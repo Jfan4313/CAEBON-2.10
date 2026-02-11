@@ -29,10 +29,6 @@ const RetrofitStorage: React.FC = () => {
   const [isChartExpanded, setIsChartExpanded] = useState(false);
 
   useEffect(() => {
-      // Logic: Strategy Impacts
-      // Arbitrage: Lower hardware cost (standard cabinets), Revenue comes from price difference
-      // Demand: Higher control cost (sophisticated EMS), Revenue comes from basic capacity fee reduction
-      
       const activeUnits = buildings.filter(b => b.active).length;
       const baseInvestment = activeUnits * 150; // 150万 per unit base
       
@@ -40,13 +36,11 @@ const RetrofitStorage: React.FC = () => {
       let yearlySaving = 0;
 
       if (strategy === 'arbitrage') {
-          // Standard cost, high recurring revenue from peak-valley
           investment = baseInvestment; 
-          yearlySaving = activeUnits * 44.25; // Mock calc
+          yearlySaving = activeUnits * 44.25; 
       } else {
-          // Demand management: High software cost, lower but stable saving
-          investment = baseInvestment * 1.15; // +15% for advanced EMS
-          yearlySaving = activeUnits * 35.0; // Lower than pure arbitrage potentially
+          investment = baseInvestment * 1.15; 
+          yearlySaving = activeUnits * 35.0; 
       }
 
       updateModule('retrofit-storage', {
@@ -64,7 +58,7 @@ const RetrofitStorage: React.FC = () => {
 
   const chartData = baseMonthData.map(m => ({
       ...m,
-      val: parseFloat((m.val * (currentModule.yearlySaving / 88.5)).toFixed(2)) // Scale based on total saving ratio
+      val: parseFloat((m.val * (currentModule.yearlySaving / 88.5)).toFixed(2)) 
   }));
 
   return (
@@ -94,7 +88,7 @@ const RetrofitStorage: React.FC = () => {
         </header>
 
         <div className={`flex-1 overflow-y-auto p-8 pb-32 transition-opacity duration-300 ${currentModule.isActive ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-5xl mx-auto space-y-6">
                 
                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <h3 className="text-base font-bold text-slate-800 mb-4 flex items-center justify-between">
@@ -196,11 +190,11 @@ const RetrofitStorage: React.FC = () => {
                                     <div className="grid grid-cols-2 gap-4 mt-4 pl-8 border-t border-slate-200 pt-3">
                                         <div>
                                             <label className="block text-xs font-medium text-slate-500 mb-1">容量 (kWh)</label>
-                                            <input type="number" defaultValue={1000} className="w-full text-sm border border-slate-300 rounded-md py-1.5 px-3 outline-none focus:border-primary" />
+                                            <input type="number" defaultValue={1000} className="w-full bg-white text-sm border border-slate-300 rounded-md py-1.5 px-3 outline-none focus:border-primary" />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-slate-500 mb-1">功率 (kW)</label>
-                                            <input type="number" defaultValue={500} className="w-full text-sm border border-slate-300 rounded-md py-1.5 px-3 outline-none focus:border-primary" />
+                                            <input type="number" defaultValue={500} className="w-full bg-white text-sm border border-slate-300 rounded-md py-1.5 px-3 outline-none focus:border-primary" />
                                         </div>
                                     </div>
                                 )}

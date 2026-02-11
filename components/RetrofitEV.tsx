@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { useProject } from '../context/ProjectContext';
 
 const monthData = [
   { name: '1月', val: 2.5 },
@@ -17,6 +18,8 @@ const monthData = [
 ];
 
 const RetrofitEV: React.FC = () => {
+  const { modules, toggleModule } = useProject();
+  const currentModule = modules['retrofit-ev'];
   const [strategy, setStrategy] = useState<'smart' | 'v2g'>('smart');
   const [zones, setZones] = useState([
       { id: 1, name: '地下停车场 A区', active: true },
@@ -28,21 +31,36 @@ const RetrofitEV: React.FC = () => {
       setZones(zones.map(z => z.id === id ? { ...z, active: !z.active } : z));
   };
 
+  if (!currentModule) return null;
+
   return (
     <div className="flex h-full bg-slate-50 relative">
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-20 shrink-0">
-            <div>
-                <h2 className="text-xl font-bold text-slate-900">充电桩设施配置</h2>
-                <p className="text-xs text-slate-500">智能充电与V2G车网互动</p>
+            <div className="flex items-center gap-4">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-900">充电桩设施配置</h2>
+                    <p className="text-xs text-slate-500">智能充电与V2G车网互动</p>
+                </div>
+                <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full ml-4">
+                    <span className={`text-xs font-bold ${currentModule.isActive ? 'text-primary' : 'text-slate-400'}`}>
+                        {currentModule.isActive ? '模块已启用' : '模块已停用'}
+                    </span>
+                    <button 
+                        onClick={() => toggleModule('retrofit-ev')}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${currentModule.isActive ? 'bg-primary' : 'bg-slate-300'}`}
+                    >
+                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${currentModule.isActive ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                </div>
             </div>
             <button className="flex items-center gap-2 text-sm text-primary font-medium hover:underline">
                 <span className="material-icons text-base">history</span> 加载历史方案
             </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 pb-32">
-            <div className="max-w-4xl mx-auto space-y-6">
+        <div className={`flex-1 overflow-y-auto p-8 pb-32 transition-opacity duration-300 ${currentModule.isActive ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
+            <div className="max-w-5xl mx-auto space-y-6">
                 
                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <h3 className="text-base font-bold text-slate-800 mb-4 flex items-center">
@@ -135,11 +153,11 @@ const RetrofitEV: React.FC = () => {
                                     <div className="grid grid-cols-2 gap-4 mt-4 pl-8 border-t border-slate-200 pt-3">
                                         <div>
                                             <label className="block text-xs font-medium text-slate-500 mb-1">交流慢充桩 (7kW)</label>
-                                            <input type="number" defaultValue={10} className="w-full text-sm border border-slate-300 rounded-md py-1.5 px-3 outline-none focus:border-primary" />
+                                            <input type="number" defaultValue={10} className="w-full bg-white text-sm border border-slate-300 rounded-md py-1.5 px-3 outline-none focus:border-primary" />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-slate-500 mb-1">直流快充桩 (60kW+)</label>
-                                            <input type="number" defaultValue={2} className="w-full text-sm border border-slate-300 rounded-md py-1.5 px-3 outline-none focus:border-primary" />
+                                            <input type="number" defaultValue={2} className="w-full bg-white text-sm border border-slate-300 rounded-md py-1.5 px-3 outline-none focus:border-primary" />
                                         </div>
                                     </div>
                                 )}
@@ -150,14 +168,15 @@ const RetrofitEV: React.FC = () => {
             </div>
         </div>
 
+        {/* Sticky Footer */}
         <div className="fixed bottom-0 left-64 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 text-slate-400">
                     <span className="material-icons text-[18px]">history</span>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-700">上次保存</span>
-                    <span className="text-[10px] text-slate-400 font-medium">无</span>
+                    <span className="text-xs font-bold text-slate-700">自动同步</span>
+                    <span className="text-[10px] text-slate-400 font-medium">数据实时计算中...</span>
                 </div>
             </div>
             <div className="flex items-center gap-3">
@@ -169,11 +188,13 @@ const RetrofitEV: React.FC = () => {
         </div>
       </div>
 
-      <aside className="w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 h-screen overflow-y-auto shadow-xl mb-16">
+      {/* Right Sidebar - Analytics */}
+      <aside className={`w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 h-screen overflow-y-auto shadow-xl mb-16 transition-all duration-300 ${currentModule.isActive ? '' : 'opacity-60 grayscale'}`}>
           <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   <span className="material-icons text-primary">analytics</span> 实时预估收益
               </h3>
+              {!currentModule.isActive && <span className="text-xs font-bold text-red-500 border border-red-200 bg-red-50 px-2 py-0.5 rounded">未计入</span>}
           </div>
           
           <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
@@ -188,7 +209,8 @@ const RetrofitEV: React.FC = () => {
                   </div>
               </div>
 
-               <div className="bg-primary p-4 rounded-xl shadow-lg shadow-primary/20 text-white relative overflow-hidden">
+               <div className="bg-primary p-4 rounded-xl shadow-lg shadow-primary/20 text-white relative overflow-hidden group">
+                   <div className="absolute right-0 top-0 w-24 h-24 bg-white/10 rounded-full -mr-8 -mt-8 blur-xl group-hover:bg-white/20 transition-all"></div>
                    <div className="flex items-center gap-2 mb-2 relative z-10">
                        <div className="p-1.5 bg-white/20 rounded text-white"><span className="material-icons text-sm">account_balance_wallet</span></div>
                        <span className="text-xs font-semibold text-blue-100 uppercase">总投资额</span>
@@ -293,15 +315,6 @@ const RetrofitEV: React.FC = () => {
                             </defs>
                         </BarChart>
                     </ResponsiveContainer>
-                </div>
-                
-                <div className="mt-6 flex justify-end gap-4">
-                    <button className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                        <span className="material-icons text-base">download</span> 导出数据
-                    </button>
-                    <button className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover shadow-sm" onClick={() => setIsChartExpanded(false)}>
-                        完成查看
-                    </button>
                 </div>
             </div>
         </div>

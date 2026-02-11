@@ -1,15 +1,123 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useProject, Transformer, Bill } from '../context/ProjectContext';
+
+// --- Types ---
+
+interface EquipmentItem {
+    id: number;
+    name: string;
+    type?: string; // For HVAC/Water categories
+    health?: string; // New: For HVAC health/age
+    cop?: number;    // New: For HVAC COP
+    power: number; // kW (or W for lighting)
+    count: number;
+    param?: number; // Extra param like hours or area coverage
+}
+
+interface Building {
+    id: number;
+    name: string;
+    type: string;
+    area: number;
+    systems: {
+        lighting: { 
+            enabled: boolean; 
+            mode: 'density' | 'list'; 
+            density: number; // W/m2
+            items: EquipmentItem[]; 
+        };
+        hvac: { 
+            enabled: boolean; 
+            items: EquipmentItem[]; 
+        };
+        water: { 
+            enabled: boolean; 
+            items: EquipmentItem[]; 
+        };
+        production: { 
+            enabled: boolean; 
+            items: EquipmentItem[]; 
+        };
+    };
+}
 
 const ProjectEntry: React.FC = () => {
+  const { transformers, setTransformers, bills, setBills } = useProject();
+
   // Region State
   const [province, setProvince] = useState('Shanghai');
   const [city, setCity] = useState('Pudong');
-  const [projectType, setProjectType] = useState('factory'); // factory, school, office
+  const [projectType, setProjectType] = useState('factory');
 
-  // Building State
-  const [buildings, setBuildings] = useState([
-    { id: 1, name: '1号生产车间', type: '工厂 (Factory)', area: 12500 },
-    { id: 2, name: '研发中心大楼', type: '办公楼 (Office)', area: 4800 },
+  // Building State with Detail Lists
+  const [buildings, setBuildings] = useState<Building[]>([
+    { 
+        id: 1, 
+        name: '1号生产车间', 
+        type: '工厂 (Factory)', 
+        area: 12500,
+        systems: {
+            lighting: { 
+                enabled: true, 
+                mode: 'density', 
+                density: 12, 
+                items: [
+                    { id: 1, name: '金卤灯 (High Bay)', power: 250, count: 200 },
+                    { id: 2, name: 'T8 荧光灯管', power: 36, count: 500 }
+                ] 
+            },
+            hvac: { 
+                enabled: true, 
+                items: [
+                    { id: 1, name: '1# 离心冷水机组', type: '水冷冷水机组 (Chiller)', health: '良 (5-10年)', cop: 5.2, power: 450, count: 2 },
+                    { id: 2, name: '组合式空调箱 (AHU)', type: '风冷模块机组', health: '优 (1-5年)', power: 45, count: 8 }
+                ]
+            },
+            water: { 
+                enabled: false, 
+                items: [
+                    { id: 1, name: '燃气热水锅炉', type: 'Boiler', power: 200, count: 1 }
+                ] 
+            },
+            production: { 
+                enabled: true, 
+                items: [
+                    { id: 1, name: 'SMT 贴片产线', power: 350, count: 4 },
+                    { id: 2, name: '空压机组', power: 132, count: 3 }
+                ]
+            }
+        }
+    },
+    { 
+        id: 2, 
+        name: '研发中心大楼', 
+        type: '办公楼 (Office)', 
+        area: 4800,
+        systems: {
+            lighting: { 
+                enabled: true, 
+                mode: 'density', 
+                density: 9, 
+                items: [] 
+            },
+            hvac: { 
+                enabled: true, 
+                items: [
+                    { id: 1, name: 'VRV 多联机外机', type: '多联机 (VRF)', health: '优 (1-5年)', power: 25, count: 20 }
+                ] 
+            },
+            water: { 
+                enabled: true, 
+                items: [
+                    { id: 1, name: '容积式电热水器', type: 'Heater', power: 15, count: 4 }
+                ] 
+            },
+            production: { 
+                enabled: false, 
+                items: [] 
+            }
+        } 
+    },
   ]);
   const [targetBuildingId, setTargetBuildingId] = useState<number>(1);
 
@@ -17,8 +125,11 @@ const ProjectEntry: React.FC = () => {
   const [estimationMode, setEstimationMode] = useState<'auto' | 'manual'>('manual');
   const [isScanning, setIsScanning] = useState(false);
 
-  // System Config State
-  const [activeSystem, setActiveSystem] = useState('lighting');
+  // System Config Tab State
+  const [activeSystemTab, setActiveSystemTab] = useState<'lighting' | 'hvac' | 'water' | 'production'>('lighting');
+
+  // Transformer & Bill Local State
+  const [isImporting, setIsImporting] = useState(false);
 
   // Sync target building if buildings change
   useEffect(() => {
@@ -27,54 +138,374 @@ const ProjectEntry: React.FC = () => {
     }
   }, [buildings, targetBuildingId]);
 
+  // --- Handlers ---
+
   const handleAddBuilding = () => {
     const newId = buildings.length > 0 ? Math.max(...buildings.map(b => b.id)) + 1 : 1;
-    setBuildings([
-      ...buildings,
-      { id: newId, name: `新建建筑 ${newId}`, type: '未定义', area: 0 }
-    ]);
+    const newBuilding: Building = {
+        id: newId,
+        name: `新建建筑 ${newId}`,
+        type: '未定义',
+        area: 1000,
+        systems: {
+            lighting: { enabled: true, mode: 'density', density: 10, items: [] },
+            hvac: { enabled: true, items: [] },
+            water: { enabled: false, items: [] },
+            production: { enabled: false, items: [] }
+        }
+    };
+    setBuildings([...buildings, newBuilding]);
+    setTargetBuildingId(newId);
   };
 
   const handleDeleteBuilding = (id: number) => {
     setBuildings(buildings.filter(b => b.id !== id));
+    if (targetBuildingId === id && buildings.length > 1) {
+        setTargetBuildingId(buildings[0].id === id ? buildings[1].id : buildings[0].id);
+    }
   };
 
   const handleBuildingChange = (id: number, field: string, value: string | number) => {
     setBuildings(buildings.map(b => b.id === id ? { ...b, [field]: value } : b));
   };
 
+  // -- Deep Update Handlers --
+
+  const toggleSystemEnabled = (buildingId: number, systemKey: keyof Building['systems']) => {
+      setBuildings(prev => prev.map(b => {
+          if (b.id !== buildingId) return b;
+          return {
+              ...b,
+              systems: {
+                  ...b.systems,
+                  [systemKey]: {
+                      ...b.systems[systemKey],
+                      enabled: !b.systems[systemKey].enabled
+                  }
+              }
+          };
+      }));
+  };
+
+  const updateLightingMode = (buildingId: number, mode: 'density' | 'list') => {
+      setBuildings(prev => prev.map(b => {
+          if (b.id !== buildingId) return b;
+          return {
+              ...b,
+              systems: { ...b.systems, lighting: { ...b.systems.lighting, mode } }
+          };
+      }));
+  };
+
+  const updateLightingDensity = (buildingId: number, density: number) => {
+      setBuildings(prev => prev.map(b => {
+          if (b.id !== buildingId) return b;
+          return {
+              ...b,
+              systems: { ...b.systems, lighting: { ...b.systems.lighting, density } }
+          };
+      }));
+  };
+
+  // Generic Item Handlers (Add/Remove/Update) for arrays
+  const addSystemItem = (buildingId: number, systemKey: keyof Building['systems']) => {
+      setBuildings(prev => prev.map(b => {
+          if (b.id !== buildingId) return b;
+          const currentItems = b.systems[systemKey].items;
+          const newId = currentItems.length > 0 ? Math.max(...currentItems.map(i => i.id)) + 1 : 1;
+          
+          let newItem: EquipmentItem = { 
+              id: newId, 
+              name: '新设备', 
+              power: 10, 
+              count: 1 
+          };
+
+          if (systemKey === 'hvac') {
+              newItem = { ...newItem, type: '多联机 (VRF)', health: '优 (1-5年)', power: 25 };
+          } else if (systemKey === 'lighting') {
+              newItem = { ...newItem, power: 20 };
+          } else {
+              newItem = { ...newItem, type: 'Type A' };
+          }
+          
+          return {
+              ...b,
+              systems: {
+                  ...b.systems,
+                  [systemKey]: {
+                      ...b.systems[systemKey],
+                      items: [...currentItems, newItem]
+                  }
+              }
+          };
+      }));
+  };
+
+  const removeSystemItem = (buildingId: number, systemKey: keyof Building['systems'], itemId: number) => {
+      setBuildings(prev => prev.map(b => {
+          if (b.id !== buildingId) return b;
+          return {
+              ...b,
+              systems: {
+                  ...b.systems,
+                  [systemKey]: {
+                      ...b.systems[systemKey],
+                      items: b.systems[systemKey].items.filter(i => i.id !== itemId)
+                  }
+              }
+          };
+      }));
+  };
+
+  const updateSystemItem = (buildingId: number, systemKey: keyof Building['systems'], itemId: number, field: keyof EquipmentItem, value: any) => {
+      setBuildings(prev => prev.map(b => {
+          if (b.id !== buildingId) return b;
+          return {
+              ...b,
+              systems: {
+                  ...b.systems,
+                  [systemKey]: {
+                      ...b.systems[systemKey],
+                      items: b.systems[systemKey].items.map(i => i.id === itemId ? { ...i, [field]: value } : i)
+                  }
+              }
+          };
+      }));
+  };
+
+
   const handleModeChange = (mode: 'auto' | 'manual') => {
       setEstimationMode(mode);
       if (mode === 'auto') {
           setIsScanning(true);
-          setTimeout(() => setIsScanning(false), 2000); // Mock scanning
+          setTimeout(() => setIsScanning(false), 2000); 
       }
   };
 
-  // Dynamic Systems based on Project Type
-  const getSystems = () => {
-      const base = [
-          { id: 'lighting', label: '照明系统', icon: 'lightbulb' },
-          { id: 'hvac', label: '空调系统', icon: 'ac_unit' },
-          { id: 'water', label: '热水系统', icon: 'water_drop' },
-      ];
-      if (projectType === 'factory') {
-          base.push({ id: 'production', label: '生产系统', icon: 'precision_manufacturing' });
-      }
-      return base;
+  const handleAddTransformer = () => {
+      const newId = transformers.length > 0 ? Math.max(...transformers.map(t => t.id)) + 1 : 1;
+      setTransformers([...transformers, { id: newId, name: `#${newId} 变压器`, capacity: 1000, voltageLevel: '10kV' }]);
   };
 
-  const systems = getSystems();
-  const currentBuilding = buildings.find(b => b.id === targetBuildingId);
+  const handleTransformerChange = (id: number, field: keyof Transformer, value: any) => {
+      setTransformers(transformers.map(t => t.id === id ? { ...t, [field]: value } : t));
+  };
 
-  // Summary Calculation
-  const totalArea = buildings.reduce((acc, curr) => acc + (curr.area || 0), 0);
-  const estimatedLoad = (totalArea * (projectType === 'factory' ? 0.15 : 0.08)).toFixed(1); // Mock calculation
+  const handleDeleteTransformer = (id: number) => {
+      setTransformers(transformers.filter(t => t.id !== id));
+  };
+
+  const handleSmartImportBills = () => {
+      setIsImporting(true);
+      setTimeout(() => {
+          const mockBills = Array.from({length: 12}, (_, i) => ({
+              id: i + 1,
+              month: `2023-${String(i+1).padStart(2, '0')}`,
+              kwh: Math.floor(Math.random() * 50000 + 100000),
+              cost: Math.floor(Math.random() * 40000 + 80000)
+          }));
+          setBills(mockBills);
+          setIsImporting(false);
+      }, 1500);
+  };
+
+  const systemsMenu = [
+      { id: 'lighting', label: '照明系统', icon: 'lightbulb' },
+      { id: 'hvac', label: '空调系统', icon: 'ac_unit' },
+      { id: 'water', label: '热水系统', icon: 'water_drop' },
+      { id: 'production', label: '生产系统', icon: 'precision_manufacturing' },
+  ];
+  
+  // Get current active building object
+  const currentBuilding = buildings.find(b => b.id === targetBuildingId) || buildings[0];
+  const currentSystemConfig = currentBuilding ? currentBuilding.systems[activeSystemTab] : null;
+
+  // --- Calculations ---
+  // Helper to calculate building load (KW)
+  const calculateBuildingLoad = (b: Building) => {
+      let totalKW = 0;
+      
+      // 1. Lighting
+      if (b.systems.lighting.enabled) {
+          if (b.systems.lighting.mode === 'density') {
+              totalKW += (b.systems.lighting.density * b.area) / 1000;
+          } else {
+              const listSumW = b.systems.lighting.items.reduce((acc, item) => acc + (item.power * item.count), 0);
+              totalKW += listSumW / 1000; // Lighting items stored in Watts usually
+          }
+      }
+
+      // 2. HVAC (stored in kW)
+      if (b.systems.hvac.enabled) {
+          totalKW += b.systems.hvac.items.reduce((acc, item) => acc + (item.power * item.count), 0);
+      }
+
+      // 3. Water (stored in kW)
+      if (b.systems.water.enabled) {
+          totalKW += b.systems.water.items.reduce((acc, item) => acc + (item.power * item.count), 0);
+      }
+
+      // 4. Production (stored in kW)
+      if (b.systems.production.enabled) {
+          totalKW += b.systems.production.items.reduce((acc, item) => acc + (item.power * item.count), 0);
+      }
+
+      return totalKW;
+  };
+
+  // Aggregated Load Calculation across all buildings and enabled systems
+  const totalLoadMW = useMemo(() => {
+      let totalKW = 0;
+      buildings.forEach(b => {
+          totalKW += calculateBuildingLoad(b);
+      });
+      return (totalKW / 1000).toFixed(2); // Convert to MW
+  }, [buildings]);
+
+  // Render Helper for List Tables
+  const renderItemTable = (
+      systemKey: keyof Building['systems'], 
+      items: EquipmentItem[], 
+      powerUnitLabel: string, 
+      showType: boolean
+    ) => (
+      <div className="overflow-x-auto border border-slate-200 rounded-xl">
+          <table className="w-full text-sm text-left whitespace-nowrap">
+              <thead className="bg-slate-50 text-xs text-slate-500 font-semibold border-b border-slate-200">
+                  <tr>
+                      <th className="px-4 py-3">设备/灯具名称</th>
+                      
+                      {systemKey === 'hvac' ? (
+                          <>
+                            <th className="px-4 py-3">类型型号形式</th>
+                            <th className="px-4 py-3">系统健康度/年限</th>
+                            <th className="px-4 py-3">COP (可选)</th>
+                          </>
+                      ) : (
+                          showType && <th className="px-4 py-3">类型/型号</th>
+                      )}
+
+                      <th className="px-4 py-3">单台功率 ({powerUnitLabel})</th>
+                      <th className="px-4 py-3">数量</th>
+                      <th className="px-4 py-3 text-right">合计功率</th>
+                      <th className="px-4 py-3 w-10"></th>
+                  </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                  {items.map((item) => (
+                      <tr key={item.id} className="group hover:bg-slate-50">
+                          <td className="px-4 py-2">
+                              <input 
+                                  value={item.name} 
+                                  onChange={(e) => updateSystemItem(currentBuilding.id, systemKey, item.id, 'name', e.target.value)}
+                                  className="w-full min-w-[120px] bg-white outline-none border border-slate-200 rounded px-2 py-1 focus:border-primary text-slate-700 font-medium"
+                                  placeholder="输入名称"
+                              />
+                          </td>
+                          
+                          {systemKey === 'hvac' ? (
+                              <>
+                                <td className="px-4 py-2">
+                                    <select
+                                        value={item.type || '多联机 (VRF)'}
+                                        onChange={(e) => updateSystemItem(currentBuilding.id, systemKey, item.id, 'type', e.target.value)}
+                                        className="w-[160px] bg-white outline-none border border-slate-200 rounded px-2 py-1 focus:border-primary text-slate-600 appearance-none cursor-pointer"
+                                    >
+                                        <option>多联机 (VRF)</option>
+                                        <option>水冷冷水机组 (Chiller)</option>
+                                        <option>风冷模块机组</option>
+                                        <option>分体空调 (Split AC)</option>
+                                    </select>
+                                </td>
+                                <td className="px-4 py-2">
+                                    <select
+                                        value={item.health || '良 (5-10年)'}
+                                        onChange={(e) => updateSystemItem(currentBuilding.id, systemKey, item.id, 'health', e.target.value)}
+                                        className={`w-[130px] bg-white outline-none border border-slate-200 rounded px-2 py-1 focus:border-primary text-xs font-medium appearance-none cursor-pointer
+                                            ${item.health?.includes('优') ? 'text-green-600' : item.health?.includes('差') ? 'text-red-500' : 'text-slate-600'}
+                                        `}
+                                    >
+                                        <option>优 (1-5年)</option>
+                                        <option>良 (5-10年)</option>
+                                        <option>差 (10年以上)</option>
+                                    </select>
+                                </td>
+                                <td className="px-4 py-2">
+                                    <input 
+                                        type="number"
+                                        step="0.1"
+                                        value={item.cop || ''}
+                                        onChange={(e) => updateSystemItem(currentBuilding.id, systemKey, item.id, 'cop', parseFloat(e.target.value))}
+                                        className="w-16 bg-white outline-none border border-slate-200 rounded px-2 py-1 focus:border-primary text-slate-600 text-center"
+                                        placeholder="-"
+                                    />
+                                </td>
+                              </>
+                          ) : (
+                              showType && (
+                                <td className="px-4 py-2">
+                                    <input 
+                                        value={item.type || ''} 
+                                        onChange={(e) => updateSystemItem(currentBuilding.id, systemKey, item.id, 'type', e.target.value)}
+                                        className="w-full min-w-[100px] bg-white outline-none border border-slate-200 rounded px-2 py-1 focus:border-primary text-slate-600"
+                                        placeholder="输入类型"
+                                    />
+                                </td>
+                              )
+                          )}
+
+                          <td className="px-4 py-2">
+                              <input 
+                                  type="number"
+                                  value={item.power} 
+                                  onChange={(e) => updateSystemItem(currentBuilding.id, systemKey, item.id, 'power', parseFloat(e.target.value))}
+                                  className="w-24 bg-white outline-none border border-slate-200 rounded px-2 py-1 focus:border-primary text-slate-600"
+                              />
+                          </td>
+                          <td className="px-4 py-2">
+                              <input 
+                                  type="number"
+                                  value={item.count} 
+                                  onChange={(e) => updateSystemItem(currentBuilding.id, systemKey, item.id, 'count', parseFloat(e.target.value))}
+                                  className="w-20 bg-white outline-none border border-slate-200 rounded px-2 py-1 focus:border-primary text-slate-600"
+                              />
+                          </td>
+                          <td className="px-4 py-2 text-right font-medium text-slate-700">
+                              {(item.power * item.count).toLocaleString()} {powerUnitLabel}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                              <button 
+                                  onClick={() => removeSystemItem(currentBuilding.id, systemKey, item.id)}
+                                  className="text-slate-300 hover:text-red-500 transition-colors"
+                              >
+                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                          </td>
+                      </tr>
+                  ))}
+                  {items.length === 0 && (
+                      <tr>
+                          <td colSpan={systemKey === 'hvac' ? 8 : (showType ? 6 : 5)} className="px-4 py-8 text-center text-slate-400 text-xs">暂无设备，请添加</td>
+                      </tr>
+                  )}
+              </tbody>
+          </table>
+          <div className="bg-slate-50/50 p-2 border-t border-slate-200">
+              <button 
+                  onClick={() => addSystemItem(currentBuilding.id, systemKey)}
+                  className="w-full py-2 text-xs font-medium text-slate-500 hover:text-primary hover:bg-white border border-dashed border-slate-300 hover:border-primary/50 rounded-lg transition-all flex items-center justify-center gap-1"
+              >
+                  <span className="material-symbols-outlined text-[16px]">add</span> 添加一行
+              </button>
+          </div>
+      </div>
+  );
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
       <div className="flex-1 overflow-y-auto p-8 pb-32 scroll-smooth">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-6xl mx-auto space-y-6">
             <div className="mb-8">
                 <div className="flex items-center gap-2 text-xs text-slate-400 mb-3 font-medium">
                 <span className="hover:text-primary transition-colors cursor-pointer">项目概览</span>
@@ -87,9 +518,8 @@ const ProjectEntry: React.FC = () => {
                 </div>
             </div>
 
-            <div className="space-y-6">
-                {/* Basic Info */}
-                <section className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+            {/* Basic Info */}
+            <section className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-50">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                     <span className="material-symbols-outlined">apartment</span>
@@ -103,7 +533,7 @@ const ProjectEntry: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                     <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700 ml-1">项目名称 <span className="text-red-500">*</span></label>
-                        <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" placeholder="请输入项目名称" defaultValue="上海浦东新区工业园节能改造项目" />
+                        <input type="text" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" placeholder="请输入项目名称" defaultValue="上海浦东新区工业园节能改造项目" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700 ml-1">项目类型 <span className="text-red-500">*</span></label>
@@ -112,9 +542,9 @@ const ProjectEntry: React.FC = () => {
                                 value={projectType}
                                 onChange={(e) => {
                                     setProjectType(e.target.value);
-                                    setActiveSystem('lighting'); // Reset tab on type change
+                                    setActiveSystemTab('lighting'); // Reset tab on type change
                                 }}
-                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 appearance-none cursor-pointer focus:bg-white focus:border-primary"
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm text-slate-700 appearance-none cursor-pointer focus:bg-white focus:border-primary"
                             >
                                 <option value="factory">零碳工厂 (Factory)</option>
                                 <option value="school">零碳学校 (School)</option>
@@ -130,7 +560,7 @@ const ProjectEntry: React.FC = () => {
                             <select 
                                 value={province}
                                 onChange={(e) => { setProvince(e.target.value); setCity(''); }}
-                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 appearance-none cursor-pointer focus:bg-white focus:border-primary"
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm text-slate-700 appearance-none cursor-pointer focus:bg-white focus:border-primary"
                             >
                                 <option value="" disabled>选择省份</option>
                                 <option value="Shanghai">上海市</option>
@@ -144,7 +574,7 @@ const ProjectEntry: React.FC = () => {
                             <select 
                                 value={city}
                                 onChange={(e) => setCity(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 appearance-none cursor-pointer focus:bg-white focus:border-primary"
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm text-slate-700 appearance-none cursor-pointer focus:bg-white focus:border-primary"
                             >
                                 <option value="" disabled>选择城市/区</option>
                                 {province === 'Shanghai' && <option value="Pudong">浦东新区</option>}
@@ -183,14 +613,14 @@ const ProjectEntry: React.FC = () => {
                                             <input 
                                                 value={b.name} 
                                                 onChange={(e) => handleBuildingChange(b.id, 'name', e.target.value)}
-                                                className="bg-transparent w-full outline-none font-medium focus:border-b focus:border-primary" 
+                                                className="bg-white w-full outline-none font-medium border border-slate-200 rounded px-2 py-1 focus:border-primary" 
                                             />
                                         </td>
                                         <td className="px-6 py-3">
                                             <select 
                                                 value={b.type}
                                                 onChange={(e) => handleBuildingChange(b.id, 'type', e.target.value)}
-                                                className="bg-transparent w-full outline-none text-slate-600 appearance-none cursor-pointer"
+                                                className="bg-white w-full outline-none text-slate-600 appearance-none cursor-pointer border border-slate-200 rounded px-2 py-1 focus:border-primary"
                                             >
                                                 <option>工厂 (Factory)</option>
                                                 <option>办公楼 (Office)</option>
@@ -204,7 +634,7 @@ const ProjectEntry: React.FC = () => {
                                                 type="number"
                                                 value={b.area}
                                                 onChange={(e) => handleBuildingChange(b.id, 'area', parseFloat(e.target.value))}
-                                                className="bg-transparent w-full outline-none text-slate-600 focus:border-b focus:border-primary"
+                                                className="bg-white w-full outline-none text-slate-600 border border-slate-200 rounded px-2 py-1 focus:border-primary"
                                             />
                                         </td>
                                         <td className="px-6 py-3 text-right">
@@ -236,36 +666,159 @@ const ProjectEntry: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                </section>
+            </section>
 
-                {/* Energy Consumption */}
-                <section className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
-                    <div className="flex items-center gap-3 mb-8 border-b border-slate-50 pb-4">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                            <span className="material-symbols-outlined">settings_suggest</span>
+            {/* Power Distribution & Bills */}
+            <section className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm animate-fade-in">
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-50">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <span className="material-symbols-outlined">electric_meter</span>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-800">配电与电费</h3>
+                        <p className="text-xs text-slate-500">录入变压器信息与历史电费账单</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Transformers */}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center px-1">
+                            <label className="text-sm font-semibold text-slate-700">变压器信息</label>
+                            <button 
+                                onClick={handleAddTransformer}
+                                className="text-xs font-medium text-primary hover:text-primary-hover flex items-center gap-1"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">add</span> 添加变压器
+                            </button>
                         </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800">能耗配置</h3>
-                            <p className="text-xs text-slate-500">配置各建筑分项能耗数据</p>
+                        <div className="space-y-3">
+                            {transformers.map((t) => (
+                                <div key={t.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-3 relative group">
+                                    <button 
+                                        onClick={() => handleDeleteTransformer(t.id)}
+                                        className="absolute top-2 right-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">close</span>
+                                    </button>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] text-slate-400 block mb-1">名称/编号</label>
+                                            <input 
+                                                value={t.name}
+                                                onChange={(e) => handleTransformerChange(t.id, 'name', e.target.value)}
+                                                className="w-full text-sm bg-white border border-slate-200 rounded px-2 py-1 outline-none focus:border-primary" 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] text-slate-400 block mb-1">电压等级</label>
+                                            <select 
+                                                value={t.voltageLevel}
+                                                onChange={(e) => handleTransformerChange(t.id, 'voltageLevel', e.target.value)}
+                                                className="w-full text-sm bg-white border border-slate-200 rounded px-2 py-1 outline-none focus:border-primary"
+                                            >
+                                                <option>10kV</option>
+                                                <option>20kV</option>
+                                                <option>35kV</option>
+                                                <option>110kV</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] text-slate-400 block mb-1">额定容量 (kVA)</label>
+                                            <input 
+                                                type="number"
+                                                value={t.capacity}
+                                                onChange={(e) => handleTransformerChange(t.id, 'capacity', parseInt(e.target.value))}
+                                                className="w-full text-sm bg-white border border-slate-200 rounded px-2 py-1 outline-none focus:border-primary" 
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {transformers.length === 0 && (
+                                <div className="p-6 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-xs">
+                                    暂无变压器信息，请添加
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="flex bg-slate-100 p-1 rounded-xl mb-8 max-w-lg mx-auto">
-                        <button 
-                            onClick={() => handleModeChange('auto')}
-                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${estimationMode === 'auto' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            智能估算 (Auto)
-                        </button>
-                        <button 
-                            onClick={() => handleModeChange('manual')}
-                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${estimationMode === 'manual' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            手动录入 (Manual)
-                        </button>
+                    {/* Bills */}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center px-1">
+                            <label className="text-sm font-semibold text-slate-700">电费单录入</label>
+                            <button 
+                                onClick={handleSmartImportBills}
+                                disabled={isImporting}
+                                className={`text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all ${isImporting ? 'bg-slate-100 text-slate-400' : 'bg-primary/10 text-primary hover:bg-primary/20'}`}
+                            >
+                                {isImporting ? (
+                                    <><span className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span> 识别中...</>
+                                ) : (
+                                    <><span className="material-symbols-outlined text-[16px]">upload_file</span> 导入Excel/图片</>
+                                )}
+                            </button>
+                        </div>
+                        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm max-h-[300px] overflow-y-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-xs text-slate-500 font-semibold sticky top-0 z-10">
+                                    <tr>
+                                        <th className="px-4 py-2">月份</th>
+                                        <th className="px-4 py-2">用电量 (kWh)</th>
+                                        <th className="px-4 py-2 text-right">总电费 (元)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 text-xs">
+                                    {bills.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={3} className="px-4 py-8 text-center text-slate-400">
+                                                可手动填写或上传电费单图片/Excel进行AI识别
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        bills.map((bill) => (
+                                            <tr key={bill.id} className="hover:bg-slate-50">
+                                                <td className="px-4 py-2 text-slate-700 font-medium">{bill.month}</td>
+                                                <td className="px-4 py-2 text-slate-600">{bill.kwh.toLocaleString()}</td>
+                                                <td className="px-4 py-2 text-right text-slate-600">¥ {bill.cost.toLocaleString()}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+                </div>
+            </section>
 
-                    {estimationMode === 'auto' ? (
+            {/* Energy Consumption - Estimation & Manual Config */}
+            <section className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-3 mb-8 border-b border-slate-50 pb-4">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <span className="material-symbols-outlined">settings_suggest</span>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-800">能耗详情配置</h3>
+                        <p className="text-xs text-slate-500">配置各建筑分项能耗数据</p>
+                    </div>
+                </div>
+
+                <div className="flex bg-slate-100 p-1 rounded-xl mb-8 max-w-lg mx-auto">
+                    <button 
+                        onClick={() => handleModeChange('auto')}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${estimationMode === 'auto' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        智能估算 (Auto)
+                    </button>
+                    <button 
+                        onClick={() => handleModeChange('manual')}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${estimationMode === 'manual' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        手动录入 (Manual)
+                    </button>
+                </div>
+
+                {estimationMode === 'auto' ? (
                         <div className="text-center py-12 px-6 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
                             {isScanning ? (
                                 <div className="flex flex-col items-center">
@@ -309,15 +862,15 @@ const ProjectEntry: React.FC = () => {
                             <div className="flex items-center justify-between">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
-                                    分项能耗详情
+                                    分项能耗详情 (按建筑独立配置)
                                 </h4>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs text-slate-500">配置建筑:</span>
+                                    <span className="text-xs text-slate-500">当前配置建筑:</span>
                                     <div className="relative">
                                         <select 
                                             value={targetBuildingId}
                                             onChange={(e) => setTargetBuildingId(Number(e.target.value))}
-                                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:border-primary pr-8 appearance-none cursor-pointer"
+                                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:border-primary pr-8 appearance-none cursor-pointer shadow-sm"
                                         >
                                             {buildings.map(b => (
                                                 <option key={b.id} value={b.id}>{b.name}</option>
@@ -329,163 +882,273 @@ const ProjectEntry: React.FC = () => {
                             </div>
 
                             <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-100 pb-2">
-                                {systems.map(sys => (
+                                {systemsMenu.map(sys => (
                                     <button 
                                         key={sys.id}
-                                        onClick={() => setActiveSystem(sys.id)}
-                                        className={`px-5 py-2.5 rounded-t-xl text-sm font-medium flex items-center gap-2 transition-all relative top-[1px] ${activeSystem === sys.id ? 'bg-primary text-white shadow-sm' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                                        onClick={() => setActiveSystemTab(sys.id as any)}
+                                        className={`px-5 py-2.5 rounded-t-xl text-sm font-medium flex items-center gap-2 transition-all relative top-[1px] ${activeSystemTab === sys.id ? 'bg-primary text-white shadow-sm' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
                                     >
                                         <span className="material-symbols-outlined text-[18px]">{sys.icon}</span> {sys.label}
                                     </button>
                                 ))}
                             </div>
 
-                            <div className="p-8 rounded-2xl border border-primary/20 bg-primary/5 relative overflow-hidden min-h-[300px]">
-                                {activeSystem === 'lighting' && (
+                            <div className={`p-8 rounded-2xl border transition-all relative overflow-hidden min-h-[300px] ${currentSystemConfig?.enabled ? 'border-primary/20 bg-primary/5' : 'border-slate-200 bg-slate-50'}`}>
+                                {activeSystemTab === 'lighting' && currentBuilding && (
                                     <div className="animate-fade-in">
                                         <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/50">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-yellow-500">
+                                                <div className={`w-12 h-12 rounded-xl shadow-sm flex items-center justify-center transition-colors ${currentBuilding.systems.lighting.enabled ? 'bg-white text-yellow-500' : 'bg-slate-200 text-slate-400'}`}>
                                                     <span className="material-symbols-outlined text-[24px]">lightbulb</span>
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-slate-800 text-lg">照明系统配置</h4>
-                                                    <p className="text-xs text-slate-500 mt-0.5">配置 {currentBuilding?.name} 的灯具功率与控制</p>
+                                                    <h4 className={`font-bold text-lg ${currentBuilding.systems.lighting.enabled ? 'text-slate-800' : 'text-slate-500'}`}>照明系统配置</h4>
+                                                    <p className="text-xs text-slate-500 mt-0.5">配置 {currentBuilding.name} 的灯具功率与控制</p>
                                                 </div>
                                             </div>
                                             <label className="flex items-center cursor-pointer gap-3">
-                                                <span className="text-sm font-medium text-primary">启用此系统</span>
-                                                <div className="relative w-12 h-6 bg-primary rounded-full">
-                                                    <div className="absolute top-1 right-1 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+                                                <span className={`text-sm font-medium ${currentBuilding.systems.lighting.enabled ? 'text-primary' : 'text-slate-400'}`}>
+                                                    {currentBuilding.systems.lighting.enabled ? '已启用' : '未启用'}
+                                                </span>
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="sr-only peer"
+                                                    checked={currentBuilding.systems.lighting.enabled}
+                                                    onChange={(e) => toggleSystemEnabled(currentBuilding.id, 'lighting')}
+                                                />
+                                                <div className="relative w-12 h-6 bg-slate-300 peer-checked:bg-primary rounded-full transition-colors">
+                                                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${currentBuilding.systems.lighting.enabled ? 'translate-x-6' : ''}`}></div>
                                                 </div>
                                             </label>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-700 flex justify-between">
-                                                    功率密度 (W/㎡) <span className="text-xs text-slate-400 font-normal">建议值: 8-12</span>
+                                        <div className={`transition-opacity ${currentBuilding.systems.lighting.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                            {/* Mode Selector */}
+                                            <div className="flex items-center gap-4 mb-6">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="lightingMode" 
+                                                        className="accent-primary"
+                                                        checked={currentBuilding.systems.lighting.mode === 'density'}
+                                                        onChange={() => updateLightingMode(currentBuilding.id, 'density')}
+                                                    />
+                                                    <span className="text-sm font-medium text-slate-700">智能估算 (功率密度)</span>
                                                 </label>
-                                                <div className="relative">
-                                                    <input type="number" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-primary" defaultValue="8.5" />
-                                                    <span className="absolute right-4 top-3 text-xs text-slate-400 font-medium">W/㎡</span>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-700 flex justify-between">
-                                                    灯具总数 <span className="text-xs text-slate-400 font-normal">当前楼层预估</span>
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="lightingMode" 
+                                                        className="accent-primary"
+                                                        checked={currentBuilding.systems.lighting.mode === 'list'}
+                                                        onChange={() => updateLightingMode(currentBuilding.id, 'list')}
+                                                    />
+                                                    <span className="text-sm font-medium text-slate-700">手动清单 (灯具列表)</span>
                                                 </label>
-                                                <div className="relative">
-                                                    <input type="number" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-primary" defaultValue="240" />
-                                                    <span className="absolute right-4 top-3 text-xs text-slate-400 font-medium">个</span>
-                                                </div>
                                             </div>
+
+                                            {currentBuilding.systems.lighting.mode === 'density' ? (
+                                                <div className="space-y-4 max-w-md bg-white p-6 rounded-xl border border-slate-200">
+                                                    <div className="space-y-2">
+                                                        <label className="text-sm font-semibold text-slate-700 flex justify-between">
+                                                            功率密度 (W/㎡) <span className="text-xs text-slate-400 font-normal">建议值: 8-12</span>
+                                                        </label>
+                                                        <div className="relative">
+                                                            <input 
+                                                                type="number" 
+                                                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-primary" 
+                                                                value={currentBuilding.systems.lighting.density}
+                                                                onChange={(e) => updateLightingDensity(currentBuilding.id, parseFloat(e.target.value))}
+                                                            />
+                                                            <span className="absolute right-4 top-3 text-xs text-slate-400 font-medium">W/㎡</span>
+                                                        </div>
+                                                        <p className="text-xs text-slate-500 pt-1">
+                                                            预估总负荷: <span className="font-bold text-primary">{((currentBuilding.systems.lighting.density * currentBuilding.area) / 1000).toFixed(1)} kW</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                renderItemTable('lighting', currentBuilding.systems.lighting.items, 'W', false)
+                                            )}
                                         </div>
                                     </div>
                                 )}
                                 
-                                {activeSystem === 'hvac' && (
+                                {activeSystemTab === 'hvac' && currentBuilding && (
                                     <div className="animate-fade-in">
                                          <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/50">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-blue-500">
+                                                <div className={`w-12 h-12 rounded-xl shadow-sm flex items-center justify-center transition-colors ${currentBuilding.systems.hvac.enabled ? 'bg-white text-blue-500' : 'bg-slate-200 text-slate-400'}`}>
                                                     <span className="material-symbols-outlined text-[24px]">ac_unit</span>
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-slate-800 text-lg">暖通空调配置</h4>
-                                                    <p className="text-xs text-slate-500 mt-0.5">配置 {currentBuilding?.name} 的制冷/制热设备</p>
+                                                    <h4 className={`font-bold text-lg ${currentBuilding.systems.hvac.enabled ? 'text-slate-800' : 'text-slate-500'}`}>暖通空调配置</h4>
+                                                    <p className="text-xs text-slate-500 mt-0.5">配置 {currentBuilding.name} 的制冷/制热设备</p>
                                                 </div>
                                             </div>
                                             <label className="flex items-center cursor-pointer gap-3">
-                                                <span className="text-sm font-medium text-primary">启用此系统</span>
-                                                <div className="relative w-12 h-6 bg-primary rounded-full">
-                                                    <div className="absolute top-1 right-1 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+                                                <span className={`text-sm font-medium ${currentBuilding.systems.hvac.enabled ? 'text-primary' : 'text-slate-400'}`}>
+                                                    {currentBuilding.systems.hvac.enabled ? '已启用' : '未启用'}
+                                                </span>
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="sr-only peer"
+                                                    checked={currentBuilding.systems.hvac.enabled}
+                                                    onChange={(e) => toggleSystemEnabled(currentBuilding.id, 'hvac')}
+                                                />
+                                                <div className="relative w-12 h-6 bg-slate-300 peer-checked:bg-primary rounded-full transition-colors">
+                                                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${currentBuilding.systems.hvac.enabled ? 'translate-x-6' : ''}`}></div>
                                                 </div>
                                             </label>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-700">冷机类型</label>
-                                                <select className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-primary">
-                                                    <option>水冷螺杆机组</option>
-                                                    <option>风冷模块机组</option>
-                                                    <option>离心式冷水机组</option>
-                                                </select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-700">制冷量 (kW)</label>
-                                                <input type="number" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-primary" defaultValue="1200" />
-                                            </div>
+                                        <div className={`transition-opacity ${currentBuilding.systems.hvac.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                            {renderItemTable('hvac', currentBuilding.systems.hvac.items, 'kW', true)}
                                         </div>
                                     </div>
                                 )}
 
-                                {activeSystem === 'water' && (
+                                {activeSystemTab === 'water' && currentBuilding && (
                                     <div className="animate-fade-in">
                                         <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/50">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-cyan-500">
+                                                <div className={`w-12 h-12 rounded-xl shadow-sm flex items-center justify-center transition-colors ${currentBuilding.systems.water.enabled ? 'bg-white text-cyan-500' : 'bg-slate-200 text-slate-400'}`}>
                                                     <span className="material-symbols-outlined text-[24px]">water_drop</span>
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-slate-800 text-lg">热水系统配置</h4>
-                                                    <p className="text-xs text-slate-500 mt-0.5">配置 {currentBuilding?.name} 的生活/工艺热水</p>
+                                                    <h4 className={`font-bold text-lg ${currentBuilding.systems.water.enabled ? 'text-slate-800' : 'text-slate-500'}`}>热水系统配置</h4>
+                                                    <p className="text-xs text-slate-500 mt-0.5">配置 {currentBuilding.name} 的生活/工艺热水</p>
                                                 </div>
                                             </div>
                                             <label className="flex items-center cursor-pointer gap-3">
-                                                <span className="text-sm font-medium text-slate-400">未启用</span>
-                                                <div className="relative w-12 h-6 bg-slate-300 rounded-full">
-                                                    <div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+                                                <span className={`text-sm font-medium ${currentBuilding.systems.water.enabled ? 'text-primary' : 'text-slate-400'}`}>
+                                                    {currentBuilding.systems.water.enabled ? '已启用' : '未启用'}
+                                                </span>
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="sr-only peer"
+                                                    checked={currentBuilding.systems.water.enabled}
+                                                    onChange={(e) => toggleSystemEnabled(currentBuilding.id, 'water')}
+                                                />
+                                                <div className="relative w-12 h-6 bg-slate-300 peer-checked:bg-primary rounded-full transition-colors">
+                                                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${currentBuilding.systems.water.enabled ? 'translate-x-6' : ''}`}></div>
                                                 </div>
                                             </label>
                                         </div>
-                                        <div className="text-center py-10 text-slate-400">
-                                            <span className="material-symbols-outlined text-4xl mb-2 opacity-50">block</span>
-                                            <p className="text-sm">该系统当前处于禁用状态</p>
+                                        <div className={`transition-opacity ${currentBuilding.systems.water.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                            {renderItemTable('water', currentBuilding.systems.water.items, 'kW', true)}
                                         </div>
                                     </div>
                                 )}
 
-                                {activeSystem === 'production' && (
+                                {activeSystemTab === 'production' && currentBuilding && (
                                     <div className="animate-fade-in">
                                         <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/50">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-purple-500">
+                                                <div className={`w-12 h-12 rounded-xl shadow-sm flex items-center justify-center transition-colors ${currentBuilding.systems.production.enabled ? 'bg-white text-purple-500' : 'bg-slate-200 text-slate-400'}`}>
                                                     <span className="material-symbols-outlined text-[24px]">precision_manufacturing</span>
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-slate-800 text-lg">生产设备配置</h4>
-                                                    <p className="text-xs text-slate-500 mt-0.5">配置 {currentBuilding?.name} 的产线与动力设备</p>
+                                                    <h4 className={`font-bold text-lg ${currentBuilding.systems.production.enabled ? 'text-slate-800' : 'text-slate-500'}`}>生产设备配置</h4>
+                                                    <p className="text-xs text-slate-500 mt-0.5">配置 {currentBuilding.name} 的产线与动力设备</p>
                                                 </div>
                                             </div>
                                             <label className="flex items-center cursor-pointer gap-3">
-                                                <span className="text-sm font-medium text-primary">启用此系统</span>
-                                                <div className="relative w-12 h-6 bg-primary rounded-full">
-                                                    <div className="absolute top-1 right-1 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+                                                <span className={`text-sm font-medium ${currentBuilding.systems.production.enabled ? 'text-primary' : 'text-slate-400'}`}>
+                                                    {currentBuilding.systems.production.enabled ? '已启用' : '未启用'}
+                                                </span>
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="sr-only peer"
+                                                    checked={currentBuilding.systems.production.enabled}
+                                                    onChange={(e) => toggleSystemEnabled(currentBuilding.id, 'production')}
+                                                />
+                                                <div className="relative w-12 h-6 bg-slate-300 peer-checked:bg-primary rounded-full transition-colors">
+                                                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${currentBuilding.systems.production.enabled ? 'translate-x-6' : ''}`}></div>
                                                 </div>
                                             </label>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-700">主要产线数量</label>
-                                                <input type="number" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-primary" defaultValue="4" />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-700">年运行小时数</label>
-                                                <input type="number" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-primary" defaultValue="6000" />
-                                            </div>
-                                            <div className="space-y-2 md:col-span-2">
-                                                <label className="text-sm font-semibold text-slate-700">装机总功率 (kW)</label>
-                                                <input type="number" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm focus:border-primary" defaultValue="2500" />
-                                            </div>
+                                        <div className={`transition-opacity ${currentBuilding.systems.production.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                            {renderItemTable('production', currentBuilding.systems.production.items, 'kW', false)}
                                         </div>
                                     </div>
                                 )}
                             </div>
+
+                            {/* Summary Section */}
+                            <div className="mt-8 bg-slate-100 rounded-2xl p-6 border border-slate-200 animate-fade-in">
+                                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2 mb-4">
+                                    <span className="material-symbols-outlined text-[18px]">fact_check</span>
+                                    配置汇总与校核
+                                </h4>
+                                <div className="grid grid-cols-1 gap-4">
+                                    {buildings.map(b => {
+                                        const load = calculateBuildingLoad(b);
+                                        return (
+                                            <div key={b.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center gap-6">
+                                                {/* Building Info */}
+                                                <div className="w-full md:w-1/4">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="material-symbols-outlined text-slate-400 text-[20px]">domain</span>
+                                                        <span className="font-bold text-slate-800">{b.name}</span>
+                                                    </div>
+                                                    <div className="text-xs text-slate-500 pl-7">
+                                                        {b.type} | {b.area.toLocaleString()} ㎡
+                                                    </div>
+                                                </div>
+
+                                                {/* Systems Status */}
+                                                <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                                                    {/* Lighting */}
+                                                    <div className={`flex items-center gap-2 p-2 rounded-lg border ${b.systems.lighting.enabled ? 'bg-yellow-50 border-yellow-100' : 'bg-slate-50 border-transparent opacity-50'}`}>
+                                                        <span className={`material-symbols-outlined text-[18px] ${b.systems.lighting.enabled ? 'text-yellow-600' : 'text-slate-400'}`}>lightbulb</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-slate-500">照明</span>
+                                                            <span className="text-xs font-bold text-slate-700">
+                                                                {b.systems.lighting.enabled 
+                                                                    ? (b.systems.lighting.mode === 'density' ? `${b.systems.lighting.density} W/㎡` : `${b.systems.lighting.items.length} 种设备`) 
+                                                                    : '停用'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    {/* HVAC */}
+                                                    <div className={`flex items-center gap-2 p-2 rounded-lg border ${b.systems.hvac.enabled ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-transparent opacity-50'}`}>
+                                                        <span className={`material-symbols-outlined text-[18px] ${b.systems.hvac.enabled ? 'text-blue-600' : 'text-slate-400'}`}>ac_unit</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-slate-500">空调</span>
+                                                            <span className="text-xs font-bold text-slate-700">{b.systems.hvac.enabled ? `${b.systems.hvac.items.length} 种设备` : '停用'}</span>
+                                                        </div>
+                                                    </div>
+                                                    {/* Water */}
+                                                    <div className={`flex items-center gap-2 p-2 rounded-lg border ${b.systems.water.enabled ? 'bg-cyan-50 border-cyan-100' : 'bg-slate-50 border-transparent opacity-50'}`}>
+                                                        <span className={`material-symbols-outlined text-[18px] ${b.systems.water.enabled ? 'text-cyan-600' : 'text-slate-400'}`}>water_drop</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-slate-500">热水</span>
+                                                            <span className="text-xs font-bold text-slate-700">{b.systems.water.enabled ? `${b.systems.water.items.length} 种设备` : '停用'}</span>
+                                                        </div>
+                                                    </div>
+                                                    {/* Production */}
+                                                    <div className={`flex items-center gap-2 p-2 rounded-lg border ${b.systems.production.enabled ? 'bg-purple-50 border-purple-100' : 'bg-slate-50 border-transparent opacity-50'}`}>
+                                                        <span className={`material-symbols-outlined text-[18px] ${b.systems.production.enabled ? 'text-purple-600' : 'text-slate-400'}`}>precision_manufacturing</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-slate-500">生产</span>
+                                                            <span className="text-xs font-bold text-slate-700">{b.systems.production.enabled ? `${b.systems.production.items.length} 种设备` : '停用'}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Load Summary */}
+                                                <div className="w-full md:w-auto min-w-[120px] text-right border-l border-slate-200 pl-6 hidden md:block">
+                                                    <span className="text-[10px] text-slate-400 uppercase font-medium">预估负荷</span>
+                                                    <div className="text-lg font-bold text-primary">{load.toFixed(1)} <span className="text-xs font-normal text-slate-500">kW</span></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     )}
-                </section>
-            </div>
+            </section>
           </div>
       </div>
       
@@ -499,12 +1162,12 @@ const ProjectEntry: React.FC = () => {
                        <span className="text-sm font-bold text-slate-700">{buildings.length} <span className="text-[10px] font-normal">栋</span></span>
                    </div>
                     <div className="flex flex-col">
-                       <span className="text-[10px] text-slate-400 uppercase font-medium">总面积</span>
-                       <span className="text-sm font-bold text-slate-700">{totalArea.toLocaleString()} <span className="text-[10px] font-normal">㎡</span></span>
+                       <span className="text-[10px] text-slate-400 uppercase font-medium">变压器</span>
+                       <span className="text-sm font-bold text-slate-700">{transformers.length} <span className="text-[10px] font-normal">台</span></span>
                    </div>
                     <div className="flex flex-col">
-                       <span className="text-[10px] text-slate-400 uppercase font-medium">预估总负荷</span>
-                       <span className="text-sm font-bold text-primary">{estimatedLoad} <span className="text-[10px] font-normal">MW</span></span>
+                       <span className="text-[10px] text-slate-400 uppercase font-medium">预估总负荷 (所有建筑)</span>
+                       <span className="text-sm font-bold text-primary">{totalLoadMW} <span className="text-[10px] font-normal">MW</span></span>
                    </div>
                </div>
                <div className="flex items-center gap-2">

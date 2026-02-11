@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 
 // Define the shape of data for each module
 export interface ModuleData {
@@ -10,6 +10,28 @@ export interface ModuleData {
   yearlySaving: number; // in 万元 or carbon tons converted to value
   kpiPrimary: { label: string; value: string }; // e.g., "1.2 MWp"
   kpiSecondary: { label: string; value: string }; // e.g., "ROI 12%"
+}
+
+export interface Transformer {
+  id: number;
+  name: string;
+  capacity: number; // kVA
+  voltageLevel: string; // e.g., "10kV"
+}
+
+export interface Bill {
+  id: number;
+  month: string;
+  kwh: number;
+  cost: number;
+  transformerId?: number;
+}
+
+// Global Price Config State
+export interface PriceConfigState {
+    mode: 'tou' | 'fixed' | 'spot';
+    fixedPrice: number;
+    touSegments: { start: number; end: number; price: number; type: string }[];
 }
 
 // Initial state for all modules
@@ -121,12 +143,35 @@ interface ProjectContextType {
   updateModule: (id: string, data: Partial<ModuleData>) => void;
   toggleModule: (id: string) => void;
   getSummary: () => { totalInvestment: number; totalSaving: number; roi: number };
+  transformers: Transformer[];
+  setTransformers: (data: Transformer[]) => void;
+  bills: Bill[];
+  setBills: (data: Bill[]) => void;
+  priceConfig: PriceConfigState;
+  setPriceConfig: (config: PriceConfigState) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [modules, setModules] = useState<Record<string, ModuleData>>(initialModules);
+  const [transformers, setTransformers] = useState<Transformer[]>([]);
+  const [bills, setBills] = useState<Bill[]>([]);
+  
+  // Default Price Config
+  const [priceConfig, setPriceConfig] = useState<PriceConfigState>({
+      mode: 'tou',
+      fixedPrice: 0.85,
+      touSegments: [
+        { start: 0, end: 8, price: 0.32, type: 'valley' },
+        { start: 8, end: 11, price: 0.68, type: 'flat' },
+        { start: 11, end: 14, price: 1.15, type: 'peak' },
+        { start: 14, end: 17, price: 1.62, type: 'tip' },
+        { start: 17, end: 19, price: 1.15, type: 'peak' },
+        { start: 19, end: 22, price: 0.68, type: 'flat' },
+        { start: 22, end: 24, price: 0.32, type: 'valley' },
+      ]
+  });
 
   const updateModule = useCallback((id: string, data: Partial<ModuleData>) => {
     setModules(prev => ({
@@ -159,7 +204,12 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [modules]);
 
   return (
-    <ProjectContext.Provider value={{ modules, updateModule, toggleModule, getSummary }}>
+    <ProjectContext.Provider value={{ 
+        modules, updateModule, toggleModule, getSummary, 
+        transformers, setTransformers, 
+        bills, setBills,
+        priceConfig, setPriceConfig
+    }}>
       {children}
     </ProjectContext.Provider>
   );

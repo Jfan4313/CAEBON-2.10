@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, ResponsiveContainer, Cell, XAxis, YAxis, Tooltip, CartesianGrid, Brush } from 'recharts';
+import { useProject } from '../context/ProjectContext';
 
 type PriceMode = 'tou' | 'fixed' | 'spot';
 
 const PriceConfig: React.FC = () => {
+  const { setPriceConfig } = useProject(); // Access context setter
   const [configType, setConfigType] = useState<'template' | 'manual'>('template');
   const [priceMode, setPriceMode] = useState<PriceMode>('tou');
   const [chartData, setChartData] = useState<any[]>([]);
@@ -21,6 +23,20 @@ const PriceConfig: React.FC = () => {
       { start: 22, end: 24, price: 0.32, type: 'valley' },
   ]);
   const [spotValues, setSpotValues] = useState<number[]>(Array(24).fill(0.5));
+
+  // Sync with Global Context whenever local state changes
+  useEffect(() => {
+      // Logic to simplify spot values into a format somewhat compatible or just use basic TOU/Fixed for the global config type
+      // For now, mapping spot to TOU segments would be complex, so we just pass the mode and data
+      // For this demo, if Spot is selected, we won't fully serialize it to global TOU segments effectively without data loss, 
+      // but let's assume we pass the standard TOU/Fixed structure primarily for calculations.
+      
+      setPriceConfig({
+          mode: priceMode,
+          fixedPrice: fixedPriceVal,
+          touSegments: touSegments
+      });
+  }, [priceMode, fixedPriceVal, touSegments, setPriceConfig]);
 
   // Generate chart data based on current mode
   useEffect(() => {
@@ -208,7 +224,7 @@ const PriceConfig: React.FC = () => {
                                             step="0.01"
                                             value={fixedPriceVal}
                                             onChange={(e) => setFixedPriceVal(parseFloat(e.target.value))}
-                                            className="w-full text-lg font-bold text-slate-800 outline-none border-b border-slate-200 focus:border-primary py-1"
+                                            className="w-full text-lg font-bold text-slate-800 outline-none border-b border-slate-200 focus:border-primary py-1 bg-white"
                                         />
                                     </div>
                                 </div>
@@ -223,7 +239,7 @@ const PriceConfig: React.FC = () => {
                                                 <select 
                                                     value={seg.type}
                                                     onChange={(e) => handleTouChange(idx, 'type', e.target.value)}
-                                                    className="bg-slate-50 border border-slate-200 rounded px-1 py-0.5 outline-none"
+                                                    className="bg-white border border-slate-200 rounded px-1 py-0.5 outline-none focus:border-primary"
                                                 >
                                                     <option value="valley">低谷</option>
                                                     <option value="flat">平段</option>
@@ -238,7 +254,7 @@ const PriceConfig: React.FC = () => {
                                                     step="0.01"
                                                     value={seg.price}
                                                     onChange={(e) => handleTouChange(idx, 'price', parseFloat(e.target.value))}
-                                                    className="w-16 border border-slate-200 rounded px-2 py-1 outline-none focus:border-primary"
+                                                    className="w-16 border border-slate-200 rounded px-2 py-1 outline-none focus:border-primary bg-white"
                                                 />
                                                 <span className="text-slate-400">元</span>
                                             </div>
@@ -267,7 +283,7 @@ const PriceConfig: React.FC = () => {
                                                     step="0.01"
                                                     value={val}
                                                     onChange={(e) => handleSpotChange(i, e.target.value)}
-                                                    className="w-full text-xs font-medium outline-none text-right"
+                                                    className="w-full text-xs font-medium outline-none text-right bg-white"
                                                 />
                                             </div>
                                         ))}
@@ -324,7 +340,7 @@ const PriceConfig: React.FC = () => {
       <div className="fixed bottom-0 left-64 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 text-slate-400">
-                    <span className="material-symbols-outlined text-[18px]">history</span>
+                    <span className="material-icons text-[18px]">history</span>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs font-bold text-slate-700">上次配置</span>
