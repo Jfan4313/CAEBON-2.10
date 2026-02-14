@@ -1,362 +1,522 @@
 import React, { useState, useMemo } from 'react';
-import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useProject } from '../context/ProjectContext';
 
-// Generate 24h simulated data
-const generate24hData = () => {
-  const data = [];
-  for (let i = 0; i <= 24; i++) {
-    // Simulate a load curve: lower at night, higher during day
-    const baseLoad = 200 + Math.sin((i - 6) / 24 * Math.PI * 2) * 150 + Math.random() * 30;
-    // AI optimization is better during non-peak or stable periods, just a simulation
-    const optimizationRate = (i > 8 && i < 18) ? 0.92 : 0.85; 
+// --- Types ---
+
+type PriceLevel = 'valley' | 'flat' | 'peak';
+type LoadLevel = 'low' | 'normal' | 'high';
+type PvLevel = 'night' | 'cloudy' | 'sunny';
+
+interface NodeState {
+    status: 'idle' | 'charging' | 'discharging' | 'generating' | 'consuming' | 'optimized' | 'off';
+    label: string; 
+    val: string; 
+    flow: 'in' | 'out' | 'none'; 
+}
+
+// --- Illustration Assets (Clean Isometric Style) ---
+
+const IllustrationColors = {
+    bg: '#ffffff', // Pure White
+    buildingFace: '#f1f5f9', // Slate 100
+    buildingSide: '#e2e8f0', // Slate 200
+    buildingRoof: '#f8fafc', // Slate 50
+    window: '#e0f2fe', // Sky 100
+    windowBorder: '#bae6fd', // Sky 200
     
-    data.push({
-      name: `${i}h`,
-      hour: i,
-      actual: Math.max(50, Math.round(baseLoad)),
-      ai: Math.max(40, Math.round(baseLoad * optimizationRate)),
-      confidence: Math.round(88 + Math.random() * 10)
-    });
-  }
-  return data;
+    solar: '#3b82f6', // Blue 500
+    solarBorder: '#eff6ff', 
+    
+    storageFace: '#f8fafc',
+    storageSide: '#cbd5e1',
+    
+    grid: '#64748b', // Slate 500
+    
+    flowGreen: '#22c55e',
+    flowOrange: '#f97316',
+    flowBlue: '#3b82f6',
 };
 
-const fullData = generate24hData();
+// Isometric Cube Helper
+const IsoCube = ({ x, y, w, h, d, faceColor, sideColor, topColor, opacity=1 }: any) => (
+    <g transform={`translate(${x}, ${y})`} opacity={opacity}>
+        {/* Top */}
+        <path d={`M0 0 L${w} -${w/2} L${w+d} -${w/2 - d/2} L${d} ${d/2} Z`} fill={topColor} stroke="white" strokeWidth="0.5"/>
+        {/* Right (Side) */}
+        <path d={`M${w+d} -${w/2 - d/2} L${w+d} ${h - w/2 - d/2} L${d} ${h + d/2} L${d} ${d/2} Z`} fill={sideColor} stroke="white" strokeWidth="0.5"/>
+        {/* Left (Face) */}
+        <path d={`M0 0 L${d} ${d/2} L${d} ${h + d/2} L0 ${h} Z`} fill={faceColor} stroke="white" strokeWidth="0.5"/>
+    </g>
+);
 
-// Summary data for sidebar
-const sidebarData = [
-  { name: '0h', actual: 120, ai: 110 },
-  { name: '4h', actual: 100, ai: 90 },
-  { name: '8h', actual: 300, ai: 280 },
-  { name: '12h', actual: 450, ai: 400 },
-  { name: '16h', actual: 400, ai: 360 },
-  { name: '20h', actual: 200, ai: 190 },
+const MainBuilding = () => (
+    <g transform="translate(450, 280)">
+        {/* Main Structure - L Shape */}
+        <IsoCube x={0} y={0} w={120} h={100} d={80} 
+            faceColor={IllustrationColors.buildingFace} 
+            sideColor={IllustrationColors.buildingSide} 
+            topColor={IllustrationColors.buildingRoof} 
+        />
+        <IsoCube x={60} y={-30} w={80} h={120} d={60} 
+            faceColor={IllustrationColors.buildingFace} 
+            sideColor={IllustrationColors.buildingSide} 
+            topColor={IllustrationColors.buildingRoof} 
+        />
+        
+        {/* Windows */}
+        <g transform="translate(10, 20)">
+            <path d="M10 5 L70 35 L70 80 L10 50 Z" fill={IllustrationColors.window} stroke={IllustrationColors.windowBorder} strokeWidth="1" />
+            <line x1="40" y1="20" x2="40" y2="65" stroke={IllustrationColors.windowBorder} />
+            <line x1="10" y1="27" x2="70" y2="57" stroke={IllustrationColors.windowBorder} />
+        </g>
+        <g transform="translate(90, -10)">
+             <path d="M0 60 L60 30 L60 -20 L0 10 Z" fill={IllustrationColors.window} stroke={IllustrationColors.windowBorder} strokeWidth="1" />
+        </g>
+
+        {/* Entrance */}
+        <g transform="translate(20, 85)">
+            <path d="M0 0 L30 15 L30 55 L0 40 Z" fill="#e2e8f0" opacity="0.5" />
+            <path d="M5 2 L25 12 L25 48 L5 38 Z" fill="#475569" />
+        </g>
+    </g>
+);
+
+const SolarArray = ({ active }: { active: boolean }) => (
+    <g transform="translate(150, 350)">
+        {[0, 1, 2].map(i => (
+            <g key={i} transform={`translate(${i*50}, ${-i*25})`}>
+                <path d="M0 0 L60 -30 L90 -15 L30 15 Z" fill={IllustrationColors.solar} stroke={IllustrationColors.solarBorder} strokeWidth="1" />
+                <path d="M30 15 L30 30" stroke="#94a3b8" strokeWidth="2" />
+                <path d="M0 0 L0 15" stroke="#94a3b8" strokeWidth="2" />
+                {active && <path d="M0 0 L60 -30 L90 -15 L30 15 Z" fill="white" opacity="0.2" className="animate-pulse" />}
+            </g>
+        ))}
+    </g>
+);
+
+const StorageContainer = ({ active, status }: { active: boolean, status: string }) => (
+    <g transform="translate(300, 480)">
+        <IsoCube x={0} y={0} w={90} h={50} d={50} 
+            faceColor="#f8fafc" sideColor="#cbd5e1" topColor="#fff" 
+        />
+        <path d="M10 5 L30 15 L30 55 L10 45 Z" fill="none" stroke="#94a3b8" />
+        <path d="M40 20 L60 30 L60 70 L40 60 Z" fill="none" stroke="#94a3b8" />
+        <circle cx="75" cy="50" r="3" fill={active ? (status === 'charging' ? '#22c55e' : '#f97316') : '#cbd5e1'} className={active ? 'animate-ping' : ''} />
+        <text x="30" y="60" fontSize="8" fill="#64748b" transform="rotate(-26) skewX(26)" fontWeight="bold">ESS</text>
+    </g>
+);
+
+const GridPylon = ({ active }: { active: boolean }) => (
+    <g transform="translate(850, 150)">
+        <path d="M0 0 L-20 120 L20 120 Z" fill="none" stroke={IllustrationColors.grid} strokeWidth="2" />
+        <line x1="-30" y1="30" x2="30" y2="30" stroke={IllustrationColors.grid} strokeWidth="2" />
+        <line x1="-40" y1="60" x2="40" y2="60" stroke={IllustrationColors.grid} strokeWidth="2" />
+        <path d="M-30 30 Q -200 80, -350 180" fill="none" stroke="#cbd5e1" strokeWidth="1" />
+        {active && <path d="M-30 30 Q -200 80, -350 180" fill="none" stroke={IllustrationColors.flowBlue} strokeWidth="2" strokeDasharray="5 5" className="animate-flow" />}
+    </g>
+);
+
+const HvacSystem = ({ active }: { active: boolean }) => (
+    <g transform="translate(620, 230)">
+        <IsoCube x={0} y={0} w={30} h={20} d={30} faceColor="#e2e8f0" sideColor="#cbd5e1" topColor="#f1f5f9" />
+        <IsoCube x={40} y={20} w={30} h={20} d={30} faceColor="#e2e8f0" sideColor="#cbd5e1" topColor="#f1f5f9" />
+        {active && (
+            <g transform="translate(15, -7)">
+                <line x1="-6" y1="0" x2="6" y2="0" stroke="#64748b" strokeWidth="2" className="animate-spin origin-center" />
+                <line x1="0" y1="-6" x2="0" y2="6" stroke="#64748b" strokeWidth="2" className="animate-spin origin-center" />
+            </g>
+        )}
+    </g>
+);
+
+const FlowPath = ({ d, color, active, reverse }: any) => {
+    if (!active) return null;
+    return (
+        <g pointerEvents="none">
+            <path d={d} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" opacity="0.2" />
+            <path d={d} fill="none" stroke={color} strokeWidth="2" strokeDasharray="6 6" className={reverse ? 'animate-flow-reverse' : 'animate-flow'} />
+            <style>{`
+                @keyframes flow { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+                @keyframes flow-reverse { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 24; } }
+                .animate-flow { animation: flow 1s linear infinite; }
+                .animate-flow-reverse { animation: flow-reverse 1s linear infinite; }
+            `}</style>
+        </g>
+    );
+};
+
+const StatHUD = ({ x, y, label, value, color }: any) => (
+    <div className="absolute transform -translate-x-1/2 -translate-y-full pointer-events-none transition-all duration-500" style={{ left: x, top: y - 20 }}>
+        <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.08)] border border-slate-100 border-l-4 flex flex-col min-w-[80px]" style={{ borderLeftColor: color }}>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
+            <span className="text-sm font-bold text-slate-800">{value}</span>
+        </div>
+        <div className="w-0.5 h-6 bg-slate-200 mx-auto opacity-60"></div>
+        <div className="w-2 h-2 rounded-full bg-slate-300 mx-auto -mt-1 ring-2 ring-white"></div>
+    </div>
+);
+
+// --- Logic Helpers ---
+
+const getPriceInfo = (level: PriceLevel) => {
+    switch(level) {
+        case 'valley': return { price: 0.32, label: '谷电' };
+        case 'flat': return { price: 0.68, label: '平段' };
+        case 'peak': return { price: 1.65, label: '尖峰' };
+    }
+};
+
+const getLoadInfo = (level: LoadLevel) => {
+    switch(level) {
+        case 'low': return { kw: 150 };
+        case 'normal': return { kw: 450 };
+        case 'high': return { kw: 850 };
+    }
+};
+
+const getPvInfo = (level: PvLevel) => {
+    switch(level) {
+        case 'night': return { kw: 0 };
+        case 'cloudy': return { kw: 120 };
+        case 'sunny': return { kw: 600 };
+    }
+};
+
+const generateChartData = (price: PriceLevel) => {
+    return Array.from({ length: 24 }, (_, i) => {
+        let base = 200 + Math.random() * 50;
+        if (i > 8 && i < 18) base += 200; 
+        let aiLoad = base;
+        if (price === 'peak' && (i >= 10 && i <= 14)) aiLoad -= 80; 
+        return { hour: `${i}:00`, base: Math.round(base), ai: Math.round(aiLoad) };
+    });
+};
+
+const aiBenefits = [
+    { 
+        id: 'storage',
+        name: '储能策略优化', 
+        value: 8.5, 
+        uplift: '12%',
+        color: '#8b5cf6', 
+        icon: 'battery_charging_full',
+        desc: '基于电价预测的智能充放电策略，捕捉最大化峰谷套利空间。'
+    },
+    { 
+        id: 'hvac',
+        name: '暖通全局寻优', 
+        value: 4.8, 
+        uplift: '15%',
+        color: '#3b82f6', 
+        icon: 'ac_unit',
+        desc: '动态调节机组参数，基于负荷预测实现系统级能效(COP)最大化。'
+    },
+    { 
+        id: 'solar',
+        name: '光伏消纳提升', 
+        value: 3.2, 
+        uplift: '5%',
+        color: '#f59e0b', 
+        icon: 'solar_power',
+        desc: '平滑光伏出力波动，优化源荷匹配，提高清洁能源自用比例。'
+    },
+    { 
+        id: 'ev',
+        name: '有序充电调度', 
+        value: 2.1, 
+        uplift: '8%',
+        color: '#10b981', 
+        icon: 'ev_station',
+        desc: '利用负荷低谷时段引导充电，削减尖峰负荷，延缓扩容投资。'
+    },
+    {
+        id: 'lighting',
+        name: '智能照明控制',
+        value: 1.5,
+        uplift: '10%',
+        color: '#eab308',
+        icon: 'lightbulb',
+        desc: '融合环境光与人员感应，实现恒照度控制与分区管理。'
+    }
 ];
 
 export default function RetrofitAI() {
-  const { modules, toggleModule } = useProject();
-  const currentModule = modules['retrofit-ai'];
-  const [isChartExpanded, setIsChartExpanded] = useState(false);
-  
-  // Interactive States
-  const [predictionHorizon, setPredictionHorizon] = useState<number>(12); // Slider: 4-24 hours
-  const [selectedPoint, setSelectedPoint] = useState<any>(fullData[8]); // Default selection
+    const { modules } = useProject();
+    const currentModule = modules['retrofit-ai'];
+    
+    // --- State ---
+    const [priceLevel, setPriceLevel] = useState<PriceLevel>('flat');
+    const [loadLevel, setLoadLevel] = useState<LoadLevel>('normal');
+    const [pvLevel, setPvLevel] = useState<PvLevel>('cloudy');
 
-  // Filter chart data based on slider
-  const mainChartData = useMemo(() => {
-      return fullData.slice(0, predictionHorizon + 1);
-  }, [predictionHorizon]);
-  
-  if (!currentModule) return null;
+    // --- Dynamic Decision Engine ---
+    const systemState = useMemo(() => {
+        const price = getPriceInfo(priceLevel);
+        const load = getLoadInfo(loadLevel);
+        const pv = getPvInfo(pvLevel);
 
-  return (
-    <div className="flex h-full bg-slate-50 relative">
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-20 shrink-0">
-            <div className="flex items-center gap-4">
-                <div>
-                    <h2 className="text-xl font-bold text-slate-900">AI 智控平台配置</h2>
-                    <p className="text-xs text-slate-500">能耗预测与设备运行优化策略</p>
-                </div>
-                <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full ml-4">
-                    <span className={`text-xs font-bold ${currentModule.isActive ? 'text-primary' : 'text-slate-400'}`}>
-                        {currentModule.isActive ? '模块已启用' : '模块已停用'}
-                    </span>
-                    <button 
-                        onClick={() => toggleModule('retrofit-ai')}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${currentModule.isActive ? 'bg-primary' : 'bg-slate-300'}`}
-                    >
-                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${currentModule.isActive ? 'translate-x-5' : 'translate-x-1'}`} />
-                    </button>
-                </div>
-            </div>
-            <button className="flex items-center gap-2 text-sm text-primary font-medium hover:underline">
-                <span className="material-icons text-base">history</span> 加载历史方案
-            </button>
-        </header>
+        const nodes: Record<string, NodeState> = {
+            solar: { status: 'off', label: 'PV Generation', val: '0 kW', flow: 'none' },
+            storage: { status: 'idle', label: 'Energy Storage', val: 'SOC 50%', flow: 'none' },
+            hvac: { status: 'consuming', label: 'HVAC Load', val: 'RUN', flow: 'in' },
+            ev: { status: 'consuming', label: 'EV Charging', val: 'IDLE', flow: 'in' },
+            lighting: { status: 'consuming', label: 'Lighting', val: 'ON', flow: 'in' },
+            grid: { status: 'idle', label: 'Grid', val: 'CONN', flow: 'in' }
+        };
 
-        <div className={`flex-1 overflow-y-auto p-8 pb-32 transition-opacity duration-300 ${currentModule.isActive ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
-            <div className="max-w-5xl mx-auto space-y-6">
-                
-                {/* Features */}
-                <section className="bg-gradient-to-br from-blue-50 to-white rounded-xl shadow-sm border border-blue-100 p-6">
-                    <h3 className="text-base font-bold text-blue-800 mb-4 flex items-center gap-2">
-                        <span className="material-icons">psychology</span> 核心功能介绍
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {[
-                            {title: 'AI 负荷预测', desc: '基于历史数据与天气预报，精准预测未来能耗，指导能源调度。'},
-                            {title: '设备故障诊断', desc: '实时监控设备运行参数，利用异常检测算法提前预警潜在故障。'},
-                            {title: '全局能效优化', desc: '动态调整暖通、照明等子系统运行参数，在保障舒适度前提下实现极致节能。'}
-                        ].map((f, i) => (
-                            <div key={i} className="flex gap-3">
-                                <div className="w-1 h-full bg-blue-200 rounded-full"></div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800 text-sm">{f.title}</h4>
-                                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">{f.desc}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
+        if (pvLevel !== 'night') {
+            nodes.solar = { status: 'generating', label: 'PV Gen', val: `${pv.kw} kW`, flow: 'out' };
+        }
 
-                {/* Interactive Prediction Chart */}
-                <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                        <div>
-                            <h3 className="text-base font-bold text-slate-800 flex items-center">
-                                <span className="material-icons text-primary mr-2">timeline</span> AI 负荷预测模型
-                            </h3>
-                            <p className="text-xs text-slate-500 mt-1">拖动滑块调整预测时长，点击柱状图查看详细数据</p>
-                        </div>
-                        
-                        {/* Slider Control */}
-                        <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100 w-full md:w-auto shadow-sm">
-                            <span className="text-xs font-medium text-slate-600 whitespace-nowrap flex items-center gap-1">
-                                <span className="material-icons text-[14px]">schedule</span>
-                                预测范围: <span className="text-primary font-bold">{predictionHorizon}</span> 小时
-                            </span>
-                            <input 
-                                type="range" 
-                                min="6" 
-                                max="24" 
-                                step="1" 
-                                value={predictionHorizon}
-                                onChange={(e) => setPredictionHorizon(Number(e.target.value))}
-                                className="w-full md:w-32 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col md:flex-row gap-6 h-[320px]">
-                        {/* Chart Area */}
-                        <div className="flex-1 relative bg-slate-50/50 rounded-xl p-2 border border-slate-100">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart 
-                                    data={mainChartData} 
-                                    margin={{top: 20, right: 10, left: -20, bottom: 0}}
-                                    onClick={(e: any) => { if(e && e.activePayload) setSelectedPoint(e.activePayload[0].payload); }}
-                                    className="cursor-pointer"
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                    <XAxis dataKey="name" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                                    <Tooltip 
-                                        cursor={{fill: 'rgba(59, 130, 246, 0.05)'}}
-                                        contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}}
-                                        labelStyle={{fontSize: '12px', color: '#64748b', marginBottom: '4px'}}
-                                    />
-                                    <Bar dataKey="actual" name="基准负荷" fill="#cbd5e1" radius={[2,2,0,0]} />
-                                    <Bar dataKey="ai" name="AI预测" fill="#3b82f6" radius={[2,2,0,0]}>
-                                        {mainChartData.map((entry, index) => (
-                                            <Cell 
-                                                key={`cell-${index}`} 
-                                                fill={selectedPoint && selectedPoint.hour === entry.hour ? '#2563eb' : '#3b82f6'} 
-                                                cursor="pointer"
-                                            />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                            <div className="absolute top-2 right-4 flex gap-3 text-[10px]">
-                                <div className="flex items-center gap-1"><div className="w-2 h-2 bg-slate-300 rounded"></div><span className="text-slate-500">实际负荷</span></div>
-                                <div className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500 rounded"></div><span className="text-slate-500">AI优化</span></div>
-                            </div>
-                        </div>
-
-                        {/* Selected Point Detail Panel */}
-                        <div className="w-full md:w-56 shrink-0 bg-white border border-blue-100 rounded-xl p-5 flex flex-col justify-center shadow-[0_4px_20px_-4px_rgba(59,130,246,0.1)] relative overflow-hidden transition-all duration-300">
-                            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-blue-50 to-transparent rounded-bl-full -mr-6 -mt-6"></div>
-                            
-                            {selectedPoint ? (
-                                <>
-                                    <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3 relative z-10">
-                                        <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
-                                            <span className="material-icons text-sm">access_time_filled</span>
-                                        </div>
-                                        <div>
-                                            <h4 className="text-sm font-bold text-slate-800">{selectedPoint.name} 时刻</h4>
-                                            <p className="text-[10px] text-slate-400">实时数据快照</p>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4 relative z-10">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-xs text-slate-500">原始负荷</span>
-                                            <span className="text-sm font-bold text-slate-600">{selectedPoint.actual} <span className="text-[10px] font-normal">kW</span></span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-xs text-slate-500">AI 优化值</span>
-                                            <span className="text-lg font-bold text-primary">{selectedPoint.ai} <span className="text-xs font-normal">kW</span></span>
-                                        </div>
-                                        <div className="bg-emerald-50 rounded-lg p-2 flex items-center justify-between border border-emerald-100">
-                                            <span className="text-xs text-emerald-700 font-medium">节能潜力</span>
-                                            <div className="flex items-center text-emerald-600 font-bold text-sm">
-                                                <span className="material-icons text-[14px]">arrow_downward</span>
-                                                {((1 - selectedPoint.ai / selectedPoint.actual) * 100).toFixed(1)}%
-                                            </div>
-                                        </div>
-                                        <div className="pt-2">
-                                            <div className="flex justify-between text-[10px] mb-1">
-                                                <span className="text-slate-400">模型置信度</span>
-                                                <span className="font-bold text-blue-600">{selectedPoint.confidence}%</span>
-                                            </div>
-                                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                                <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{width: `${selectedPoint.confidence}%`}}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="text-center text-slate-400 py-8">
-                                    <span className="material-icons text-3xl mb-2 opacity-50">touch_app</span>
-                                    <p className="text-xs">点击左侧图表<br/>查看详细数据</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </section>
-
-                {/* Parameters */}
-                <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex items-center justify-between mb-5">
-                        <h3 className="text-base font-bold text-slate-800 flex items-center">
-                            <span className="material-icons text-primary mr-2">sliders</span> 详细参数设置
-                        </h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">接入点位数 (Tag)</label>
-                            <div className="relative">
-                                <input type="number" defaultValue={2000} className="block w-full rounded-lg border-slate-300 bg-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm pl-4 pr-16 py-2.5 border outline-none" />
-                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none"><span className="text-slate-500 sm:text-sm font-medium">个</span></div>
-                            </div>
-                        </div>
-                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">AI 软件订阅年费</label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><span className="text-slate-500 sm:text-sm font-medium">¥</span></div>
-                                <input type="number" defaultValue={15} className="block w-full rounded-lg border-slate-300 bg-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm pl-8 pr-16 py-2.5 border outline-none" />
-                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none"><span className="text-slate-500 sm:text-sm font-medium">万元/年</span></div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </div>
+        const netLoad = load.kw - pv.kw;
         
-        {/* Sticky Footer */}
-        <div className="fixed bottom-0 left-64 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-            <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 text-slate-400">
-                    <span className="material-icons text-[18px]">history</span>
-                </div>
-                <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-700">自动同步</span>
-                    <span className="text-[10px] text-slate-400 font-medium">数据实时计算中...</span>
-                </div>
-            </div>
-            <div className="flex items-center gap-3">
-                <button className="px-6 py-2.5 text-sm font-semibold rounded-xl text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all">重置</button>
-                <button className="px-8 py-2.5 text-sm font-semibold rounded-xl bg-primary text-white shadow-lg shadow-primary/30 hover:bg-primary-hover transition-all flex items-center gap-2">
-                    保存配置 <span className="material-icons text-[18px]">save</span>
-                </button>
-            </div>
-        </div>
-      </div>
-        
-      {/* Right Sidebar - Analytics */}
-      <aside className={`w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 h-screen overflow-y-auto shadow-xl mb-16 transition-all duration-300 ${currentModule.isActive ? '' : 'opacity-60 grayscale'}`}>
-          <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <span className="material-icons text-primary">analytics</span> 实时预估收益
-              </h3>
-              {!currentModule.isActive && <span className="text-xs font-bold text-red-500 border border-red-200 bg-red-50 px-2 py-0.5 rounded">未计入</span>}
-          </div>
-          <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
-               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <div className="flex items-center gap-2 mb-2">
-                      <div className="p-1.5 bg-green-100 rounded text-green-600"><span className="material-icons text-sm">energy_savings_leaf</span></div>
-                      <span className="text-xs font-semibold text-slate-500 uppercase">额外节能潜力</span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-slate-900 tracking-tight">8.5%</span>
-                  </div>
-              </div>
-               <div className="bg-primary p-4 rounded-xl shadow-lg shadow-primary/20 text-white relative overflow-hidden group">
-                   <div className="absolute right-0 top-0 w-24 h-24 bg-white/10 rounded-full -mr-8 -mt-8 blur-xl group-hover:bg-white/20 transition-all"></div>
-                   <div className="flex items-center gap-2 mb-2 relative z-10">
-                       <div className="p-1.5 bg-white/20 rounded text-white"><span className="material-icons text-sm">account_balance_wallet</span></div>
-                       <span className="text-xs font-semibold text-blue-100 uppercase">首年投入成本</span>
-                   </div>
-                   <div className="flex items-baseline gap-2 relative z-10">
-                       <span className="text-3xl font-bold tracking-tight">¥ 35.0</span>
-                       <span className="text-sm text-blue-100">万元</span>
-                   </div>
-               </div>
+        if (priceLevel === 'valley') {
+            nodes.storage = { status: 'charging', label: 'Storage', val: 'Charge +200', flow: 'in' };
+        } else if (priceLevel === 'peak') {
+            nodes.storage = { status: 'discharging', label: 'Storage', val: 'Discharge -180', flow: 'out' };
+        } else {
+            if (pv.kw > load.kw) {
+                nodes.storage = { status: 'charging', label: 'Storage', val: 'PV Absorbed', flow: 'in' };
+            }
+        }
 
-               {/* Clickable Chart */}
-               <div 
-                  className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer group relative transition-all hover:border-primary/50 hover:shadow-md"
-                  onClick={() => setIsChartExpanded(true)}
-                >
-                    <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                            <div className="p-1.5 bg-blue-100 rounded text-blue-600"><span className="material-icons text-sm">bar_chart</span></div>
-                            <span className="text-xs font-semibold text-slate-500 uppercase">能耗对比 (实时/AI)</span>
-                        </div>
-                        <span className="material-icons text-slate-300 text-sm group-hover:text-primary transition-colors">open_in_full</span>
-                    </div>
-                    <div className="h-32 w-full pointer-events-none">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={sidebarData} barGap={2}>
-                                <XAxis dataKey="name" tick={{fontSize: 9, fill: '#94a3b8'}} axisLine={false} tickLine={false} interval={1} />
-                                <Bar dataKey="actual" fill="#cbd5e1" radius={[2,2,0,0]} />
-                                <Bar dataKey="ai" fill="#3b82f6" radius={[2,2,0,0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-          </div>
-      </aside>
+        if (loadLevel === 'high') {
+            nodes.hvac = { status: 'optimized', label: 'HVAC', val: 'Eco Mode', flow: 'in' };
+            nodes.ev = { status: 'optimized', label: 'EV Charger', val: 'Queueing', flow: 'in' };
+        } else {
+            nodes.hvac = { status: 'consuming', label: 'HVAC', val: 'Cooling', flow: 'in' };
+            nodes.ev = { status: 'consuming', label: 'EV Charger', val: 'Fast Chg', flow: 'in' };
+        }
 
-      {/* Expanded Chart Modal */}
-      {isChartExpanded && (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6"
-            onClick={() => setIsChartExpanded(false)}
-        >
-            <div 
-                className="bg-white rounded-2xl w-full max-w-5xl h-[600px] shadow-2xl p-8 flex flex-col relative animate-[zoomIn_0.2s_ease-out]"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex justify-between items-center mb-6">
+        if (netLoad > 0 && nodes.storage.status !== 'discharging') {
+             nodes.grid = { status: 'consuming', label: 'Grid', val: `${Math.max(0, netLoad).toFixed(0)} kW`, flow: 'out' }; 
+        }
+
+        let strategyLabel = 'Balanced';
+        if (priceLevel === 'peak') strategyLabel = 'Peak Shaving';
+        else if (priceLevel === 'valley') strategyLabel = 'Valley Filling';
+
+        return { nodes, strategyLabel };
+    }, [priceLevel, loadLevel, pvLevel]);
+
+    const chartData = useMemo(() => generateChartData(priceLevel), [priceLevel]);
+    const totalAiSaving = aiBenefits.reduce((a,b) => a + b.value, 0);
+
+    if (!currentModule) return null;
+
+    return (
+        <div className="flex h-full flex-col bg-slate-50 relative overflow-hidden">
+            {/* Header */}
+            <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 z-20 shrink-0">
+                <div className="flex items-center gap-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                            <span className="p-2 bg-blue-100 text-blue-600 rounded-lg"><span className="material-icons">bar_chart</span></span>
-                            AI 优化效果对比
+                        <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                            <span className="material-icons text-indigo-600">psychology</span>
+                            AI 智控数字孪生 <span className="text-slate-400 font-normal">| Digital Twin</span>
                         </h2>
-                        <p className="text-slate-500 mt-1 ml-12">实际能耗 vs AI优化后能耗</p>
                     </div>
-                    <button onClick={() => setIsChartExpanded(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-slate-800">
-                        <span className="material-icons text-2xl">close</span>
-                    </button>
+                    <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full">
+                        <div className={`w-2 h-2 rounded-full ${currentModule.isActive ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></div>
+                        <span className="text-xs font-bold text-indigo-700">
+                            System Online: {systemState.strategyLabel}
+                        </span>
+                    </div>
                 </div>
-                <div className="flex-1 w-full min-h-0 bg-slate-50 rounded-xl border border-slate-100 p-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={sidebarData} margin={{top: 20, right: 30, left: 20, bottom: 5}} barGap={8}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis dataKey="name" tick={{fontSize: 14, fill: '#64748b'}} axisLine={{stroke: '#e2e8f0'}} tickLine={false} dy={10} />
-                            <YAxis tick={{fontSize: 12, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                            <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
-                            <Bar dataKey="actual" name="实际能耗" fill="#cbd5e1" radius={[4,4,0,0]} />
-                            <Bar dataKey="ai" name="AI优化后" fill="#3b82f6" radius={[4,4,0,0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
+            </header>
+
+            {/* Main Content Body */}
+            <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col lg:flex-row">
+                
+                {/* 1. LEFT: Illustration Canvas (White Background) */}
+                <div className="flex-1 relative bg-white overflow-hidden border-r border-slate-200">
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#f8fafc" strokeWidth="1"/>
+                            </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
+                        
+                        <FlowPath d="M200 320 Q 300 300 450 330" color={IllustrationColors.flowGreen} active={systemState.nodes.solar.flow === 'out'} />
+                        <FlowPath d="M850 180 Q 700 200 570 330" color={IllustrationColors.flowBlue} active={systemState.nodes.grid.status === 'consuming'} />
+                        <FlowPath d="M340 480 Q 400 450 450 380" color={IllustrationColors.flowGreen} active={systemState.nodes.storage.status === 'discharging'} />
+                        <FlowPath d="M450 380 Q 400 450 340 480" color={IllustrationColors.flowOrange} active={systemState.nodes.storage.status === 'charging'} />
+                        <FlowPath d="M500 380 Q 520 450 550 520" color={IllustrationColors.flowOrange} active={systemState.nodes.ev.flow === 'in'} />
+                        <FlowPath d="M550 330 Q 580 280 620 250" color={IllustrationColors.flowOrange} active={systemState.nodes.hvac.flow === 'in'} />
+                        <FlowPath d="M550 380 Q 650 400 750 420" color={IllustrationColors.flowOrange} active={systemState.nodes.lighting.flow === 'in'} />
+
+                        <MainBuilding />
+                        <SolarArray active={systemState.nodes.solar.status === 'generating'} />
+                        <GridPylon active={systemState.nodes.grid.status === 'consuming'} />
+                        <StorageContainer active={systemState.nodes.storage.status !== 'idle'} status={systemState.nodes.storage.status} />
+                        <HvacSystem active={systemState.nodes.hvac.status !== 'off'} />
+                    </svg>
+
+                    <div className="absolute inset-0 pointer-events-none">
+                        <StatHUD x={200} y={320} label="光伏发电" value={systemState.nodes.solar.val} color={IllustrationColors.flowGreen} />
+                        <StatHUD x={850} y={150} label="电网取电" value={systemState.nodes.grid.val} color={IllustrationColors.flowBlue} />
+                        <StatHUD x={340} y={480} label="储能系统" value={systemState.nodes.storage.val} color={systemState.nodes.storage.status==='charging' ? IllustrationColors.flowOrange : IllustrationColors.flowGreen} />
+                        <StatHUD x={550} y={520} label="充电桩" value={systemState.nodes.ev.val} color={IllustrationColors.flowOrange} />
+                        <StatHUD x={640} y={230} label="暖通空调" value={systemState.nodes.hvac.val} color={IllustrationColors.flowOrange} />
+                        <StatHUD x={750} y={420} label="智能照明" value={systemState.nodes.lighting.val} color={IllustrationColors.flowOrange} />
+                    </div>
                 </div>
+
+                {/* 2. RIGHT: Dashboard Panel - Structured & Modern */}
+                <div className="w-full lg:w-[400px] bg-white flex flex-col z-20 h-full shadow-2xl relative">
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        
+                        {/* A. Brain Neuron Configuration */}
+                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                            <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg"><span className="material-icons text-sm">settings_input_component</span></span>
+                                大脑神经元配置
+                            </h3>
+                            <div className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs font-medium text-slate-500">
+                                        <span>电价信号 (Price)</span>
+                                        <span className="text-indigo-600">{priceLevel.toUpperCase()}</span>
+                                    </div>
+                                    <div className="flex bg-white p-1 rounded-lg border border-slate-200">
+                                        {(['valley', 'flat', 'peak'] as const).map(p => (
+                                            <button 
+                                                key={p} 
+                                                onClick={() => setPriceLevel(p)}
+                                                className={`flex-1 py-1.5 text-xs rounded-md transition-all ${priceLevel === p ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                            >
+                                                {{valley:'谷', flat:'平', peak:'峰'}[p]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs font-medium text-slate-500">
+                                        <span>建筑负荷 (Load)</span>
+                                        <span className="text-blue-600">{loadLevel.toUpperCase()}</span>
+                                    </div>
+                                    <div className="flex bg-white p-1 rounded-lg border border-slate-200">
+                                        {(['low', 'normal', 'high'] as const).map(l => (
+                                            <button 
+                                                key={l} 
+                                                onClick={() => setLoadLevel(l)}
+                                                className={`flex-1 py-1.5 text-xs rounded-md transition-all ${loadLevel === l ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                            >
+                                                {{low:'低', normal:'中', high:'高'}[l]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs font-medium text-slate-500">
+                                        <span>光伏出力 (PV)</span>
+                                        <span className="text-orange-600">{pvLevel.toUpperCase()}</span>
+                                    </div>
+                                    <div className="flex bg-white p-1 rounded-lg border border-slate-200">
+                                        {(['night', 'cloudy', 'sunny'] as const).map(p => (
+                                            <button 
+                                                key={p} 
+                                                onClick={() => setPvLevel(p)}
+                                                className={`flex-1 py-1.5 text-xs rounded-md transition-all ${pvLevel === p ? 'bg-orange-50 text-orange-700 font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                            >
+                                                {{night:'无', cloudy:'阴', sunny:'晴'}[p]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* B. AI Revenue Premium Analysis - List View */}
+                        <div>
+                            <div className="flex justify-between items-center mb-3 px-1">
+                                <div className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                    <span className="material-icons text-emerald-500 text-lg">monetization_on</span>
+                                    AI 收益溢价分析
+                                </div>
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                                    +¥{totalAiSaving.toFixed(1)}万/年
+                                </span>
+                            </div>
+                            <div className="space-y-3">
+                                {aiBenefits.map((item) => (
+                                    <div key={item.id} className="group bg-white rounded-xl border border-slate-100 p-3 hover:border-slate-300 hover:shadow-md transition-all relative overflow-hidden">
+                                        {/* Background Decor */}
+                                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-slate-50 to-transparent rounded-bl-full -mr-6 -mt-6 opacity-60 group-hover:from-slate-100 transition-all"></div>
+                                        
+                                        <div className="flex gap-3 relative z-10">
+                                            <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 shadow-sm" style={{backgroundColor: `${item.color}15`, color: item.color}}>
+                                                <span className="material-icons text-xl">{item.icon}</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-xs font-bold text-slate-800">{item.name}</span>
+                                                    <span className="text-xs font-bold text-slate-900">¥{item.value}万</span>
+                                                </div>
+                                                <p className="text-[10px] text-slate-500 leading-relaxed mb-2 opacity-90 line-clamp-2">{item.desc}</p>
+                                                
+                                                {/* Uplift Bar */}
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex-1">
+                                                        <div 
+                                                            className="h-full rounded-full transition-all duration-1000 ease-out" 
+                                                            style={{width: '70%', backgroundColor: item.color}}
+                                                        ></div>
+                                                    </div>
+                                                    <span className="text-[9px] font-bold" style={{color: item.color}}>+{item.uplift}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* C. Real-time Dashboard */}
+                        <div className="flex flex-col h-[220px]">
+                            <div className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+                                <span className="material-icons text-blue-500 text-lg">monitoring</span>
+                                算法溢价实时看板
+                            </div>
+                            <div className="flex-1 w-full bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col relative overflow-hidden">
+                                <div className="absolute top-4 right-4 flex items-center gap-3 text-[10px] z-10">
+                                    <span className="flex items-center gap-1.5 text-slate-400"><div className="w-2 h-0.5 bg-slate-300"></div>基线</span>
+                                    <span className="flex items-center gap-1.5 text-blue-600 font-bold"><div className="w-2 h-0.5 bg-blue-600"></div>优化后</span>
+                                </div>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={chartData} margin={{top: 25, right: 5, left: -25, bottom: 0}}>
+                                        <defs>
+                                            <linearGradient id="grad1" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
+                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis dataKey="hour" tick={{fontSize: 9, fill: '#94a3b8'}} axisLine={false} tickLine={false} interval={3} />
+                                        <YAxis tick={{fontSize: 9, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                                        <Tooltip 
+                                            contentStyle={{backgroundColor: 'rgba(255,255,255,0.95)', border: 'none', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', fontSize: '10px'}}
+                                        />
+                                        <Area type="monotone" dataKey="ai" stroke="#3b82f6" fill="url(#grad1)" strokeWidth={2} name="优化后" animationDuration={1000} />
+                                        <Area type="monotone" dataKey="base" stroke="#cbd5e1" fill="transparent" strokeDasharray="3 3" name="基线" animationDuration={1000} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Fixed Footer Action */}
+                    <div className="p-4 border-t border-slate-100 bg-white">
+                        <button className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 transform active:scale-[0.98]">
+                            <span className="material-icons text-sm">auto_awesome</span> 生成优化报告
+                        </button>
+                    </div>
+                </div>
+
             </div>
         </div>
-      )}
-    </div>
-  );
-}
+    );
+};

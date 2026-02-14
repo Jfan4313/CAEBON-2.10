@@ -19,12 +19,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
   const iconClass = (isActive: boolean) =>
     `material-symbols-outlined text-[20px] transition-transform ${isActive ? '' : 'group-hover:scale-110'}`;
 
+  // Reordered: Simple -> Complex -> System -> Abstract
   const retrofitItems: { id: View; label: string; icon: string }[] = [
-    { id: 'retrofit-solar', label: '分布式光伏', icon: 'solar_power' },
-    { id: 'retrofit-storage', label: '工商业储能', icon: 'battery_charging_full' },
-    { id: 'retrofit-hvac', label: '暖通空调', icon: 'ac_unit' },
     { id: 'retrofit-lighting', label: '智能照明', icon: 'lightbulb' },
     { id: 'retrofit-water', label: '热水系统', icon: 'water_drop' },
+    { id: 'retrofit-hvac', label: '暖通空调', icon: 'ac_unit' },
+    { id: 'retrofit-solar', label: '分布式光伏', icon: 'solar_power' },
+    { id: 'retrofit-storage', label: '工商业储能', icon: 'battery_charging_full' },
     { id: 'retrofit-ev', label: '充电桩设施', icon: 'ev_station' },
     { id: 'retrofit-microgrid', label: '微电网', icon: 'grid_4x4' },
     { id: 'retrofit-vpp', label: '虚拟电厂', icon: 'hub' },

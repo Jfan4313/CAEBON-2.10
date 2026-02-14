@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 // Define the shape of data for each module
 export interface ModuleData {
@@ -10,6 +10,7 @@ export interface ModuleData {
   yearlySaving: number; // in 万元 or carbon tons converted to value
   kpiPrimary: { label: string; value: string }; // e.g., "1.2 MWp"
   kpiSecondary: { label: string; value: string }; // e.g., "ROI 12%"
+  params?: any; // Generic container for module-specific state persistence
 }
 
 export interface Transformer {
@@ -32,6 +33,21 @@ export interface PriceConfigState {
     mode: 'tou' | 'fixed' | 'spot';
     fixedPrice: number;
     touSegments: { start: number; end: number; price: number; type: string }[];
+    spotPrices: number[]; // Added for spot price persistence
+}
+
+// Project Base Info (from Project Entry)
+export interface ProjectBaseInfo {
+    name: string;
+    type: string;
+    province: string;
+    city: string;
+    buildings: any[]; // Store complex building objects
+}
+
+export interface Notification {
+    message: string;
+    type: 'success' | 'error';
 }
 
 // Initial state for all modules
@@ -138,6 +154,29 @@ const initialModules: Record<string, ModuleData> = {
   }
 };
 
+const initialPriceConfig: PriceConfigState = {
+    mode: 'tou',
+    fixedPrice: 0.85,
+    touSegments: [
+      { start: 0, end: 8, price: 0.32, type: 'valley' },
+      { start: 8, end: 11, price: 0.68, type: 'flat' },
+      { start: 11, end: 14, price: 1.15, type: 'peak' },
+      { start: 14, end: 17, price: 1.62, type: 'tip' },
+      { start: 17, end: 19, price: 1.15, type: 'peak' },
+      { start: 19, end: 22, price: 0.68, type: 'flat' },
+      { start: 22, end: 24, price: 0.32, type: 'valley' },
+    ],
+    spotPrices: Array(24).fill(0.5) // Default spot prices
+};
+
+const initialProjectBaseInfo: ProjectBaseInfo = {
+    name: '上海浦东新区工业园节能改造项目',
+    type: 'factory',
+    province: 'Shanghai',
+    city: 'Pudong',
+    buildings: [] // Will be populated by default in component if empty
+};
+
 interface ProjectContextType {
   modules: Record<string, ModuleData>;
   updateModule: (id: string, data: Partial<ModuleData>) => void;
@@ -149,6 +188,10 @@ interface ProjectContextType {
   setBills: (data: Bill[]) => void;
   priceConfig: PriceConfigState;
   setPriceConfig: (config: PriceConfigState) => void;
+  projectBaseInfo: ProjectBaseInfo;
+  setProjectBaseInfo: (info: ProjectBaseInfo) => void;
+  saveProject: () => void;
+  notification: Notification | null;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -157,21 +200,26 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [modules, setModules] = useState<Record<string, ModuleData>>(initialModules);
   const [transformers, setTransformers] = useState<Transformer[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
-  
-  // Default Price Config
-  const [priceConfig, setPriceConfig] = useState<PriceConfigState>({
-      mode: 'tou',
-      fixedPrice: 0.85,
-      touSegments: [
-        { start: 0, end: 8, price: 0.32, type: 'valley' },
-        { start: 8, end: 11, price: 0.68, type: 'flat' },
-        { start: 11, end: 14, price: 1.15, type: 'peak' },
-        { start: 14, end: 17, price: 1.62, type: 'tip' },
-        { start: 17, end: 19, price: 1.15, type: 'peak' },
-        { start: 19, end: 22, price: 0.68, type: 'flat' },
-        { start: 22, end: 24, price: 0.32, type: 'valley' },
-      ]
-  });
+  const [priceConfig, setPriceConfig] = useState<PriceConfigState>(initialPriceConfig);
+  const [projectBaseInfo, setProjectBaseInfo] = useState<ProjectBaseInfo>(initialProjectBaseInfo);
+  const [notification, setNotification] = useState<Notification | null>(null);
+
+  // Load from LocalStorage
+  useEffect(() => {
+      const savedData = localStorage.getItem('ZERO_CARBON_PROJECT_DATA');
+      if (savedData) {
+          try {
+              const parsed = JSON.parse(savedData);
+              if (parsed.modules) setModules(parsed.modules);
+              if (parsed.transformers) setTransformers(parsed.transformers);
+              if (parsed.bills) setBills(parsed.bills);
+              if (parsed.priceConfig) setPriceConfig(parsed.priceConfig);
+              if (parsed.projectBaseInfo) setProjectBaseInfo(parsed.projectBaseInfo);
+          } catch (e) {
+              console.error("Failed to load project data", e);
+          }
+      }
+  }, []);
 
   const updateModule = useCallback((id: string, data: Partial<ModuleData>) => {
     setModules(prev => ({
@@ -203,12 +251,32 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return { totalInvestment, totalSaving, roi };
   }, [modules]);
 
+  const saveProject = useCallback(() => {
+      const dataToSave = {
+          modules,
+          transformers,
+          bills,
+          priceConfig,
+          projectBaseInfo,
+          lastSaved: new Date().toISOString()
+      };
+      try {
+          localStorage.setItem('ZERO_CARBON_PROJECT_DATA', JSON.stringify(dataToSave));
+          setNotification({ message: '项目配置已成功保存', type: 'success' });
+          setTimeout(() => setNotification(null), 3000);
+      } catch (e) {
+          setNotification({ message: '保存失败，请检查浏览器存储设置', type: 'error' });
+      }
+  }, [modules, transformers, bills, priceConfig, projectBaseInfo]);
+
   return (
     <ProjectContext.Provider value={{ 
         modules, updateModule, toggleModule, getSummary, 
         transformers, setTransformers, 
         bills, setBills,
-        priceConfig, setPriceConfig
+        priceConfig, setPriceConfig,
+        projectBaseInfo, setProjectBaseInfo,
+        saveProject, notification
     }}>
       {children}
     </ProjectContext.Provider>

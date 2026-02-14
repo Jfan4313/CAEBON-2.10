@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, CartesianGrid, Brush } from 'recharts';
 
 const data = [
@@ -17,6 +17,13 @@ const data = [
 ];
 
 const Dashboard: React.FC = () => {
+  const [visibleSeries, setVisibleSeries] = useState<Record<string, boolean>>({ base: true, current: true });
+
+  const handleLegendClick = (e: any) => {
+    const { dataKey } = e;
+    setVisibleSeries(prev => ({ ...prev, [dataKey]: !prev[dataKey] }));
+  };
+
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
       {/* Metrics Row */}
@@ -100,7 +107,7 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
              <div>
                  <h3 className="text-base font-bold text-slate-800">能源节省预测分析</h3>
-                 <p className="text-xs text-slate-400">可拖动下方滑块缩放查看特定月份数据</p>
+                 <p className="text-xs text-slate-400">点击图例隐藏/显示系列，拖动滑块缩放查看</p>
              </div>
              <button className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg text-xs font-medium text-slate-600">
                 年度 <span className="material-symbols-outlined text-[14px]">expand_more</span>
@@ -118,9 +125,15 @@ const Dashboard: React.FC = () => {
                     itemStyle={{fontSize: '12px', fontWeight: 500}}
                     labelStyle={{fontSize: '12px', color: '#64748b', marginBottom: '8px'}}
                 />
-                <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{fontSize: '12px', fontWeight: 500}} />
-                <Bar name="基准能耗 (Baseline)" dataKey="base" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
-                <Bar name="改造后能耗 (Predicted)" dataKey="current" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                <Legend 
+                    verticalAlign="top" 
+                    height={36} 
+                    iconType="circle" 
+                    wrapperStyle={{fontSize: '12px', fontWeight: 500, cursor: 'pointer'}} 
+                    onClick={handleLegendClick}
+                />
+                <Bar name="基准能耗 (Baseline)" dataKey="base" fill="#cbd5e1" radius={[4, 4, 0, 0]} hide={!visibleSeries.base} />
+                <Bar name="改造后能耗 (Predicted)" dataKey="current" fill="#4f46e5" radius={[4, 4, 0, 0]} hide={!visibleSeries.current} />
                 <Brush dataKey="name" height={20} stroke="#cbd5e1" travellerWidth={10} tickFormatter={() => ''} />
               </BarChart>
             </ResponsiveContainer>

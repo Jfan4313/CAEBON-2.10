@@ -41,16 +41,7 @@ interface Building {
     };
 }
 
-const ProjectEntry: React.FC = () => {
-  const { transformers, setTransformers, bills, setBills } = useProject();
-
-  // Region State
-  const [province, setProvince] = useState('Shanghai');
-  const [city, setCity] = useState('Pudong');
-  const [projectType, setProjectType] = useState('factory');
-
-  // Building State with Detail Lists
-  const [buildings, setBuildings] = useState<Building[]>([
+const defaultBuildings: Building[] = [
     { 
         id: 1, 
         name: '1号生产车间', 
@@ -118,8 +109,25 @@ const ProjectEntry: React.FC = () => {
             }
         } 
     },
-  ]);
-  const [targetBuildingId, setTargetBuildingId] = useState<number>(1);
+];
+
+const ProjectEntry: React.FC = () => {
+  const { transformers, setTransformers, bills, setBills, saveProject, projectBaseInfo, setProjectBaseInfo } = useProject();
+
+  // Region State (Hydrate from Context)
+  const [projectName, setProjectName] = useState(projectBaseInfo.name);
+  const [province, setProvince] = useState(projectBaseInfo.province);
+  const [city, setCity] = useState(projectBaseInfo.city);
+  const [projectType, setProjectType] = useState(projectBaseInfo.type);
+
+  // Building State (Hydrate from Context)
+  const [buildings, setBuildings] = useState<Building[]>(
+      (projectBaseInfo.buildings && projectBaseInfo.buildings.length > 0) 
+      ? projectBaseInfo.buildings 
+      : defaultBuildings
+  );
+  
+  const [targetBuildingId, setTargetBuildingId] = useState<number>(buildings.length > 0 ? buildings[0].id : 0);
 
   // Estimation Mode State
   const [estimationMode, setEstimationMode] = useState<'auto' | 'manual'>('manual');
@@ -137,6 +145,17 @@ const ProjectEntry: React.FC = () => {
       setTargetBuildingId(buildings[0].id);
     }
   }, [buildings, targetBuildingId]);
+
+  // Sync to Global Context whenever local state changes
+  useEffect(() => {
+      setProjectBaseInfo({
+          name: projectName,
+          type: projectType,
+          province,
+          city,
+          buildings
+      });
+  }, [projectName, projectType, province, city, buildings, setProjectBaseInfo]);
 
   // --- Handlers ---
 
@@ -533,7 +552,13 @@ const ProjectEntry: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                     <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700 ml-1">项目名称 <span className="text-red-500">*</span></label>
-                        <input type="text" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" placeholder="请输入项目名称" defaultValue="上海浦东新区工业园节能改造项目" />
+                        <input 
+                            type="text" 
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" 
+                            placeholder="请输入项目名称" 
+                            value={projectName}
+                            onChange={(e) => setProjectName(e.target.value)}
+                        />
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700 ml-1">项目类型 <span className="text-red-500">*</span></label>
@@ -668,6 +693,8 @@ const ProjectEntry: React.FC = () => {
                 </div>
             </section>
 
+            {/* ... Rest of the component (Power Distribution, Energy Consumption) ... */}
+            {/* Keeping existing structure but implicitly they use context now for saving */}
             {/* Power Distribution & Bills */}
             <section className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm animate-fade-in">
                 <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-50">
@@ -791,7 +818,8 @@ const ProjectEntry: React.FC = () => {
                 </div>
             </section>
 
-            {/* Energy Consumption - Estimation & Manual Config */}
+            {/* Energy Consumption - Estimation & Manual Config (This part reused activeSystemTab and currentBuilding, which rely on state we already persisted) */}
+            {/* The rest of the component uses the building state which is now persisted in context */}
             <section className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-3 mb-8 border-b border-slate-50 pb-4">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
@@ -973,9 +1001,11 @@ const ProjectEntry: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
-                                
+                                {/* Other tabs logic is same as before, essentially rendering based on currentBuilding state which is now persisted */}
+                                {/* ... (HVAC, Water, Production render blocks - identical to previous file but using persisted state) ... */}
                                 {activeSystemTab === 'hvac' && currentBuilding && (
                                     <div className="animate-fade-in">
+                                         {/* ... HVAC Render Logic ... */}
                                          <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/50">
                                             <div className="flex items-center gap-4">
                                                 <div className={`w-12 h-12 rounded-xl shadow-sm flex items-center justify-center transition-colors ${currentBuilding.systems.hvac.enabled ? 'bg-white text-blue-500' : 'bg-slate-200 text-slate-400'}`}>
@@ -1009,6 +1039,7 @@ const ProjectEntry: React.FC = () => {
 
                                 {activeSystemTab === 'water' && currentBuilding && (
                                     <div className="animate-fade-in">
+                                        {/* ... Water Render Logic ... */}
                                         <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/50">
                                             <div className="flex items-center gap-4">
                                                 <div className={`w-12 h-12 rounded-xl shadow-sm flex items-center justify-center transition-colors ${currentBuilding.systems.water.enabled ? 'bg-white text-cyan-500' : 'bg-slate-200 text-slate-400'}`}>
@@ -1042,6 +1073,7 @@ const ProjectEntry: React.FC = () => {
 
                                 {activeSystemTab === 'production' && currentBuilding && (
                                     <div className="animate-fade-in">
+                                        {/* ... Production Render Logic ... */}
                                         <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/50">
                                             <div className="flex items-center gap-4">
                                                 <div className={`w-12 h-12 rounded-xl shadow-sm flex items-center justify-center transition-colors ${currentBuilding.systems.production.enabled ? 'bg-white text-purple-500' : 'bg-slate-200 text-slate-400'}`}>
@@ -1188,7 +1220,10 @@ const ProjectEntry: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
                 <button className="px-6 py-2.5 text-sm font-semibold rounded-xl text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all">清空重置</button>
-                <button className="px-8 py-2.5 text-sm font-semibold rounded-xl bg-primary text-white shadow-lg shadow-primary/30 hover:bg-primary-hover transition-all flex items-center gap-2">
+                <button 
+                    onClick={saveProject}
+                    className="px-8 py-2.5 text-sm font-semibold rounded-xl bg-primary text-white shadow-lg shadow-primary/30 hover:bg-primary-hover transition-all flex items-center gap-2"
+                >
                     保存并下一步 <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </button>
             </div>

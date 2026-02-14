@@ -1,49 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, ResponsiveContainer, Cell, XAxis, YAxis, Tooltip, CartesianGrid, Brush } from 'recharts';
 import { useProject } from '../context/ProjectContext';
 
 type PriceMode = 'tou' | 'fixed' | 'spot';
 
 const PriceConfig: React.FC = () => {
-  const { setPriceConfig } = useProject(); // Access context setter
-  const [configType, setConfigType] = useState<'template' | 'manual'>('template');
-  const [priceMode, setPriceMode] = useState<PriceMode>('tou');
-  const [chartData, setChartData] = useState<any[]>([]);
+  const { priceConfig, setPriceConfig, saveProject } = useProject();
+  
+  // Only UI state remains local
+  const [configType, setConfigType] = useState<'template' | 'manual'>('manual');
 
-  // State for manual data
-  const [fixedPriceVal, setFixedPriceVal] = useState(0.85);
-  // Simple TOU state (start hour, price, type)
-  const [touSegments, setTouSegments] = useState([
-      { start: 0, end: 8, price: 0.32, type: 'valley' },
-      { start: 8, end: 11, price: 0.68, type: 'flat' },
-      { start: 11, end: 14, price: 1.15, type: 'peak' },
-      { start: 14, end: 17, price: 1.62, type: 'tip' },
-      { start: 17, end: 19, price: 1.15, type: 'peak' },
-      { start: 19, end: 22, price: 0.68, type: 'flat' },
-      { start: 22, end: 24, price: 0.32, type: 'valley' },
-  ]);
-  const [spotValues, setSpotValues] = useState<number[]>(Array(24).fill(0.5));
+  // Helpers to update context directly
+  const handlePriceModeChange = (mode: PriceMode) => {
+      setPriceConfig({ ...priceConfig, mode });
+  };
 
-  // Sync with Global Context whenever local state changes
-  useEffect(() => {
-      // Logic to simplify spot values into a format somewhat compatible or just use basic TOU/Fixed for the global config type
-      // For now, mapping spot to TOU segments would be complex, so we just pass the mode and data
-      // For this demo, if Spot is selected, we won't fully serialize it to global TOU segments effectively without data loss, 
-      // but let's assume we pass the standard TOU/Fixed structure primarily for calculations.
-      
-      setPriceConfig({
-          mode: priceMode,
-          fixedPrice: fixedPriceVal,
-          touSegments: touSegments
-      });
-  }, [priceMode, fixedPriceVal, touSegments, setPriceConfig]);
+  const handleFixedPriceChange = (val: number) => {
+      setPriceConfig({ ...priceConfig, fixedPrice: val });
+  };
 
-  // Generate chart data based on current mode
-  useEffect(() => {
-    let newData: any[] = [];
+  const handleTouChange = (idx: number, field: string, val: any) => {
+      const newSegs = [...priceConfig.touSegments];
+      newSegs[idx] = { ...newSegs[idx], [field]: val };
+      setPriceConfig({ ...priceConfig, touSegments: newSegs });
+  };
+
+  const handleSpotChange = (idx: number, val: string) => {
+      const numVal = parseFloat(val) || 0;
+      const newSpots = [...(priceConfig.spotPrices || Array(24).fill(0.5))];
+      newSpots[idx] = numVal;
+      setPriceConfig({ ...priceConfig, spotPrices: newSpots });
+  };
+
+  const generateRandomSpot = () => {
+      const randoms = Array.from({length: 24}, () => parseFloat((Math.random() * 1.5 + 0.2).toFixed(2)));
+      setPriceConfig({ ...priceConfig, spotPrices: randoms });
+  };
+
+  // Memoize chart data to avoid recalculation on every render unless data changes
+  const chartData = useMemo(() => {
     if (configType === 'template') {
-        // Default template data
-        newData = Array.from({ length: 24 }, (_, i) => {
+        // Template Preview (Visual only, doesn't change actual config)
+        return Array.from({ length: 24 }, (_, i) => {
             let type = 'valley';
             let price = 0.32;
             if (i >= 8 && i <= 10) { type = 'flat'; price = 0.68; }
@@ -51,23 +49,22 @@ const PriceConfig: React.FC = () => {
             else if (i >= 14 && i <= 16) { type = 'tip'; price = 1.62; }
             else if (i >= 17 && i <= 18) { type = 'peak'; price = 1.15; }
             else if (i >= 19 && i <= 21) { type = 'flat'; price = 0.68; }
-            
             return { hour: i, price, type };
         });
     } else {
-        if (priceMode === 'fixed') {
-            newData = Array.from({ length: 24 }, (_, i) => ({ hour: i, price: fixedPriceVal, type: 'flat' }));
-        } else if (priceMode === 'tou') {
-            newData = Array.from({ length: 24 }, (_, i) => {
-                const seg = touSegments.find(s => i >= s.start && i < s.end);
+        if (priceConfig.mode === 'fixed') {
+            return Array.from({ length: 24 }, (_, i) => ({ hour: i, price: priceConfig.fixedPrice, type: 'flat' }));
+        } else if (priceConfig.mode === 'tou') {
+            return Array.from({ length: 24 }, (_, i) => {
+                const seg = priceConfig.touSegments.find(s => i >= s.start && i < s.end);
                 return { hour: i, price: seg ? seg.price : 0.5, type: seg ? seg.type : 'flat' };
             });
-        } else if (priceMode === 'spot') {
-            newData = spotValues.map((v, i) => ({ hour: i, price: v, type: 'spot' }));
+        } else if (priceConfig.mode === 'spot') {
+            return (priceConfig.spotPrices || Array(24).fill(0.5)).map((v, i) => ({ hour: i, price: v, type: 'spot' }));
         }
     }
-    setChartData(newData);
-  }, [configType, priceMode, fixedPriceVal, touSegments, spotValues]);
+    return [];
+  }, [configType, priceConfig]);
 
   const getBarColor = (type: string) => {
     switch(type) {
@@ -78,23 +75,6 @@ const PriceConfig: React.FC = () => {
         case 'spot': return '#8b5cf6'; // purple
         default: return '#cbd5e1';
     }
-  }
-
-  const handleSpotChange = (idx: number, val: string) => {
-      const nums = [...spotValues];
-      nums[idx] = parseFloat(val) || 0;
-      setSpotValues(nums);
-  }
-
-  const generateRandomSpot = () => {
-      const randoms = Array.from({length: 24}, () => parseFloat((Math.random() * 1.5 + 0.2).toFixed(2)));
-      setSpotValues(randoms);
-  }
-
-  const handleTouChange = (idx: number, field: string, val: any) => {
-      const newSegs = [...touSegments];
-      newSegs[idx] = { ...newSegs[idx], [field]: val };
-      setTouSegments(newSegs);
   }
 
   return (
@@ -108,7 +88,10 @@ const PriceConfig: React.FC = () => {
                 </div>
                 <div className="flex gap-3">
                     <button 
-                        onClick={() => { setConfigType('template'); setPriceMode('tou'); }}
+                        onClick={() => { 
+                            setConfigType('template'); 
+                            handlePriceModeChange('tou'); 
+                        }}
                         className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
                         重置配置
@@ -156,11 +139,11 @@ const PriceConfig: React.FC = () => {
                                     <input 
                                         type="radio" 
                                         name="priceMode" 
-                                        checked={priceMode === mode.id} 
-                                        onChange={() => setPriceMode(mode.id as PriceMode)}
+                                        checked={priceConfig.mode === mode.id} 
+                                        onChange={() => handlePriceModeChange(mode.id as PriceMode)}
                                         className="accent-primary w-4 h-4"
                                     />
-                                    <span className={`text-sm font-medium ${priceMode === mode.id ? 'text-primary' : 'text-slate-600'}`}>{mode.label}</span>
+                                    <span className={`text-sm font-medium ${priceConfig.mode === mode.id ? 'text-primary' : 'text-slate-600'}`}>{mode.label}</span>
                                 </label>
                             ))}
                         </div>
@@ -173,14 +156,14 @@ const PriceConfig: React.FC = () => {
                     <div className="flex-1 flex flex-col">
                         {/* Legend */}
                         <div className="flex items-center gap-6 mb-4 text-sm flex-wrap">
-                            {priceMode === 'tou' || configType === 'template' ? (
+                            {priceConfig.mode === 'tou' || configType === 'template' ? (
                                 <>
                                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span><span className="text-slate-600">尖峰 (Tip)</span></div>
                                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-orange-500"></span><span className="text-slate-600">高峰 (Peak)</span></div>
                                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500"></span><span className="text-slate-600">平段 (Flat)</span></div>
                                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-500"></span><span className="text-slate-600">低谷 (Valley)</span></div>
                                 </>
-                            ) : priceMode === 'spot' ? (
+                            ) : priceConfig.mode === 'spot' ? (
                                 <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-purple-500"></span><span className="text-slate-600">实时电价 (Spot)</span></div>
                             ) : (
                                 <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500"></span><span className="text-slate-600">固定电价 (Fixed)</span></div>
@@ -215,24 +198,24 @@ const PriceConfig: React.FC = () => {
                                 <span className="material-icons text-base text-slate-400">edit</span> 参数配置
                             </h3>
                             
-                            {priceMode === 'fixed' && (
+                            {priceConfig.mode === 'fixed' && (
                                 <div className="space-y-4">
                                     <div className="bg-white p-4 rounded-lg border border-slate-200">
                                         <label className="block text-xs font-medium text-slate-500 mb-1">统一电价 (元/kWh)</label>
                                         <input 
                                             type="number" 
                                             step="0.01"
-                                            value={fixedPriceVal}
-                                            onChange={(e) => setFixedPriceVal(parseFloat(e.target.value))}
+                                            value={priceConfig.fixedPrice}
+                                            onChange={(e) => handleFixedPriceChange(parseFloat(e.target.value))}
                                             className="w-full text-lg font-bold text-slate-800 outline-none border-b border-slate-200 focus:border-primary py-1 bg-white"
                                         />
                                     </div>
                                 </div>
                             )}
 
-                            {priceMode === 'tou' && (
+                            {priceConfig.mode === 'tou' && (
                                 <div className="space-y-3">
-                                    {touSegments.map((seg, idx) => (
+                                    {priceConfig.touSegments.map((seg, idx) => (
                                         <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
                                             <div className="flex justify-between items-center mb-2">
                                                 <span className="font-medium text-slate-700">{seg.start}:00 - {seg.end}:00</span>
@@ -266,7 +249,7 @@ const PriceConfig: React.FC = () => {
                                 </div>
                             )}
 
-                            {priceMode === 'spot' && (
+                            {priceConfig.mode === 'spot' && (
                                 <div className="space-y-3">
                                     <button 
                                         onClick={generateRandomSpot}
@@ -275,7 +258,7 @@ const PriceConfig: React.FC = () => {
                                         随机生成模拟数据
                                     </button>
                                     <div className="grid grid-cols-2 gap-2">
-                                        {spotValues.map((val, i) => (
+                                        {(priceConfig.spotPrices || []).map((val, i) => (
                                             <div key={i} className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-slate-200">
                                                 <span className="text-[10px] text-slate-400 w-8">{i}:00</span>
                                                 <input 
@@ -315,7 +298,7 @@ const PriceConfig: React.FC = () => {
                     </div>
                 </div>
                 
-                {priceMode !== 'fixed' && (
+                {priceConfig.mode !== 'fixed' && (
                     <div className="bg-gradient-to-br from-white to-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden group">
                         <div className="absolute top-0 right-0 w-16 h-16 bg-purple-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
                         <p className="text-xs font-medium text-slate-500 uppercase">峰谷/最大价差</p>
@@ -337,7 +320,7 @@ const PriceConfig: React.FC = () => {
       </div>
       
       {/* Unified Sticky Footer */}
-      <div className="fixed bottom-0 left-64 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <div className="fixed bottom-0 left-64 right-80 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 text-slate-400">
                     <span className="material-icons text-[18px]">history</span>
@@ -349,8 +332,11 @@ const PriceConfig: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
                 <button className="px-6 py-2.5 text-sm font-semibold rounded-xl text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all">重置</button>
-                <button className="px-8 py-2.5 text-sm font-semibold rounded-xl bg-primary text-white shadow-lg shadow-primary/30 hover:bg-primary-hover transition-all flex items-center gap-2">
-                    应用并保存 <span className="material-symbols-outlined text-[18px]">save</span>
+                <button 
+                    onClick={saveProject}
+                    className="px-8 py-2.5 text-sm font-semibold rounded-xl bg-primary text-white shadow-lg shadow-primary/30 hover:bg-primary-hover transition-all flex items-center gap-2"
+                >
+                    应用并保存 <span className="material-icons text-[18px]">save</span>
                 </button>
             </div>
         </div>
