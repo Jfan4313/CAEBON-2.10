@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>零碳项目算法公式解释 - 大白话版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .nav button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            background: white;
+            color: #667eea;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .nav button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .nav button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 24px;
+            color: #667eea;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .formula-card {
+            background: #f8f9ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .formula-card h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .formula-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #e74c3c;
+            margin-bottom: 12px;
+            border: 1px dashed #667eea;
+        }
+
+        .explanation {
+            color: #666;
+            font-size: 15px;
+        }
+
+        .explanation p {
+            margin-bottom: 8px;
+        }
+
+        .explanation strong {
+            color: #333;
+        }
+
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .param-table th,
+        .param-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .param-table th {
+            background: #667eea;
+            color: white;
+            font-weight: 500;
+        }
+
+        .param-table tr:hover {
+            background: #f0f3ff;
+        }
+
+        .example {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 12px;
+        }
+
+        .example-title {
+            color: #856404;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .data-table {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 10px;
+        }
+
+        .data-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 10px 15px;
+            text-align: left;
+            border: 1px solid #eee;
+        }
+
+        .data-table th {
+            background: #f0f3ff;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-right: 8px;
+        }
+
+        .tag-lighting { background: #e3f2fd; color: #1976d2; }
+        .tag-hvac { background: #e8f5e9; color: #388e3c; }
+        .tag-solar { background: #fff3e0; color: #f57c00; }
+        .tag-advanced { background: #f3e5f5; color: #7b1fa2; }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .nav {
+                flex-direction: column;
+            }
+
+            .nav button {
+                width: 100%;
+            }
+
+            header h1 {
+                font-size: 24px;
+            }
+
+            .section {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔬 零碳项目算法公式解释</h1>
+            <p>大白话版 - 方便检查和调整 | 算法库版本: v1.0.0</p>
+        </header>
+
+        <div class="nav">
+            <button class="active" onclick="showSection('lighting')">💡 照明系统</button>
+            <button onclick="showSection('hvac')">❄️ 暖通空调</button>
+            <button onclick="showSection('solar')">☀️ 光储系统</button>
+            <button onclick="showSection('integrated')">🔗 综合优化</button>
+            <button onclick="showSection('comfort')">🌡️ 舒适度计算</button>
+            <button onclick="showSection('battery')">🔋 电池衰减</button>
+            <button onclick="showSection('v2g')">🚗 V2G优化</button>
+            <button onclick="showSection('digital')">🏢 数字孪生</button>
+            <button onclick="showSection('rl')">🤖 强化学习</button>
+            <button onclick="showSection('data')">📊 基础数据</button>
+        </div>
+
+        <!-- 照明系统 -->
+        <div id="lighting" class="section active">
+            <h2 class="section-title">💡 照明系统算法</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-lighting">基准计算</span>
+                <h3>照明基准负荷计算</h3>
+                <div class="formula-box">
+功率密度 = 总功率 / 面积  (单位：瓦/平方米)<br><br>
+基准负荷 = 功率密度 × 面积 × 流量系数 / 1000  (单位：千瓦)<br><br>
+日耗电量 = 基准负荷 × 每天运行时间  (单位：千瓦时)
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 首先算出每平米用多少瓦电（功率密度）</p>
+                    <p>• 然后根据人流量调整：人多的时候可能开更多灯，所以要乘一个流量系数</p>
+                    <p>• 最后除以1000把瓦转换成千瓦</p>
+                    <p>• 日耗电量就是基准负荷乘以每天开灯的时间</p>
+                </div>
+                <table class="param-table">
+                    <tr><th>参数</th><th>说明</th><th>单位</th></tr>
+                    <tr><td>area</td><td>照明面积</td><td>平方米(m²)</td></tr>
+                    <tr><td>totalPower</td><td>灯具总功率</td><td>千瓦(kW)</td></tr>
+                    <tr><td>dailyHours</td><td>每天运行时间</td><td>小时</td></tr>
+                    <tr><td>trafficMultiplier</td><td>流量系数(根据人流量)</td><td>倍数(通常1-1.3)</td></tr>
+                </table>
+            </div>
+
+            <div class="formula-card">
+                <span class="tag tag-lighting">节能计算</span>
+                <h3>照明节能潜力计算</h3>
+                <div class="formula-box">
+1. LED升级节能量 = 旧功率 × (LED效率 - 白炽灯效率) / 白炽灯效率<br>
+   其中：LED效率=100, 白炽灯效率=15<br><br>
+2. 智能控制节能量 = 新功率 × 25% × 每天运行时间<br>
+   (智能控制可以节省25%的电)<br><br>
+3. 自然光利用节能量 = 新功率 × 日光利用小时数 × 30%<br>
+   (利用自然光可以再省30%)<br><br>
+总节能量 = 1 + 2 + 3<br><br>
+节电率 = 总节能量 / (旧功率 × 旧运行时间) × 100%<br><br>
+投资回报率(ROI) = (年节电收益 - 投资) / 投资 × 100%
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 第一步：从白炽灯换成LED灯，LED更省电，效率是白炽灯的6-7倍</p>
+                    <p>• 第二步：加智能控制（光感+调光），人少的时候灯光调暗，能省25%</p>
+                    <p>• 第三步：利用自然光，晴天的时候把灯光调暗，又能省30%</p>
+                    <p>• 三部分加起来就是总节能量</p>
+                    <p>• 节电率就是节能量占原来用电量的百分比</p>
+                    <p>• ROI算的是：每年省的电费减去改造成本，再除以成本，百分比就是投资回报率</p>
+                </div>
+                <div class="example">
+                    <div class="example-title">📝 计算示例</div>
+                    <p>假设：旧系统30kW运行10小时，新系统20kW运行8小时</p>
+                    <p>LED升级：30 × (100-15)/15 = 170 kW·h 节能</p>
+                    <p>智能控制：20 × 0.25 × 8 = 40 kW·h 节能</p>
+                    <p>自然光：20 × 4 × 0.3 = 24 kW·h 节能</p>
+                    <p>总节能：234 kW·h，节电率：78%</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 暖通空调 -->
+        <div id="hvac" class="section">
+            <h2 class="section-title">❄️ 暖通空调系统算法</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-hvac">基准计算</span>
+                <h3>空调制冷负荷计算</h3>
+                <div class="formula-box">
+制冷负荷 = (面积 × 100 / 热导系数) × (年制冷时长 / 24) / 1000<br><br>
+基准负荷 = 制冷负荷 × 季节系数 × 温度系数
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 热导系数代表房子的保温能力，数值越小保温越好（比如医院1.5，工厂2.5）</p>
+                    <p>• 100是标准的热负荷参数，每平米大概需要100瓦的制冷能力</p>
+                    <p>• 年制冷时长除以24是算平均每天的制冷需求</p>
+                    <p>• 季节系数：夏天负荷最高(1.2)，冬天最低(0.8)</p>
+                    <p>• 温度系数：温度每比26度高1度，负荷增加1%</p>
+                </div>
+                <table class="param-table">
+                    <tr><th>参数</th><th>说明</th><th>单位</th></tr>
+                    <tr><td>area</td><td>空调面积</td><td>平方米(m²)</td></tr>
+                    <tr><td>thermalCoef</td><td>热导系数</td><td>W/(m²·K)</td></tr>
+                    <tr><td>annualCoolingHours</td><td>年制冷时长</td><td>小时</td></tr>
+                    <tr><td>seasonMultiplier</td><td>季节系数</td><td>倍数(0.8-1.4)</td></tr>
+                </table>
+            </div>
+
+            <div class="formula-card">
+                <span class="tag tag-hvac">节能计算</span>
+                <h3>空调节能潜力计算</h3>
+                <div class="formula-box">
+1. COP提升节能 = 制冷负荷 × (1 - 新COP/旧COP) × 0.85 × 1.15<br>
+   其中：0.85是设备能效系数，1.15是系统设计余量<br><br>
+2. 新风系统节能 = 制冷负荷 × (新风效率/0.85) × 0.7<br>
+   其中：0.85是基准新风效率，0.7是部分负荷系数<br><br>
+3. 按需控制节能 = 制冷负荷 × (1 - 人流量) × 15% × 0.7<br>
+   (人少的时候减少送风)<br><br>
+日节能量 = 1 + 2 + 3<br>
+年节能量 = 日节能量 × 365<br><br>
+COP提升率 = (新COP - 旧COP) / 旧COP × 100%
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• COP就是空调的能效比，COP越高越省电</p>
+                    <p>• COP提升节能：COP从2.8提升到4.5，意味着同样的制冷量，用电量减少38%</p>
+                    <p>• 新风系统：高效新风系统能减少空调负荷，按效率比例算节能</p>
+                    <p>• 按需控制：人少的时候减少新风送风量，能省15%</p>
+                </div>
+                <div class="example">
+                    <div class="example-title">📝 COP计算示例</div>
+                    <p>旧COP = 2.8（普通空调）</p>
+                    <p>新COP = 4.5（高效空调）</p>
+                    <p>COP提升率 = (4.5 - 2.8) / 2.8 × 100% = 60.7%</p>
+                    <p>意思是：新空调比旧空调省电60.7%</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 光储系统 -->
+        <div id="solar" class="section">
+            <h2 class="section-title">☀️ 光储系统算法</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-solar">发电量计算</span>
+                <h3>光伏发电量计算</h3>
+                <div class="formula-box">
+日日照时长 = 年日照时长 / 365<br><br>
+效率调整系数 = 光照等级系数 × 温度系数<br>
+   光照等级系数：900+ W/m²=1.05, 700+ =1.0, 500+ =0.95, 500-=0.9<br>
+   温度系数：1 - (当前温度-25) × 0.003<br><br>
+日发电量 = 装机容量 × 日日照时长 × 0.97 × 0.98 × 效率系数<br>
+   其中：0.97是逆变器效率，0.98是线路损耗<br><br>
+年发电量 = 日发电量 × 365
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 先算出平均每天能照多少小时太阳</p>
+                    <p>• 效率系数看两个因素：光照强度和温度</p>
+                    <p>  - 光照越强，发电效率越高（直射光最好）</p>
+                    <p>  - 温度越高，发电效率反而下降（太阳能板怕热）</p>
+                    <p>• 逆变器是把直流电转交流电的，有效率97%</p>
+                    <p>• 线路传输有损耗，效率98%</p>
+                </div>
+                <table class="param-table">
+                    <tr><th>参数</th><th>说明</th><th>单位</th></tr>
+                    <tr><td>pvCapacity</td><td>光伏装机容量</td><td>千瓦</td></tr>
+                    <tr><td>annualSunshineHours</td><td>年日照时数</td><td>小时/年</td></tr>
+                    <tr><td>avgTemperature</td><td>平均气温</td><td>摄氏度(°C)</td></tr>
+                    <tr><td>solarIrradiance</td><td>太阳辐射强度</td><td>瓦/平方米(W/m²)</td></tr>
+                </table>
+            </div>
+
+            <div class="formula-card">
+                <span class="tag tag-solar">储能优化</span>
+                <h3>储能充放电优化</h3>
+                <div class="formula-box">
+策略：谷时充电，峰时放电，平时空闲<br><br>
+谷时段：0-8点，电价最低 → 充电<br>
+平时段：8-14点，电价中等 → 空闲<br>
+峰时段：14-19点，电价最高 → 放电<br>
+平时段：19-24点，电价中等 → 空闲<br><br>
+日套利收益 = Σ(放电小时 × 储能功率/2 × 电价 × 0.95)<br>
+   其中：0.95是放电效率<br><br>
+年套利收益 = 日套利收益 × 365
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 利用峰谷电价差赚钱</p>
+                    <p>• 深夜电价便宜(谷价)，把电充满</p>
+                    <p>• 下午电价贵(峰价)，把电放出来卖</p>
+                    <p>• 储能功率除以2是因为假设每次只用一半功率，持续放电</p>
+                    <p>• 乘以电价就是卖电收入</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 综合优化 -->
+        <div id="integrated" class="section">
+            <h2 class="section-title">🔗 综合系统优化</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-solar">多系统协同</span>
+                <h3>照明+空调+光储协同优化</h3>
+                <div class="formula-box">
+基础负荷 = 照明基准负荷 + 空调基准负荷<br><br>
+激进系数 = 0.5 + 激进程度 × 0.5<br>
+   (激进程度0-1：0.5表示平衡，1.0表示最激进)<br><br>
+光伏自用比例 = 最小(日发电量/基础负荷×1.2, 0.8+激进程度×0.2)<br>
+   光伏发的电优先自己用，用不完的才卖电网<br><br>
+净购电量 = 基础负荷 × (1 - 光伏自用比例) × 激进系数<br><br>
+优化后负荷 = 净购电量 × 流量系数 × 激进系数<br><br>
+小时节能量 = 基础负荷 × (1 - 优化后负荷/基础负荷) × 激进系数
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 把照明、空调、光储三个系统一起考虑优化</p>
+                    <p>• 光伏优先给建筑供电，减少从电网买电</p>
+                    <p>• 激进程度越高，节能措施越积极</p>
+                    <p>• 流量系数根据人流量调整，人多时候多用电</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 舒适度 -->
+        <div id="comfort" class="section">
+            <h2 class="section-title">🌡️ PMV/PPD 舒适度计算</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-advanced">Fanger方程</span>
+                <h3>PMV 预测平均投票值</h3>
+                <div class="formula-box">
+PMV = (0.303 × e^(-0.036×新陈代谢率) + 0.028) ×
+      (新陈代谢率/58.2 - 0.055×新陈代谢率 - 0.04×新陈代谢率×
+       (5.27 + 0.172×风速) × (35.7 - 服装表面温度))<br><br>
+服装表面温度 = 35.7 - 0.028×新陈代谢率 - 0.155×服装热阻×
+                 (新陈代谢率×3.05 - 0.357 - 0.028×新陈代谢率×5.36×
+                  (35.7 - 0.028×新陈代谢率 - 室内温度))
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• PMV是Fanger教授提出的热舒适度指标，范围是-3到+3</p>
+                    <p>• -3 = 很冷，-2 = 冷，-1 = 微冷，0 = 舒适，+1 = 微热，+2 = 热，+3 = 很热</p>
+                    <p>• 计算考虑了6个因素：温度、湿度、风速、辐射温度、衣服厚薄、活动量</p>
+                    <p>• 新陈代谢率：1.0是坐着办公，1.2是轻微活动，2.0是体力劳动</p>
+                    <p>• 服装热阻：0.5是夏季薄衣，1.0是春秋常服，1.5是冬季厚衣</p>
+                </div>
+                <table class="param-table">
+                    <tr><th>参数</th><th>说明</th><th>典型值</th></tr>
+                    <tr><td>temperature</td><td>室内温度</td><td>24-26°C</td></tr>
+                    <tr><td>humidity</td><td>相对湿度</td><td>40-60%</td></tr>
+                    <tr><td>airVelocity</td><td>空气流速</td><td>0.1-0.2 m/s</td></tr>
+                    <tr><td>cloValue</td><td>服装热阻</td><td>0.5-1.5 clo</td></tr>
+                    <tr><td>metValue</td><td>新陈代谢率</td><td>1.0-1.2 met</td></tr>
+                </table>
+            </div>
+
+            <div class="formula-card">
+                <span class="tag tag-advanced">不满意度</span>
+                <h3>PPD 预测不满意百分比</h3>
+                <div class="formula-box">
+PPD = 100 - 95 × e^(-0.03353×PMV² - 0.2179×PMV⁴)
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• PPD是根据PMV值推算出来的不满意人数百分比</p>
+                    <p>• PMV=0时，PPD=5%（意思是还有5%的人不满意）</p>
+                    <p>• PMV=±1时，PPD≈27%</p>
+                    <p>• PMV=±2时，PPD≈75%</p>
+                    <p>• PMV=±3时，PPD≈100%</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 电池衰减 -->
+        <div id="battery" class="section">
+            <h2 class="section-title">🔋 电池衰减计算</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-advanced">健康度</span>
+                <h3>电池健康度计算</h3>
+                <div class="formula-box">
+基础衰减率(每1000次循环):<br>
+  LFP(磷酸铁锂) = 2%<br>
+  NCM(三元锂) = 3%<br>
+  铅酸电池 = 5%<br><br>
+深度放电系数 = (放电深度/100)^0.5<br>
+   (放电越深，衰减越快)<br><br>
+温度系数 = (25/当前温度)²<br>
+   (温度越高，衰减越快)<br><br>
+年龄影响 = 使用年限 × 1%<br>
+   (每自然年自然衰减1%)<br><br>
+循环衰减 = (循环次数/1000) × 基础衰减率 × 深度系数 × 温度系数<br>
+总衰减 = 最小(0.8, 循环衰减 + 年龄影响)<br><br>
+健康度 = 最大(0.2, 1 - 总衰减)<br>
+衰减成本 = 总衰减 × 1000  (元)
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 电池容量会随着使用时间逐渐衰减</p>
+                    <p>• 循环次数：充放电一次算一个循环</p>
+                    <p>• 放电深度：每次用掉多少电，用得越深电池老化越快</p>
+                    <p>• 温度：25°C是最佳温度，温度越高衰减越快</p>
+                    <p>• 电池类型不同：磷酸铁锂最耐用，铅酸电池衰减最快</p>
+                    <p>• 健康度低于80%建议更换电池</p>
+                </div>
+                <div class="example">
+                    <div class="example-title">📝 计算示例</div>
+                    <p>假设：LFP电池，循环2000次，放电深度90%，温度25°C，使用3年</p>
+                    <p>循环衰减 = (2000/1000) × 2% × √0.9 × 1 = 3.8%</p>
+                    <p>年龄影响 = 3 × 1% = 3%</p>
+                    <p>总衰减 = 6.8%</p>
+                    <p>健康度 = 93.2%</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- V2G -->
+        <div id="v2g" class="section">
+            <h2 class="section-title">🚗 V2G 车辆网联优化</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-advanced">调度策略</span>
+                <h3>V2G充放电调度</h3>
+                <div class="formula-box">
+策略：<br>
+  谷时段(电价最低) → 充电<br>
+  峰时段(电价最高) → 放电<br>
+  其他时段 → 空闲<br><br>
+充电时：<br>
+  充电功率 = 最小(最大功率, (95-当前SOC)% × 电池容量)<br>
+  新SOC = 最小(95, 当前SOC + 充电功率/电池容量×100×0.95)<br>
+  (充电效率95%)<br><br>
+放电时：<br>
+  放电功率 = 最小(最大功率, (当前SOC-20)% × 电池容量)<br>
+  收益 = 放电功率 × 电价 × 0.9<br>
+  新SOC = 最大(20, 当前SOC - 放电功率/电池容量×100/0.9)<br>
+  (放电效率90%，保留20%保底电量)<br><br>
+净收益 = 放电收益 - 电池衰减成本
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• V2G = Vehicle to Grid，电动汽车可以当移动储能用</p>
+                    <p>• 车不在用的时候（比如晚上停家里），可以参与电网调度</p>
+                    <p>• 电价低的时候充电，电价高的时候放电赚钱</p>
+                    <p>• 用户优先级高的（比如第二天要用车）不参与放电</p>
+                    <p>• 要留20%电量保底，防止需要用车时没电</p>
+                    <p>• 放电会加速电池老化，要扣除衰减成本</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数字孪生 -->
+        <div id="digital" class="section">
+            <h2 class="section-title">🏢 数字孪生热建模</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-advanced">热模型</span>
+                <h3>建筑热状态计算</h3>
+                <div class="formula-box">
+传导热负荷 = 热导系数 × 面积 × (室外温度 - 室内温度) / 1000<br>
+   (热量从高温传到低温)<br><br>
+太阳辐射增益 = 太阳辐射 × 玻璃窗占比 × 0.7 × 面积 / 1000<br>
+   (阳光透过窗户进来加热室内)<br><br>
+内部热增益 = 50 × 面积 / 1000<br>
+   (设备、人员等产生的热量，假设50瓦/平米)<br><br>
+总热负荷 = 传导热 + 太阳辐射 + 内部增益<br><br>
+室内新温度 = 室内旧温度 + (总热负荷 × 1小时) /
+                       (热质量 × 热惯性 × 2)<br>
+   (热质量越大，温度变化越慢)<br><br>
+墙体温度 = 墙体旧温度 + (室外温度 - 墙体旧温度) × 0.1<br>
+   (墙体响应慢，每小时只变化10%)
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 数字孪生就是在电脑里模拟真实建筑的热状态</p>
+                    <p>• 传导热：室内外温差导致的热量传递，温差越大传热越多</p>
+                    <p>• 太阳辐射：阳光晒进来会让室内升温，玻璃窗越多越明显</p>
+                    <p>• 内部热：电脑、灯光、人都会产生热量</p>
+                    <p>• 热惯性：建筑有保温层，温度变化有延迟，不是马上响应</p>
+                    <p>• 墙体温度：墙体会吸收热量，变化比室内空气慢</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 强化学习 -->
+        <div id="rl" class="section">
+            <h2 class="section-title">🤖 强化学习优化</h2>
+
+            <div class="formula-card">
+                <span class="tag tag-advanced">DQN算法</span>
+                <h3>简化版深度Q网络</h3>
+                <div class="formula-box">
+状态空间：24小时 × 3个特征 = 72维<br>
+  (负荷、电价、温度)<br><br>
+动作空间：3个动作<br>
+  -1 = 减少10%负荷<br>
+   0 = 保持不变<br>
+  +1 = 增加10%负荷<br><br>
+Q值更新(SARSA简化):<br>
+  新Q值 = 旧Q值 + 学习率 × (奖励 + 折扣系数×旧Q值 - 旧Q值)<br><br>
+奖励函数(成本优先):<br>
+  奖励 = -负荷 × 电价 × (1 - 动作×0.1)<br>
+  (负荷小、电价低、减负荷 → 奖励大)<br><br>
+ε-贪婪策略:<br>
+  随机数 < 探索率 → 随机选动作(探索)<br>
+  随机数 >= 探索率 → 选Q值最大的动作(利用)
+                </div>
+                <div class="explanation">
+                    <p><strong>大白话解释：</strong></p>
+                    <p>• 强化学习就是让电脑自己试错，找到最优策略</p>
+                    <p>• 状态：当前是什么情况（时间、负荷、电价、温度）</p>
+                    <p>• 动作：可以做什么（调整负荷）</p>
+                    <p>• Q值：每个状态下每个动作的"评分"，Q越高越好</p>
+                    <p>• 奖励：做这个动作能得多少分，分数越高说明越好</p>
+                    <p>• 探索：偶尔随机试试新动作，避免陷入局部最优</p>
+                    <p>• 利用：大部分时候选已知的最好动作</p>
+                    <p>• 训练后得到最优策略：每个小时应该做什么动作</p>
+                </div>
+                <table class="param-table">
+                    <tr><th>参数</th><th>说明</th><th>典型值</th></tr>
+                    <tr><td>learningRate</td><td>学习率</td><td>0.1</td></tr>
+                    <tr><td>discountFactor</td><td>折扣系数</td><td>0.95</td></tr>
+                    <tr><td>explorationRate</td><td>探索率</td><td>0.2</td></tr>
+                    <tr><td>trainingEpisodes</td><td>训练回合数</td><td>100</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- 基础数据 -->
+        <div id="data" class="section">
+            <h2 class="section-title">📊 基础数据参考</h2>
+
+            <div class="formula-card">
+                <h3>城市年日照时数（小时/年）</h3>
+                <div class="data-table">
+                    <table>
+                        <tr><th>城市</th><th>日照时数</th><th>城市</th><th>日照时数</th></tr>
+                        <tr><td>北京</td><td>1650</td><td>上海</td><td>1420</td></tr>
+                        <tr><td>天津</td><td>1680</td><td>南京</td><td>1650</td></tr>
+                        <tr><td>石家庄</td><td>1720</td><td>杭州</td><td>1580</td></tr>
+                        <tr><td>太原</td><td>1750</td><td>合肥</td><td>1750</td></tr>
+                        <tr><td>呼和浩特</td><td>1820</td><td>济南</td><td>1820</td></tr>
+                        <tr><td>西安</td><td>1780</td><td>青岛</td><td>1780</td></tr>
+                        <tr><td>兰州</td><td>2100</td><td>苏州</td><td>1600</td></tr>
+                        <tr><td>西宁</td><td>2180</td><td>广州</td><td>1580</td></tr>
+                        <tr><td>成都</td><td>1250</td><td>深圳</td><td>1720</td></tr>
+                        <tr><td>重庆</td><td>1100</td><td>南宁</td><td>1680</td></tr>
+                        <tr><td>贵阳</td><td>1320</td><td>海口</td><td>1820</td></tr>
+                        <tr><td>昆明</td><td>2100</td><td>长沙</td><td>1520</td></tr>
+                        <tr><td>福州</td><td>1650</td><td>厦门</td><td>1780</td></tr>
+                        <tr><td>武汉</td><td>1650</td><td>南昌</td><td>1650</td></tr>
+                        <tr><td>郑州</td><td>1720</td><td>宁波</td><td>1750</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="formula-card">
+                <h3>建筑热导系数（越小保温越好）</h3>
+                <div class="data-table">
+                    <table>
+                        <tr><th>建筑类型</th><th>热导系数</th><th>说明</th></tr>
+                        <tr><td>医院</td><td>1.5</td><td>保温最好</td></tr>
+                        <tr><td>商场</td><td>1.8</td><td>玻璃较多</td></tr>
+                        <tr><td>学校</td><td>2.0</td><td>中等</td></tr>
+                        <tr><td>工厂</td><td>2.5</td><td>保温一般</td></tr>
+                        <tr><td>办公</td><td>2.8</td><td>保温较差</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="formula-card">
+                <h3>季节负荷系数</h3>
+                <div class="data-table">
+                    <table>
+                        <tr><th>季节</th><th>月份</th><th>总负荷系数</th><th>空调负荷系数</th></tr>
+                        <tr><td>春季</td><td>3-5月</td><td>0.9</td><td>1.1</td></tr>
+                        <tr><td>夏季</td><td>6-8月</td><td>1.2</td><td>1.4</td></tr>
+                        <tr><td>秋季</td><td>9-11月</td><td>1.0</td><td>1.1</td></tr>
+                        <tr><td>冬季</td><td>12-2月</td><td>0.8</td><td>0.85</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="formula-card">
+                <h3>分时电价时段</h3>
+                <div class="data-table">
+                    <table>
+                        <tr><th>时段</th><th>时间</th><th>说明</th></tr>
+                        <tr><td>谷时段</td><td>0:00-8:00</td><td>电价最低</td></tr>
+                        <tr><td>平时段1</td><td>8:00-14:00</td><td>电价中等</td></tr>
+                        <tr><td>峰时段</td><td>14:00-19:00</td><td>电价较高</td></tr>
+                        <tr><td>平时段2</td><td>19:00-24:00</td><td>电价中等</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="formula-card">
+                <h3>灯具效率对比</h3>
+                <div class="data-table">
+                    <table>
+                        <tr><th>灯具类型</th><th>效率</th><th>说明</th></tr>
+                        <tr><td>LED灯</td><td>100 lm/W</td><td>最节能</td></tr>
+                        <tr><td>荧光灯</td><td>60 lm/W</td><td>中等</td></tr>
+                        <tr><td>白炽灯</td><td>15 lm/W</td><td>最费电</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="formula-card">
+                <h3>电池类型对比</h3>
+                <div class="data-table">
+                    <table>
+                        <tr><th>电池类型</th><th>每1000次衰减</th><th>寿命</th></tr>
+                        <tr><td>LFP磷酸铁锂</td><td>2%</td><td>最长</td></tr>
+                        <tr><td>NCM三元锂</td><td>3%</td><td>中等</td></tr>
+                        <tr><td>铅酸电池</td><td>5%</td><td>最短</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>零碳项目收益评估软件 - 算法公式说明文档</p>
+            <p>更新时间：2026年2月</p>
+        </div>
+    </div>
+
+    <script>
+        function showSection(sectionId) {
+            // 隐藏所有section
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // 移除所有button的active类
+            document.querySelectorAll('.nav button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // 显示选中的section
+            document.getElementById(sectionId).classList.add('active');
+
+            // 给对应的button添加active类
+            event.target.classList.add('active');
+
+            // 滚动到顶部
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
