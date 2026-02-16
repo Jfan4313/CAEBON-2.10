@@ -2083,6 +2083,7 @@ export class PriceDataAdapter {
    */
   private generateSimulatedHistory(days: number): Array<{ timestamp: number; price: number }> {
     const history: Array<{ timestamp: number; price: number }>([]);
+
     const now = Date.now();
 
     for (let i = 0; i < days * 24; i++) {
@@ -2159,5 +2160,75 @@ export class PriceDataCacheManager {
    */
   clearAll(): void {
     this.cache.clear();
+  }
+}
+
+export function calculateIntegratedOptimization(
+  lightingParams: LightingSystemParams,
+  hvacParams: HVACSystemParams,
+  solarStorageParams: SolarStorageSystemParams,
+  buildingParams?: BuildingParams,
+  environmentalFactors?: EnvironmentalFactors,
+  trafficPattern?: TrafficPattern,
+  aggressiveness: number = 0.5,
+  thermalEconomicConfig?: ThermalEconomicConfig
+): {
+  optimizedLoadProfile: number[];
+  totalSavings: number;
+  recommendations: string[];
+  crossSectorMetrics?: {
+    storagePrecoolDecisions: StoragePrecoolDecision[];
+    thermalCoefficients: number[];
+    lightingHVACBalances: LightingHVACBalance[];
+  };
+} {
+  const recommendations: string[] = [];
+
+  if (thermalEconomicConfig && buildingParams && environmentalFactors) {
+    const thermalOptimizer = new ThermalEconomicOptimizer(thermalEconomicConfig);
+    const dynamicCoefficients = thermalOptimizer.calculateDynamicThermalCoefficient();
+    const crossSectorMetrics = {
+      storagePrecoolDecisions: [] as StoragePrecoolDecision[],
+      thermalCoefficients: dynamicCoefficients,
+      lightingHVACBalances: [] as LightingHVACBalance[],
+    };
+
+    for (let hour = 0; hour < 24; hour++) {
+      const price = thermalEconomicConfig.priceForecast.prices[hour].price;
+      const futurePeaks = thermalOptimizer.identifyFuturePricePeaks(hour);
+      if (futurePeaks.length > 0) {
+        const storagePrecoolDecision = thermalOptimizer.decideStorageVsPrecool(
+          hour,
+          futurePeaks[0].hour,
+          calculateDigitalTwinThermalModel(buildingParams, environmentalFactors, {
+            building: { thermalInertia: buildingParams.thermalInertia || 1 },
+          })
+        );
+        crossSectorMetrics.storagePrecoolDecisions.push(storagePrecoolDecision);
+      }
+      const lightingHVACBalance = thermalOptimizer.balanceLightingAndHVAC(hour, price);
+      crossSectorMetrics.lightingHVACBalances.push(lightingHVACBalance);
+    }
+
+    if (aggressiveness > 0.8) {
+      recommendations.push('建议启用储能削峰填谷功能');
+    }
+
+    const precoolCount = crossSectorMetrics.storagePrecoolDecisions.filter(d => d.decision === 'precool').length;
+    if (precoolCount > 4) {
+      recommendations.push('建筑热容利用效率高，' + precoolCount + '小时建议使用预冷策略');
+    }
+
+    const storageCount = crossSectorMetrics.storagePrecoolDecisions.filter(d => d.decision === 'storage').length;
+    if (storageCount > 4) {
+      recommendations.push('储能策略活跃，' + storageCount + '小时建议使用电池套利');
+    }
+
+    return {
+      optimizedLoadProfile: [],
+      totalSavings: 0,
+      recommendations,
+      crossSectorMetrics,
+    };
   }
 }
