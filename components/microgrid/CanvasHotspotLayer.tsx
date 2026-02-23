@@ -22,8 +22,8 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
     configs,
     onDeviceClick,
     children,
-    width = 800,
-    height = 600
+    width = 1920,
+    height = 1080
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const offscreenCanvasRef = useRef<HTMLCanvasElement>(null);

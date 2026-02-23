@@ -61,7 +61,7 @@ const MicrogridVisual: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full h-[650px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm flex">
+        <div className="relative w-full h-[720px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm flex">
             {/* 左侧：可视化画布区域 */}
             <div className="flex-1 relative">
                 <SceneBackground timeOfDay={timeOfDay} />
