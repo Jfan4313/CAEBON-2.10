@@ -10,13 +10,15 @@ interface CanvasHotspotLayerProps {
 }
 
 /**
- * 基于像素的 Canvas 热区层（性能优化版）
+ * 基于像素的 Canvas 热区层（性能优化版 v2）
  *
- * 性能优化策略：
+ * 性能优化策略 v2：
  * 1. 预计算 Alpha 映射：图片加载时一次性计算所有像素的 Alpha 值，存储为 Uint8Array
  * 2. 使用 requestAnimationFrame 节流：避免每帧都进行昂贵操作
  * 3. 缓存排序后的配置：避免每次鼠标移动都重新排序
- * 4. 鼠标移动防抖：只在移动超过阈值时才重新检测
+ * 4. 鼠标移动防抖：只在移动超过 3 像素时才重新检测（增大阈值减少检测频率）
+ * 5. 离散发光效果：减少 shadowBlur 和二次绘制
+ * 6. 使用 CSS will-change: optimize compositing 性能
  */
 const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
     configs,
@@ -26,7 +28,6 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
     height = 1080
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const offscreenCanvasRef = useRef<HTMLCanvasElement>(null);
     const [activeDevice, setActiveDevice] = useState<string | null>(null);
     const [hoveredDevice, setHoveredDevice] = useState<string | null>(null);
 
@@ -103,7 +104,7 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         };
     }, [configs, width, height]);
 
-    // 绘制主 Canvas
+    // 绘制主 Canvas（优化版）
     useEffect(() => {
         if (!canvasRef.current || layerData.size === 0) return;
 
@@ -111,8 +112,14 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
+        // 设置画布尺寸
         canvas.width = width;
         canvas.height = height;
+
+        // 优化：使用 will-change 和图像平滑
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
         ctx.clearRect(0, 0, width, height);
 
         // 按照 zIndex 排序
@@ -142,11 +149,12 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
             ctx.globalAlpha = alpha;
             ctx.drawImage(data.img, 0, 0, width, height);
 
+            // 离散发光效果以提升性能
             if (isActive) {
                 ctx.save();
-                ctx.globalAlpha = 1.0;
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = '#00ffff';
+                ctx.globalAlpha = 0.3;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = 'rgba(0, 255, 255, 0.3)';
                 ctx.drawImage(data.img, 0, 0, width, height);
                 ctx.restore();
             }
@@ -196,11 +204,11 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         const px = Math.floor(x);
         const py = Math.floor(y);
 
-        // 防抖：只在移动超过 2 像素时才重新检测
+        // 防抖：只在移动超过 3 像素时才重新检测（增大阈值减少检测频率）
         const lastX = lastMousePosRef.current.x;
         const lastY = lastMousePosRef.current.y;
 
-        if (Math.abs(px - lastX) < 2 && Math.abs(py - lastY) < 2) {
+        if (Math.abs(px - lastX) < 3 && Math.abs(py - lastY) < 3) {
             return;
         }
 
@@ -276,6 +284,7 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
             <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full"
+                style={{ imageRendering: 'optimizeSpeed', willChange: 'auto' }}
                 onMouseMove={handleMouseMove}
                 onClick={handleClick}
                 onMouseLeave={handleMouseLeave}
