@@ -1,21 +1,20 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMicrogridState } from './hooks/useMicrogridState';
+import { useDeviceConfigs } from './hooks/useDeviceConfigs';
+import { DeviceImageConfig } from '../../types';
 import SceneBackground from './SceneBackground';
 import DeviceLayer from './DeviceLayer';
-import ControlPanel from './ControlPanel';
 import ConfigPanelButton from './ConfigPanelButton';
 import ConfigPanel from './ConfigPanel';
-import { useDeviceConfigs } from './hooks/useDeviceConfigs';
+import SidePanel from './SidePanel';
 
 /**
  * 微电网可视化主容器组件
  *
- * 整合所有子组件，提供完整的微电网动态可视化功能
- * - 场景背景（支持昼夜切换）
- * - 设备图层（15个组件图片，支持动态位置调整）
- * - 能源流动覆盖层（SVG动画）
- * - 控制面板（手动控制模式）
- * - 配置面板（可调整图片位置、大小和关联设备）
+ * 新布局设计：
+ * - 中心区域：微电网可视化画布（无遮挡）
+ * - 右侧面板：可折叠的控制面板 + 设备信息面板
+ * - 点击设备后在侧边栏显示该设备的详细配置信息
  */
 const MicrogridVisual: React.FC = () => {
     const {
@@ -41,6 +40,9 @@ const MicrogridVisual: React.FC = () => {
         togglePanel
     } = useDeviceConfigs();
 
+    // 选中的设备配置
+    const [selectedDeviceConfig, setSelectedDeviceConfig] = useState<DeviceImageConfig | null>(null);
+
     // 加载保存的配置
     useEffect(() => {
         const loaded = loadConfigs();
@@ -49,28 +51,59 @@ const MicrogridVisual: React.FC = () => {
         }
     }, [loadConfigs]);
 
+    // 处理设备点击，显示对应的配置信息
+    const handleDeviceClick = (deviceId: string) => {
+        toggleDevice(deviceId);
+
+        // 找到对应的配置
+        const config = panelState.configs.find(c => c.linkedDevice === deviceId);
+        setSelectedDeviceConfig(config || null);
+    };
+
     return (
-        <div className="relative w-full h-[600px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-            <SceneBackground timeOfDay={timeOfDay} />
-            <DeviceLayer configs={panelState.configs} devices={devices} timeOfDay={timeOfDay} />
-            {/* 能源流动覆盖层已禁用 */}
-            {/* <EnergyFlowOverlay energyFlow={energyFlow} timeOfDay={timeOfDay} /> */}
-
-            {/* ==================== 控制面板 ==================== */}
-            {dataSourceMode === 'manual' && (
-                <ControlPanel
-                    dataSourceMode={dataSourceMode}
-                    onToggleDevice={toggleDevice}
-                    onSetTimeOfDay={setTimeOfDay}
-                    onSetDataSourceMode={setDataSourceMode}
+        <div className="relative w-full h-[650px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm flex">
+            {/* 左侧：可视化画布区域 */}
+            <div className="flex-1 relative">
+                <SceneBackground timeOfDay={timeOfDay} />
+                <DeviceLayer
+                    configs={panelState.configs}
                     devices={devices}
+                    timeOfDay={timeOfDay}
+                    onDeviceClick={handleDeviceClick}
                 />
-            )}
 
-            {/* ==================== 配置面板按钮 ==================== */}
-            <ConfigPanelButton
-                onClick={togglePanel}
-                hasUnsavedChanges={panelState.isDirty}
+                {/* 配置面板按钮 */}
+                <ConfigPanelButton
+                    onClick={togglePanel}
+                    hasUnsavedChanges={panelState.isDirty}
+                />
+
+                {/* 时间指示器（左下角） */}
+                <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md rounded-lg shadow-md border border-slate-200 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                        <span className={`material-icons text-lg ${timeOfDay === 'day' ? 'text-amber-500' : 'text-indigo-500'}`}>
+                            {timeOfDay === 'day' ? 'wb_sunny' : 'nights_stay'}
+                        </span>
+                        <div>
+                            <div className="text-xs font-bold text-slate-800">
+                                {timeOfDay === 'day' ? '白天' : '夜晚'}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                                {currentHour}:00
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* 右侧：控制面板和设备信息面板 */}
+            <SidePanel
+                dataSourceMode={dataSourceMode}
+                onToggleDevice={toggleDevice}
+                onSetTimeOfDay={setTimeOfDay}
+                onSetDataSourceMode={setDataSourceMode}
+                devices={devices}
+                selectedDeviceConfig={selectedDeviceConfig}
             />
 
             {/* ==================== 配置面板对话框 ==================== */}
@@ -85,41 +118,6 @@ const MicrogridVisual: React.FC = () => {
                     onClose={togglePanel}
                 />
             )}
-
-            {/* ==================== 时间指示器（左下角）==================== */}
-            <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md rounded-lg shadow-md border border-slate-200 px-3 py-2">
-                <div className="flex items-center gap-2">
-                    <span className={`material-icons text-lg ${timeOfDay === 'day' ? 'text-amber-500' : 'text-indigo-500'}`}>
-                        {timeOfDay === 'day' ? 'wb_sunny' : 'nights_stay'}
-                    </span>
-                    <div>
-                        <div className="text-xs font-bold text-slate-800">
-                            {timeOfDay === 'day' ? '白天' : '夜晚'}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                            {currentHour}:00
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* ==================== 数据来源模式指示器（右下角）==================== */}
-            <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md rounded-lg shadow-md border border-slate-200 px-3 py-2">
-                <div className="flex items-center gap-2">
-                    <span className="material-icons text-sm text-slate-500">
-                        {dataSourceMode === 'manual' ? 'gamepad' :
-                         dataSourceMode === 'simulation' ? 'show_chart' :
-                         'wifi'}
-                    </span>
-                    <div>
-                        <div className="text-xs font-bold text-slate-800">
-                            {dataSourceMode === 'manual' ? '手动控制' :
-                             dataSourceMode === 'simulation' ? '模拟数据' :
-                             '实时数据'}
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
