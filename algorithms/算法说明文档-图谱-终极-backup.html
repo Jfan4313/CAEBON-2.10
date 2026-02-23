@@ -1,0 +1,1644 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>算法图谱 - 终极版</title>
+    <style>
+        :root {
+            --bg-primary: #ECFEFF;
+            --bg-secondary: #F0FDF4;
+            --surface: #FFFFFF;
+            --surface-light: #F8FAFC;
+            --surface-hover: #E0F2FE;
+            --text-primary: #164E63;
+            --text-secondary: #5A7A8A;
+            --text-muted: #94A3B8;
+            --accent: #0891B2;
+            --border: #CCFBF1;
+            --border-light: #D0F0F5;
+            --success: #22C55E;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --info: #22D3EE;
+            --primary-light: #CFFAFE;
+            --primary-dark: #0E7490;
+            --gradient-start: #0891B2;
+            --gradient-end: #22D3EE;
+            --shadow-sm: 0 1px 2px rgba(8, 145, 178, 0.05);
+            --shadow-md: 0 4px 6px rgba(8, 145, 178, 0.1);
+            --shadow-lg: 0 10px 15px rgba(8, 145, 178, 0.15);
+            --shadow-xl: 0 20px 25px rgba(8, 145, 178, 0.2);
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        line-height: 1.6;
+        }
+        .grid-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.3;
+            background-image: linear-gradient(var(--border-light) 1px, transparent 1px),
+                              linear-gradient(90deg, var(--border-light) 1px, transparent 1px);
+            background-size: 40px 40px;
+            background-position: 0 0;
+            animation: gridMove 30s linear infinite;
+        }
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 40px 40px; }
+        }
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.08;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(8, 145, 178, 0.08) 2px);
+        }
+        .scanlines::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(8, 145, 178, 0) 0%, rgba(8, 145, 178, 0.05) 100%);
+            animation: scan 12s linear infinite;
+        }
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .glow-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+            background: radial-gradient(ellipse at 50% 50%, rgba(8, 145, 178, 0.06) 0%, rgba(34, 211, 238, 0.03) 40%, transparent 70%);
+            animation: glowPulse 6s ease-in-out infinite;
+        }
+        @keyframes glowPulse {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 300px;
+            height: 100vh;
+            background: var(--surface);
+            border-right: 2px solid var(--border);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 2px solid var(--border-light);
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+        }
+        .sidebar-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            margin-bottom: 4px;
+            letter-spacing: 2px;
+        }
+        .sidebar-subtitle {
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .node-info-panel {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+        .node-info-panel:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--accent);
+        }
+        .node-info-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--info), transparent, var(--accent));
+            animation: borderGlow 3s ease-in-out infinite;
+        }
+        @keyframes borderGlow {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        .node-info-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .node-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+        .node-info-connections {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .connection-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            margin: 6px 0;
+            background: var(--surface);
+            border-left: 3px solid var(--info);
+            border-radius: 0 6px 6px 0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .connection-item:hover {
+            background: var(--surface-light);
+            border-left-color: var(--neon-blue);
+            transform: translateX(4px);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+        }
+        .connection-type {
+            font-size: 0.7em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-right: 8px;
+        }
+        .type-forward {
+            background: linear-gradient(135deg, rgba(30, 64, 175, 0.3), rgba(59, 130, 246, 0.3));
+            color: var(--neon-blue);
+            box-shadow: 0 0 6px rgba(0, 212, 255, 0.3);
+        }
+        .type-backward {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(245, 158, 11, 0.3));
+            color: var(--neon-pink);
+            box-shadow: 0 0 6px rgba(255, 0, 255, 0.3);
+        }
+        .sidebar-footer {
+            padding: 16px;
+            border-top: 2px solid var(--border-light);
+            font-size: 0.8em;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        .graph-container {
+            position: fixed;
+            left: 300px;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            cursor: grab;
+        }
+        .graph-container:active {
+            cursor: grabbing;
+        }
+        .graph-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 600px;
+            height: 600px;
+            transform: translate(-50%, -50%);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            opacity: 0.1;
+            pointer-events: none;
+            animation: rotateGlow 10s linear infinite;
+        }
+        @keyframes rotateGlow {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        #graphCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            gap: 12px;
+            z-index: 50;
+        }
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            color: var(--text-primary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-sm);
+        }
+        .control-btn:hover {
+            background: var(--gradient-start);
+            color: #fff;
+            border-color: var(--info);
+            transform: translateY(-3px) scale(1.08);
+            box-shadow: var(--shadow-lg);
+        }
+        .control-btn:active {
+            background: var(--primary-dark);
+            color: #fff;
+            transform: translateY(-1px) scale(1.02);
+            box-shadow: var(--shadow-md);
+        }
+        .legend {
+            position: fixed;
+            top: 100px;
+            right: 30px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 20px;
+            z-index: 50;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: var(--shadow-xl);
+            animation: fadeInRight 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(12px);
+        }
+        @keyframes fadeInRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .legend-title {
+            font-size: 1em;
+            color: var(--accent);
+            font-weight: 600;
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            gap: 10px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .legend-item:hover {
+            transform: translateX(-4px);
+        }
+        .legend-item.active {
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            padding-left: 14px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            border: 2px solid;
+            transition: all 0.2s;
+        }
+        .legend-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.75em;
+        }
+        .legend-icon {
+            width: 20px;
+            height: 20px;
+        }
+        .stats-table {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: var(--shadow-lg);
+            backdrop-filter: blur(8px);
+            max-width: 280px;
+            animation: fadeInUp 0.4s ease-out;
+            z-index: 40;
+        }
+        .stats-table table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .stats-table th {
+            background: var(--surface-light);
+            color: var(--text-primary);
+            font-weight: 600;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 2px solid var(--border-light);
+        }
+        .stats-table td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-light);
+            color: var(--text-secondary);
+        }
+        .stats-table tr:hover td {
+            background: var(--surface-hover);
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .legend-divider {
+            height: 1px;
+            background: var(--border-light);
+            margin: 12px 0;
+        }
+        .stats-panel {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            margin-top: 280px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 16px 18px;
+            z-index: 50;
+            max-width: 220px;
+            box-shadow: var(--shadow-lg);
+            animation: fadeInRight 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(8px);
+        }
+        .stats-title {
+            font-size: 0.85em;
+            color: var(--accent);
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-light);
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        .stat-item:hover {
+            background: var(--surface-light);
+            transform: translateX(4px);
+        }
+        .stat-label {
+            color: var(--text-secondary);
+        }
+        .stat-value {
+            color: var(--accent);
+            font-weight: 600;
+            font-family: 'Fira Code', monospace;
+        }
+        .search-panel {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            z-index: 50;
+        }
+        .search-input {
+            padding: 12px 16px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(8px);
+            box-shadow: var(--shadow-sm);
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--primary-light), var(--shadow-md);
+            transform: scale(1.02);
+        }
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+        .tooltip {
+            position: fixed;
+            background: var(--surface);
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            padding: 16px 18px;
+            pointer-events: none;
+            z-index: 200;
+            max-width: 300px;
+            box-shadow: var(--shadow-xl);
+            opacity: 0;
+            transform: translateY(10px) scale(0.95);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(12px);
+        }
+        .tooltip.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .tooltip::before {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 24px;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid var(--accent);
+        }
+        .tooltip-title {
+            font-size: 1em;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .tooltip-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            background: var(--primary-light);
+            color: var(--primary-dark);
+        }
+        .tooltip-desc {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 6px;
+        }
+        .tooltip-connections {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-light);
+        }
+        .tooltip-conn {
+            font-size: 0.8em;
+            padding: 2px 0;
+            color: var(--text-secondary);
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .loading-container {
+            text-align: center;
+        }
+        .loading-text {
+            font-family: monospace;
+            font-size: 1.1em;
+            color: var(--neon-blue);
+            animation: blink 0.5s infinite;
+            letter-spacing: 3px;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.5; }
+        }
+        .loading-bar {
+            width: 200px;
+            height: 3px;
+            background: var(--border-light);
+            border-radius: 2px;
+            margin: 20px auto;
+            overflow: hidden;
+            position: relative;
+        }
+        .loading-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -200px;
+            width: 200px;
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+            animation: loadingBar 1.5s ease-in-out infinite;
+        }
+        @keyframes loadingBar {
+            0% { left: -200px; }
+            100% { left: 200px; }
+        }
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .graph-container {
+                left: 0;
+            }
+            .legend, .search-panel, .stats-panel {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 动态网格背景 -->
+    <div class="grid-background"></div>
+
+    <!-- 扫描线效果 -->
+    <div class="scanlines"></div>
+
+    <!-- 光晕效果 -->
+    <div class="glow-overlay"></div>
+
+    <!-- 粒子背景 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">NEURAL GRAPH</div>
+            <div class="sidebar-subtitle">v2.0.1</div>
+        </div>
+
+        <div class="sidebar-content">
+            <div class="node-info-panel" id="nodeInfo" style="display: none;">
+                <div class="node-info-title">
+                    <span class="node-indicator"></span>
+                    <span id="selectedNodeName">SELECT_NODE</span>
+                </div>
+                <div class="node-info-connections" id="nodeConnections">
+                    点击节点查看详情
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <p style="margin-bottom: 10px;">拖拽画布平移视图</p>
+            <p style="margin-bottom: 10px;">滚轮缩放视图</p>
+            <p>拖拽节点重新定位</p>
+            <p>点击节点显示信息</p>
+        </div>
+    </aside>
+
+    <!-- 图谱容器 -->
+    <div class="graph-container" id="graphContainer">
+        <canvas id="graphCanvas"></canvas>
+    </div>
+
+    <!-- 控制按钮 -->
+    <div class="controls">
+        <button class="control-btn" id="resetBtn" onclick="resetView()" title="重置视图">
+            ⟲
+        </button>
+        <button class="control-btn" id="physicsBtn" onclick="togglePhysics()" title="切换物理模拟">
+            ⚡
+        </button>
+        <button class="control-btn" id="fitBtn" onclick="fitToScreen()" title="适配屏幕">
+            ⛶
+        </button>
+        <button class="control-btn" id="layoutBtn" onclick="toggleLayout()" title="切换布局">
+            🔀
+        </button>
+    </div>
+
+    <!-- 图例 -->
+    <div class="legend">
+        <div class="legend-title">节点类型</div>
+        <div class="legend-item" onclick="filterNodes('algo')" data-type="algo">
+            <svg class="legend-icon" style="color: var(--primary);">
+                <path fill="currentColor" d="M10 2a2 2 0 0 1 2 4h2a2 2 0 0 1-4 4 2.83 2.83L6 11l4-4 4-4-4 4 1.41 1.41L1 7l1.41-1.41 0 0 1.41-1.41 0-4 4-1.41L1 7l4 4 4 2.83 2.83L12 5l4 4 4-4-4 4-4 4 2.83 2.83L17 7l-4 4 4-4-4 4-4 4 4 4z"/>
+            </svg>
+            <span class="legend-label">算法功能</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('param')" data-type="param">
+            <svg class="legend-icon" style="color: var(--info);">
+                <path fill="currentColor" d="M11 4a2 2 0 0 1 2 4h2a2 2 0 0 1-4 4 2.83 2.83L6 11l4-4 4-4-4 4 1.41 1.41L1 7l1.41-1.41 0 0 1.41-1.41 0-4 4-1.41L1 7l4 4 4 2.83 2.83L12 5l4 4 4-4-4 4-4 4 2.83 2.83L17 7l-4 4 4-4-4 4-4 4 4z"/>
+            </svg>
+            <span class="legend-label">参数配置</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('data')" data-type="data">
+            <svg class="legend-icon" style="color: var(--success);">
+                <path fill="currentColor" d="M4 16v2a2 2 0 0 1 2 4h10a2 2 0 0 1 4 4 2.83 2.83L12 7l-4 4 4-4-4 4-4 4 2.83 2.83L16 7l-4 4 4 2.83 2.83L20 7l4 4 4-4-4 4-4 4 4z"/>
+            </svg>
+            <span class="legend-label">基础数据</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('core')" data-type="core">
+            <svg class="legend-icon" style="color: var(--accent);">
+                <path fill="currentColor" d="M12 2a2 2 0 0 1 2 4h2a2 2 0 0 1 4 4 2.83 2.83L6 11l4-4 4-4-4 4 1.41 1.41L1 7l1.41-1.41 0 0 1.41-1.41 0-4 4-1.41L1 7l4 4 4 2.83 2.83L12 5l4 4 4-4-4 4-4 4 2.83 2.83L17 7l-4 4 4-4-4 4-4 4 4z"/>
+            </svg>
+            <span class="legend-label">核心算法</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('advanced')" data-type="advanced">
+            <svg class="legend-icon" style="color: #8B5CF6;">
+                <path fill="currentColor" d="M12 2a2 2 0 0 1 2 4h2a2 2 0 0 1 4 4 2.83 2.83L6 11l4-4 4-4-4 4 1.41 1.41L1 7l1.41-1.41 0 0 1.41-1.41 0-4 4-1.41L1 7l4 4 4 2.83 2.83L12 5l4 4 4-4-4 4-4 4 2.83 2.83L17 7l-4 4 4-4-4 4-4 4 4z"/>
+            </svg>
+            <span class="legend-label">高级功能</span>
+        </div>
+        <div class="legend-divider"></div>
+        <div class="legend-title">层级过滤</div>
+        <div class="legend-item" onclick="filterLevel(0)" data-level="0">
+            <svg class="legend-icon" style="color: var(--accent);">
+                <path fill="currentColor" d="M12 2a2 2 0 0 1 2 4h2a2 2 0 0 1-4 4 2.83 2.83L6 11l4-4 4-4-4 4 1.41 1.41L1 7l1.41-1.41 0 0 1.41-1.41 0-4 4-1.41L1 7l4 4 4 2.83 2.83L12 5l4 4 4-4-4 4-4 4 2.83 2.83L17 7l-4 4 4-4-4 4-4 4 4z"/>
+            </svg>
+            <span class="legend-label">L0 概述</span>
+        </div>
+        <div class="legend-item" onclick="filterLevel(1)" data-level="1">
+            <svg class="legend-icon" style="color: var(--primary);">
+                <path fill="currentColor" d="M10 2a2 2 0 0 1 2 4h2a2 2 0 0 1-4 4 2.83 2.83L6 11l4-4 4-4-4 4 1.41 1.41L1 7l1.41-1.41 0 0 1.41-1.41 0-4 4-1.41L1 7l4 4 4 2.83 2.83L12 5l4 4 4-4-4 4-4 4 4z"/>
+            </svg>
+            <span class="legend-label">L1 系统模块</span>
+        </div>
+        <div class="legend-item" onclick="filterLevel(2)" data-level="2">
+            <svg class="legend-icon" style="color: var(--info);">
+                <path fill="currentColor" d="M9 3a2 2 0 0 1 2 4h2a2 2 0 0 1-4 4 2.83 2.83L6 11l4-4 4-4-4 4 1.41 1.41L1 7l1.41-1.41 0 0 1.41-1.41 0-4 4-1.41L1 7l4 4 4 2.83 2.83L12 5l4 4 4-4-4 4-4 4 4z"/>
+            </svg>
+            <span class="legend-label">L2 算法函数</span>
+        </div>
+        <div class="legend-item" onclick="filterLevel(3)" data-level="3">
+            <svg class="legend-icon" style="color: var(--success);">
+                <path fill="currentColor" d="M12 2a2 2 0 0 1 2 4h10a2 2 0 0 1 4 4 2.83 2.83L6 11l4-4 4-4-4 4 1.41 1.41L1 7l1.41-1.41 0 0 1.41-1.41 0-4 4-1.41L1 7l4 4 4 2.83 2.83L12 5l4 4 4-4-4 4-4 4 4z"/>
+            </svg>
+            <span class="legend-label">L3 参数数据</span>
+        </div>
+        <div class="legend-item" onclick="filterLevel(-1)" data-level="-1">
+            <svg class="legend-icon" style="color: var(--text-secondary);">
+                <path fill="currentColor" d="M4 4h16v2h2a2 2 0 0 1 2 4h16v-2a2 2 0 0 1 2 4h10a2 2 0 0 1 2 4h-6v-2a2 2 0 0 1 2 4h-10v-2a2 2 0 0 1 2 4h-10v-6a2 2 0 0 1 2 4h-10v-8a2 2 0 0 1 2 4h-10v-6a2 2 0 0 1 2 4h-6v-6a2 2 0 0 1 2 4h-6v-6a2 2 0 0 1 2 4h-6v-6a2 2 0 0 1 2 4h-6v-6a2 2 0 0 1 2 4h-6v-6a2 2 0 0 1 2 4h-6v-6a2 2 0 0 1 2 4h-6v-6a2 2 0 0 1 2 4z"/>
+            </svg>
+            <span class="legend-label">显示全部</span>
+        </div>
+    </div>
+
+    <!-- 节点统计表格 -->
+    <div class="stats-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>层级</th>
+                    <th>节点数</th>
+                    <th>说明</th>
+                </tr>
+            </thead>
+            <tbody id="statsTableBody">
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 统计面板 -->
+    <div class="stats-panel">
+        <div class="stats-title">图谱统计</div>
+        <div class="stat-item">
+            <span class="stat-label">节点总数</span>
+            <span class="stat-value" id="totalNodes">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">连接数</span>
+            <span class="stat-value" id="totalConnections">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">可见节点</span>
+            <span class="stat-value" id="visibleNodes">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">当前过滤</span>
+            <span class="stat-value" id="activeFilterDisplay">ALL</span>
+        </div>
+    </div>
+
+    <!-- 搜索框 -->
+    <div class="search-panel">
+        <input type="text" class="search-input" id="searchInput" placeholder="搜索节点..." autocomplete="off">
+    </div>
+
+    <!-- 提示框 -->
+    <div class="tooltip" id="tooltip">
+        <div class="tooltip-title" id="tooltipTitle"></div>
+        <div class="tooltip-type" id="tooltipType"></div>
+        <div class="tooltip-desc" id="tooltipDesc"></div>
+        <div class="tooltip-connections" id="tooltipConnections"></div>
+    </div>
+
+    <!-- 加载界面 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-container">
+            <div class="loading-bar"></div>
+            <div class="loading-text">INITIALIZING NEURAL NETWORK...</div>
+        </div>
+    </div>
+
+    <script>
+        // 多层次层级结构
+        // Level 0: 概述
+        // Level 1: 五大系统模块
+        // Level 2: 算法函数
+        // Level 3: 参数/数据节点
+
+        const nodes = [
+            // ===== Level 0: 核心概述 =====
+            { id: 'overview', label: '算法库', type: 'core', x: 0, y: 0, level: 0, connections: ['lighting', 'hvac', 'solar', 'integrated', 'pmv', 'v2g', 'digital-twin', 'rl'], description: 'AI平台算法库完整介绍' },
+
+            // ===== Level 1: 系统模块 (5大系统) =====
+            { id: 'lighting', label: '照明系统', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-base', 'calc-savings'], description: '照明基准计算与节能评估' },
+            { id: 'hvac', label: '空调系统', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-hvac-base', 'calc-hvac-savings'], description: '暖通空调基准与节能评估' },
+            { id: 'solar', label: '光储系统', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-pv', 'calc-storage', 'calc-battery'], description: '光伏发电与储能优化' },
+            { id: 'pmv', label: '舒适度', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-pmv', 'calc-ppd'], description: 'PMV/PPD热舒适度计算' },
+            { id: 'v2g', label: 'V2G交互', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-v2g-opt', 'ev-params'], description: '车辆到电网双向交互' },
+            { id: 'digital-twin', label: '数字孪生', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-thermal', 'building-params'], description: '建筑热状态数字孪生模拟' },
+            { id: 'integrated', label: '综合优化', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-integrated', 'thermal-eco'], description: '多系统协同优化与热经济' },
+            { id: 'rl', label: '强化学习', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-dqn', 'rl-params'], description: 'DQN强化学习优化策略' },
+
+            // ===== Level 2: 算法函数 =====
+            // 照明系统算法
+            { id: 'calc-base', label: '照明基准', type: 'algo', x: 0, y: 0, level: 2, connections: ['area', 'power', 'hours'], description: 'calculateLightingBaseline' },
+            { id: 'calc-savings', label: '照明节能', type: 'algo', x: 0, y: 0, level: 2, connections: ['led-eff', 'smart-eff', 'traffic'], description: 'calculateLightingSavings' },
+
+            // 空调系统算法
+            { id: 'calc-hvac-base', label: '空调基准', type: 'algo', x: 0, y: 0, level: 2, connections: ['area-hvac', 'cop-curr', 'cop-target'], description: 'calculateHVACBaseline' },
+            { id: 'calc-hvac-savings', label: '空调节能', type: 'algo', x: 0, y: 0, level: 2, connections: ['cop-eff', 'fresh-air', 'demand-ctrl'], description: 'calculateHVACSavings' },
+
+            // 光储系统算法
+            { id: 'calc-pv', label: '光伏发电', type: 'algo', x: 0, y: 0, level: 2, connections: ['pv-capacity', 'sunshine-data', 'env-factors'], description: 'calculateSolarGeneration' },
+            { id: 'calc-storage', label: '储能优化', type: 'algo', x: 0, y: 0, level: 2, connections: ['storage-cap', 'power-rate', 'eff-rate'], description: 'calculateStorageOptimization' },
+            { id: 'calc-battery', label: '电池衰减', type: 'algo', x: 0, y: 0, level: 2, connections: ['battery-type', 'cycle-count'], description: 'calculateBatteryDegradation' },
+
+            // 舒适度算法
+            { id: 'calc-pmv', label: 'PMV计算', type: 'algo', x: 0, y: 0, level: 2, connections: ['fanger-eq', 'thermal-params'], description: '基于Fanger方程计算PMV' },
+            { id: 'calc-ppd', label: 'PPD计算', type: 'algo', x: 0, y: 0, level: 2, connections: ['fanger-eq'], description: '基于PMV计算PPD' },
+
+            // V2G算法
+            { id: 'calc-v2g-opt', label: 'V2G调度', type: 'algo', x: 0, y: 0, level: 2, connections: ['device-cap', 'device-power', 'soc', 'priority', 'schedule'], description: 'calculateV2GOptimization' },
+
+            // 数字孪生算法
+            { id: 'calc-thermal', label: '热状态模拟', type: 'algo', x: 0, y: 0, level: 2, connections: ['thermal-params', 'hvac-params', 'env-forecast'], description: 'calculateDigitalTwinThermalModel' },
+
+            // 综合优化算法
+            { id: 'calc-integrated', label: '综合优化', type: 'algo', x: 0, y: 0, level: 2, connections: ['agg-level', 'traffic-pattern'], description: 'calculateIntegratedOptimization' },
+            { id: 'thermal-eco', label: '热经济优化', type: 'algo', x: 0, y: 0, level: 2, connections: ['thermal-coef', 'price-forecast', 'battery-cost'], description: 'ThermalEconomicOptimizer' },
+
+            // 强化学习算法
+            { id: 'calc-dqn', label: 'DQN算法', type: 'algo', x: 0, y: 0, level: 2, connections: ['q-learning', 'neural-net', 'rl-config'], description: 'runRLOptimization - DQN' },
+
+            // ===== Level 3: 参数节点 =====
+            // 照明参数
+            { id: 'area', label: '区域面积', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'm² - 照明区域面积' },
+            { id: 'power', label: '灯具功率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kW - 现有灯具总功率' },
+            { id: 'hours', label: '运行时间', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'hour - 每天运行时间' },
+            { id: 'led-eff', label: 'LED效率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'lm/W - LED灯具效率' },
+            { id: 'smart-eff', label: '智能控制', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '% - 智能控制节能率' },
+            { id: 'traffic', label: '人流量模式', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'pattern - 工作日/周末模式' },
+
+            // 空调参数
+            { id: 'area-hvac', label: '空调面积', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'm² - 空调区域面积' },
+            { id: 'cop-curr', label: '当前COP', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'ratio - 当前能效系数' },
+            { id: 'cop-target', label: '目标COP', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'ratio - 改造后能效系数' },
+            { id: 'cop-eff', label: 'COP效率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '% - COP提升率' },
+            { id: 'fresh-air', label: '新风系统', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '% - 新风系统效率' },
+            { id: 'demand-ctrl', label: '需求控制', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'type - on-off/vrf/chiller' },
+
+            // 光储参数
+            { id: 'pv-capacity', label: '光伏容量', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kWp - 光伏装机容量' },
+            { id: 'sunshine-data', label: '日照数据', type: 'data', x: 0, y: 0, level: 3, connections: ['city-sunshine'], description: '20+城市年日照时数' },
+            { id: 'env-factors', label: '环境因素', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '温度/云量/风速' },
+            { id: 'storage-cap', label: '储能容量', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kWh - 储能容量' },
+            { id: 'power-rate', label: '充放电功率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kW - 最大充放电功率' },
+            { id: 'eff-rate', label: '往返效率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '% - 往返充放电效率' },
+            { id: 'battery-type', label: '电池类型', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'LFP/NCM/铅酸' },
+            { id: 'cycle-count', label: '循环次数', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '次 - 累计充放电循环' },
+
+            // 舒适度参数
+            { id: 'fanger-eq', label: 'Fanger方程', type: 'data', x: 0, y: 0, level: 3, connections: [], description: '热舒适度计算模型' },
+            { id: 'thermal-params', label: '热参数', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '温度/湿度/风速/服装' },
+
+            // V2G参数
+            { id: 'device-cap', label: '设备容量', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kWh - 电池容量' },
+            { id: 'device-power', label: '设备功率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kW - 最大充放电功率' },
+            { id: 'soc', label: 'SOC状态', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '% - 电池荷电状态' },
+            { id: 'priority', label: '用户优先级', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'low/medium/high' },
+            { id: 'schedule', label: '可放电时段', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'hours - [[开始,结束]...]' },
+
+            // 数字孪生参数
+            { id: 'hvac-params', label: 'HVAC参数', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '响应时间/死区' },
+            { id: 'env-forecast', label: '环境预测', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '预测时长/精度' },
+
+            // 综合优化参数
+            { id: 'agg-level', label: '激进程度', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '0-1 - AI激进程度' },
+            { id: 'traffic-pattern', label: '流量模式', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'pattern - 24小时流量模式' },
+
+            // 热经济优化参数
+            { id: 'thermal-coef', label: '热导系数', type: 'data', x: 0, y: 0, level: 3, connections: [], description: 'W/(m²·K) - 建筑热导' },
+            { id: 'price-forecast', label: '电价预测', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '24小时电价预测' },
+            { id: 'battery-cost', label: '电池衰减成本', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '元/kWh - 衰减成本' },
+
+            // 强化学习参数
+            { id: 'q-learning', label: 'Q-Learning', type: 'data', x: 0, y: 0, level: 3, connections: [], description: '强化学习基础算法' },
+            { id: 'neural-net', label: '神经网络', type: 'data', x: 0, y: 0, level: 3, connections: [], description: '深度学习网络' },
+            { id: 'rl-config', label: 'RL配置', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '学习率/折扣因子/探索率' },
+
+            // 额外数据节点
+            { id: 'city-sunshine', label: '城市日照', type: 'data', x: 0, y: 0, level: 3, connections: [], description: '北京/上海/广州等城市' },
+        ];
+
+        const nodeTypes = {
+            'core': { color: '#F59E0B', label: '核心算法' },
+            'algo': { color: '#0891B2', label: '算法功能' },
+            'param': { color: '#22D3EE', label: '参数配置' },
+            'data': { color: '#22C55E', label: '基础数据' },
+            'advanced': { color: '#8B5CF6', label: '高级功能' }
+        };
+
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let draggingNode = null;
+        let draggingCanvas = false;
+        let lastMouseX, lastMouseY;
+        let physicsEnabled = false;
+        let currentFilter = 'all';
+        let currentLevel = -1; // 当前层级过滤，-1表示显示全部
+        let animationsEnabled = true;
+        let frameCount = 0;
+        let lastTime = Date.now();
+        let hoveredNode = null;
+
+        const particlesData = [];
+        const MAX_PARTICLES = 150;
+        const PARTICLE_COLORS = ['#0891B2', '#22D3EE', '#22C55E', '#F59E0B', '#8B5CF6', '#0E7490'];
+
+        function getNodeColor(type) {
+            return nodeTypes[type]?.color || nodeTypes['algo'].color;
+        }
+
+        function initPositions() {
+            const centerX = 0;
+            const centerY = 0;
+            const canvasSize = Math.min(canvas.width, canvas.height);
+
+            // 按层级分层布局
+            const levelRadii = {
+                0: 0,           // 概述在中心
+                1: canvasSize * 0.25,   // 系统模块层
+                2: canvasSize * 0.38,   // 算法函数层
+                3: canvasSize * 0.48    // 参数数据层
+            };
+
+            // 按层级分组
+            const nodesByLevel = {};
+            nodes.forEach(node => {
+                const level = node.level || 1;
+                if (!nodesByLevel[level]) nodesByLevel[level] = [];
+                nodesByLevel[level].push(node);
+            });
+
+            // 为每个层级计算位置
+            Object.keys(nodesByLevel).forEach(levelStr => {
+                const level = parseInt(levelStr);
+                const radius = levelRadii[level] || canvasSize * 0.3;
+                const nodesInLevel = nodesByLevel[level];
+                const totalInLevel = nodesInLevel.length;
+
+                nodesInLevel.forEach((node, i) => {
+                    if (level === 0) {
+                        // Level 0: 中心点
+                        node.x = centerX;
+                        node.y = centerY;
+                    } else {
+                        // 其他层级: 环形分布
+                        const angle = (2 * Math.PI * i) / totalInLevel;
+                        node.x = centerX + radius * Math.cos(angle);
+                        node.y = centerY + radius * Math.sin(angle);
+                    }
+
+                    node.vx = 0;
+                    node.vy = 0;
+                    node.targetX = node.x;
+                    node.targetY = node.y;
+                    node.opacity = 0;
+                    node.scale = 0;
+                    node.enterTime = Date.now() + Math.random() * 500;
+                });
+            });
+
+            // 固定overview在中心
+            const overview = nodes.find(n => n.id === 'overview');
+            if (overview) {
+                overview.x = centerX;
+                overview.y = centerY;
+            }
+        }
+
+        function simulatePhysics() {
+            const repulsionStrength = 40000;
+            const attractionStrength = 0.01;
+            const levelCenterStrength = 0.005; // 层级中心吸引力
+            const damping = 0.88;
+            const minDist = 100;
+            const canvasSize = Math.min(canvas.width, canvas.height);
+
+            // 层级半径配置
+            const levelRadii = {
+                0: 0,
+                1: canvasSize * 0.25,
+                2: canvasSize * 0.38,
+                3: canvasSize * 0.48
+            };
+
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+
+                if (currentLevel !== -1 && node.level !== currentLevel) continue;
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                // 节点间斥力
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const other = nodes[j];
+                    if (currentLevel !== -1 && other.level !== currentLevel) continue;
+                    if (currentFilter !== 'all' && other.type !== currentFilter) continue;
+
+                    const dx = node.x - other.x;
+                    const dy = node.y - other.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    if (dist < minDist) {
+                        const force = repulsionStrength / (dist * dist);
+                        const fx = force * dx / dist;
+                        const fy = force * dy / dist;
+
+                        node.vx += fx;
+                        node.vy += fy;
+                        other.vx -= fx;
+                        other.vy -= fy;
+                    }
+                }
+
+                // 连接吸引力
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode &&
+                        (currentLevel === -1 || connNode.level === currentLevel) &&
+                        (currentFilter === 'all' || connNode.type === currentFilter)) {
+                        const dx = connNode.x - node.x;
+                        const dy = connNode.y - node.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        const fx = dx * attractionStrength;
+                        const fy = dy * attractionStrength;
+
+                        node.vx += fx;
+                        node.vy += fy;
+                        connNode.vx -= fx;
+                        connNode.vy -= fy;
+                    }
+                });
+
+                // 层级中心吸引力（让节点保持在对应层级圆环上）
+                const level = node.level || 1;
+                if (level > 0) {
+                    const levelRadius = levelRadii[level] || canvasSize * 0.3;
+                    const dist = Math.sqrt(node.x * node.x + node.y * node.y);
+                    const targetDist = dist > 0 ? levelRadius : 0;
+
+                    if (Math.abs(dist - targetDist) > 50) {
+                        const levelFx = -node.x * levelCenterStrength * (dist / levelRadius);
+                        const levelFy = -node.y * levelCenterStrength * (dist / levelRadius);
+                        node.vx += levelFx;
+                        node.vy += levelFy;
+                    }
+                }
+
+                node.vx -= node.x * 0.001;
+                node.vy -= node.y * 0.001;
+
+                node.vx *= damping;
+                node.vy *= damping;
+
+                if (node.id !== 'overview') {
+                    node.x += node.vx;
+                    node.y += node.vy;
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(canvas.width / 2 + offsetX, canvas.height / 2 + offsetY);
+            ctx.scale(scale, scale);
+
+            // 绘制连线
+            nodes.forEach(node => {
+                if (currentLevel !== -1 && node.level !== currentLevel) return;
+                if (currentFilter !== 'all' && node.type !== currentFilter) return;
+                if (!node.connections || node.connections.length === 0) return;
+
+                const color = getNodeColor(node.type);
+
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode && (currentFilter === 'all' || connNode.type === currentFilter)) {
+                        const gradient = ctx.createLinearGradient(node.x, node.y, connNode.x, connNode.y);
+                        const nodeColor = getNodeColor(node.type);
+                        const connColor = getNodeColor(connNode.type);
+                        gradient.addColorStop(0, nodeColor + '60');
+                        gradient.addColorStop(1, connColor + '60');
+
+                        ctx.beginPath();
+                        ctx.moveTo(node.x, node.y);
+                        ctx.lineTo(connNode.x, connNode.y);
+                        ctx.strokeStyle = gradient;
+                        ctx.lineWidth = 2 / scale;
+                        ctx.globalAlpha = 0.5;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1;
+
+                        // 绘制连接点动画
+                        if (currentLevel === -1 || connNode.level === currentLevel) {
+                            const time = Date.now() / 1000;
+                            const t = (time + node.connections.indexOf(connId) * 0.5) % 1;
+                            const x = node.x + (connNode.x - node.x) * t;
+                            const y = node.y + (connNode.y - node.y) * t;
+
+                            ctx.beginPath();
+                            ctx.arc(x, y, 3 / scale, 0, Math.PI * 2);
+                            ctx.fillStyle = getNodeColor(connNode.type);
+                            ctx.globalAlpha = 0.7;
+                            ctx.fill();
+                            ctx.globalAlpha = 1;
+                        }
+                    }
+                });
+            });
+
+            // 绘制节点
+            nodes.forEach(node => {
+                if (currentLevel !== -1 && node.level !== currentLevel) return;
+                if (currentFilter !== 'all' && node.type !== currentFilter) return;
+
+                const color = getNodeColor(node.type);
+
+                const progress = Math.min(1, (Date.now() - node.enterTime) / 500);
+
+                if (progress >= 0) {
+                    node.scale = 1;
+                    node.opacity = 1;
+                } else {
+                    node.scale = 0;
+                    node.opacity = 0;
+                }
+
+                const baseRadius = node.id === 'overview' ? 40 : 25;
+
+                // 节点光晕效果
+                if (node === hoveredNode) {
+                    const glowRadius = baseRadius * 1.4;
+                    const glowGradient = ctx.createRadialGradient(node.x, node.y, baseRadius * 0.5, node.x, node.y, glowRadius);
+                    glowGradient.addColorStop(0, color + '30');
+                    glowGradient.addColorStop(1, color + '00');
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, glowRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = glowGradient;
+                    ctx.globalAlpha = 0.5;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, baseRadius * node.scale, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.globalAlpha = node.opacity;
+                ctx.fill();
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2 / scale;
+                ctx.stroke();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = node.id === 'overview' ? 'bold 13' : '12';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                const maxWidth = baseRadius * 1.5;
+                let label = node.label;
+                if (ctx.measureText(label).width > maxWidth) {
+                    while (ctx.measureText(label + '...').width > maxWidth && label.length > 2) {
+                        label = label.slice(0, -1);
+                    }
+                    label += '...';
+                }
+                ctx.fillText(label, node.x, node.y);
+            });
+
+            ctx.restore();
+        }
+
+        function animate() {
+            frameCount++;
+
+            if (frameCount % 30 === 0) {
+                const fps = Math.round(1000 / (Date.now() - lastTime));
+                lastTime = Date.now();
+            }
+
+            if (physicsEnabled) {
+                simulatePhysics();
+            }
+
+            draw();
+            requestAnimationFrame(animate);
+            updateStatsTable();
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('graphContainer');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            initPositions();
+        }
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left - canvas.width / 2 - offsetX) / scale,
+                y: (e.clientY - rect.top - canvas.height / 2 - offsetY) / scale
+            };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(e);
+            let clickedNode = null;
+
+            for (const node of nodes) {
+                if (currentLevel !== -1 && node.level !== currentLevel) continue;
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                const dx = pos.x - node.x;
+                const dy = pos.y - node.y;
+                const radius = node.id === 'overview' ? 40 : 25;
+
+                if (Math.sqrt(dx * dx + dy * dy) < radius) {
+                    clickedNode = node;
+                    break;
+                }
+            }
+
+            if (clickedNode) {
+                draggingNode = clickedNode;
+                showNodeInfo(clickedNode);
+            } else {
+                draggingCanvas = true;
+            }
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const pos = getMousePos(e);
+            hoveredNode = null;
+
+            for (const node of nodes) {
+                if (currentLevel !== -1 && node.level !== currentLevel) continue;
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                const dx = pos.x - node.x;
+                const dy = pos.y - node.y;
+                const radius = node.id === 'overview' ? 40 : 25;
+
+                if (Math.sqrt(dx * dx + dy * dy) < radius) {
+                    hoveredNode = node;
+                    canvas.style.cursor = 'pointer';
+                    break;
+                }
+            }
+
+            if (hoveredNode) {
+                showTooltip(e.clientX, e.clientY, hoveredNode);
+            } else {
+                hideTooltip();
+                canvas.style.cursor = draggingCanvas ? 'grabbing' : (draggingNode ? 'grabbing' : 'grab');
+            }
+
+            if (draggingNode) {
+                draggingNode.x = pos.x;
+                draggingNode.y = pos.y;
+                draggingNode.vx = 0;
+                draggingNode.vy = 0;
+            } else if (draggingCanvas) {
+                offsetX += e.clientX - lastMouseX;
+                offsetY += e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            draggingNode = null;
+            draggingCanvas = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            draggingNode = null;
+            draggingCanvas = false;
+            hideTooltip();
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            scale *= zoomFactor;
+            scale = Math.max(0.2, Math.min(3, scale));
+        });
+
+        function showNodeInfo(node) {
+            const infoPanel = document.getElementById('nodeInfo');
+            const nodeName = document.getElementById('selectedNodeName');
+            const connections = document.getElementById('nodeConnections');
+
+            infoPanel.style.display = 'block';
+            nodeName.textContent = node.label;
+
+            const typeLabels = {
+                'algo': { text: '算法功能', class: 'type-forward' },
+                'param': { text: '参数配置', class: 'type-forward' },
+                'data': { text: '基础数据', class: 'type-backward' },
+                'core': { text: '核心算法', class: 'type-forward' },
+                'advanced': { text: '高级功能', class: 'type-backward' }
+            };
+
+            let connectionsHtml = `
+                <div style="margin-bottom: 8px;">
+                    <span class="connection-type ${typeLabels[node.type].class}">${typeLabels[node.type].text}</span>
+                </div>
+                <div style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.85em;">${node.description}</div>
+            `;
+
+            if (node.connections && node.connections.length > 0) {
+                connectionsHtml += '<div style="margin-top: 12px; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.85em;">连接到:</div>';
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode) {
+                        connectionsHtml += `
+                            <div class="connection-item">
+                                <span class="connection-type type-forward">→</span>
+                                <span>${connNode.label}</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            if (node.connections && node.connections.length === 0) {
+                connectionsHtml += '<div style="margin-top: 12px; color: var(--text-muted); font-size: 0.85em;">[无连接 - 叶子节点]</div>';
+            }
+
+            connections.innerHTML = connectionsHtml;
+        }
+
+        function showTooltip(x, y, node) {
+            const tooltip = document.getElementById('tooltip');
+            const title = document.getElementById('tooltipTitle');
+            const type = document.getElementById('tooltipType');
+            const desc = document.getElementById('tooltipDesc');
+            const conns = document.getElementById('tooltipConnections');
+
+            const typeLabels = {
+                'algo': { text: '算法功能', color: 'var(--primary)', class: 'type-forward' },
+                'param': { text: '参数配置', color: 'var(--secondary)', class: 'type-forward' },
+                'data': { text: '基础数据', color: 'var(--danger)', class: 'type-backward' },
+                'core': { text: '核心算法', color: 'var(--accent)', class: 'type-forward' },
+                'advanced': { text: '高级功能', color: '#8B5CF6', class: 'type-backward' }
+            };
+
+            title.textContent = node.label;
+            type.textContent = typeLabels[node.type].text;
+            type.className = 'tooltip-type ' + typeLabels[node.type].class;
+            type.style.background = typeLabels[node.type].color;
+            desc.textContent = node.description;
+
+            if (node.connections && node.connections.length > 0) {
+                const connNames = node.connections.slice(0, 5).map(id => {
+                    const n = nodes.find(node => node.id === id);
+                    return n ? n.label : id;
+                }).join(', ');
+                conns.innerHTML = `<div class="tooltip-conn">连接: ${connNames}${node.connections.length > 5 ? '...' : ''}</div>`;
+            } else {
+                conns.innerHTML = '';
+            }
+
+            tooltip.style.left = (x + 20) + 'px';
+            tooltip.style.top = (y + 20) + 'px';
+            tooltip.classList.add('visible');
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').classList.remove('visible');
+        }
+
+        function resetView() {
+            scale = 1;
+            offsetX = 0;
+            offsetY = 0;
+            initPositions();
+        }
+
+        function togglePhysics() {
+            physicsEnabled = !physicsEnabled;
+            const btn = document.getElementById('physicsBtn');
+            btn.style.background = physicsEnabled ? 'var(--info)' : 'var(--surface)';
+            btn.style.color = physicsEnabled ? '#fff' : 'var(--text-primary)';
+        }
+
+        function fitToScreen() {
+            const margin = 150;
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+            nodes.forEach(node => {
+                if (currentFilter === 'all' || node.type === currentFilter) {
+                    minX = Math.min(minX, node.x);
+                    maxX = Math.max(maxX, node.x);
+                    minY = Math.min(minY, node.y);
+                    maxY = Math.max(maxY, node.y);
+                }
+            });
+
+            const width = maxX - minX + margin * 2;
+            const height = maxY - minY + margin * 2;
+
+            scale = Math.min(canvas.width / width, canvas.height / height);
+            scale = Math.min(scale, 1.5);
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            offsetX = -centerX;
+            offsetY = -centerY;
+        }
+
+        function toggleLayout() {
+            currentLayout = currentLayout === 'force' ? 'circular' : 'force';
+            if (currentLayout === 'circular') {
+                initPositions();
+            }
+        }
+
+        function filterLevel(level) {
+            currentLevel = level;
+            updateStats();
+
+            document.querySelectorAll('.legend-item').forEach(item => {
+                item.classList.remove('active');
+                const itemLevel = parseInt(item.dataset.level || '-999');
+                if (itemLevel === level) {
+                    item.classList.add('active');
+                }
+            });
+        }
+
+        function filterNodes(type) {
+            currentFilter = type === 'all' ? 'all' : type;
+            updateStats();
+
+            document.querySelectorAll('.legend-item').forEach(item => {
+                item.classList.remove('active');
+                const itemType = item.dataset.type;
+                if ((type === 'all' && itemType === 'core') ||
+                    (type !== 'all' && itemType === type)) {
+                    item.classList.add('active');
+                }
+            });
+        }
+
+        function updateStats() {
+            const totalNodesEl = document.getElementById('totalNodes');
+            const totalConnEl = document.getElementById('totalConnections');
+            const visibleNodesEl = document.getElementById('visibleNodes');
+            const activeFilterEl = document.getElementById('activeFilterDisplay');
+
+            let totalConnections = 0;
+            let visibleNodesCount = 0;
+
+            nodes.forEach(node => {
+                const showNode = (currentFilter === 'all' || node.type === currentFilter) &&
+                                  (currentLevel === -1 || node.level === currentLevel);
+                if (showNode) {
+                    visibleNodesCount++;
+                    totalConnections += node.connections.length;
+                }
+            });
+
+            totalNodesEl.textContent = nodes.length;
+            visibleNodesEl.textContent = visibleNodesCount;
+            totalConnEl.textContent = totalConnections;
+
+            // 显示当前过滤状态
+            let statusText = 'ALL';
+            if (currentLevel !== -1) {
+                statusText = `L${currentLevel}`;
+            } else if (currentFilter !== 'all') {
+                statusText = currentFilter.toUpperCase();
+            }
+            activeFilterEl.textContent = statusText;
+            updateStatsTable();
+        }
+
+        function updateStatsTable() {
+            const tbody = document.getElementById('statsTableBody');
+            tbody.innerHTML = '';
+
+            const levelData = [
+                { level: 0, name: 'L0 概述', count: 1 },
+                { level: 1, name: 'L1 系统模块', count: 8 },
+                { level: 2, name: 'L2 算法函数', count: 15 },
+                { level: 3, name: 'L3 参数数据', count: 30 }
+            ];
+
+            levelData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><span style="color: var(--accent); font-weight: 600;">${row.name}</span></td>
+                    <td style="font-family: 'Fira Code', monospace;">${row.count}</td>
+                    <td style="color: var(--text-secondary); font-size: 0.85em;">${getLevelDescription(row.level)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function getLevelDescription(level) {
+
+        function hideLoadingOverlay() {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                }, 300);
+            }
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        class ParticleSystem {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.maxParticles = MAX_PARTICLES;
+                this.init();
+            }
+
+            init() {
+                this.resize();
+                this.animate();
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            createParticle() {
+                return {
+                    x: Math.random() * this.canvas.width,
+                    y: Math.random() * this.canvas.height,
+                    size: Math.random() * 3 + 0.5,
+                    speedX: (Math.random() - 0.5) * 0.5,
+                    speedY: (Math.random() - 0.5) * 0.5,
+                    opacity: Math.random() * 0.5 + 0.2,
+                    color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
+                    pulse: Math.random() * Math.PI * 2
+                };
+            }
+
+            animate() {
+                if (this.particles.length < this.maxParticles) {
+                    this.particles.push(this.createParticle());
+                }
+
+                this.particles.forEach((p, index) => {
+                    p.x += p.speedX;
+                    p.y += p.speedY;
+                    p.opacity -= 0.001;
+                    p.pulse += 0.02;
+
+                    if (p.x < 0 || p.x > this.canvas.width || p.y < 0 || p.y > this.canvas.height || p.opacity <= 0) {
+                        this.particles.splice(index, 1);
+                    }
+                });
+
+                this.draw();
+                requestAnimationFrame(() => this.animate());
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.particles.forEach(p => {
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.globalAlpha = p.opacity;
+                    this.ctx.fill();
+                    this.ctx.globalAlpha = 1;
+                });
+            }
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        updateStats();
+
+        hideLoadingOverlay();
+
+        setTimeout(() => {
+            const particlesCanvas = document.getElementById('particlesCanvas');
+            new ParticleSystem(particlesCanvas);
+
+            resizeCanvas();
+            animate();
+        }, 100);
+    </script>
+</body>
+</html>

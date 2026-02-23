@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>算法图谱 - 终极版</title>
+    <style>
+        :root {
+            --bg-primary: #ECFEFF;
+            --bg-secondary: #F0FDF4;
+            --surface: #FFFFFF;
+            --surface-light: #F8FAFC;
+            --surface-hover: #E0F2FE;
+            --text-primary: #164E63;
+            --text-secondary: #5A7A8A;
+            --text-muted: #94A3B8;
+            --accent: #0891B2;
+            --border: #CCFBF1;
+            --border-light: #D0F0F5;
+            --success: #22C55E;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --info: #22D3EE;
+            --primary-light: #CFFAFE;
+            --primary-dark: #0E7490;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            line-height: 1.6;
+        }
+        .grid-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.15;
+            background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                              linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: 0 0;
+            animation: gridMove 30s linear infinite;
+        }
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.08;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(8, 145, 178, 0.08) 2px);
+        }
+        .scanlines::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(8, 145, 178, 0) 0%, rgba(8, 145, 178, 0.05) 100%);
+            animation: scan 8s linear infinite;
+        }
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .glow-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+            background: radial-gradient(ellipse at 50% 50%, rgba(8, 145, 178, 0.06) 0%, rgba(8, 145, 178, 0) 0.02) 100%);
+            animation: glowPulse 6s ease-in-out infinite;
+        }
+        @keyframes glowPulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.05); }
+        }
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--surface);
+            border-right: 2px solid var(--border);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+            animation: slideIn 0.6s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 2px solid var(--border-light);
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+        }
+        .sidebar-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+            letter-spacing: 2px;
+        }
+        .sidebar-subtitle {
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .node-info-panel {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .legend {
+            position: fixed;
+            top: 100px;
+            right: 30px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: var(--shadow-lg);
+            animation: fadeInRight 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 50;
+        }
+        .legend-title {
+            font-size: 0.9em;
+            color: var(--accent);
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .legend-item {
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.25s;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        .legend-item:hover {
+            background: var(--surface-hover);
+            transform: translateX(-4px);
+            box-shadow: var(--shadow-md);
+        }
+        .legend-item.active {
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            padding-left: 14px;
+        }
+        .legend-icon {
+            width: 20px;
+            height: 20px;
+        }
+        .legend-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.75em;
+        }
+        .legend-divider {
+            height: 1px;
+            background: var(--border-light);
+            margin: 12px 0;
+        }
+        .stats-table {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: var(--shadow-lg);
+            backdrop-filter: blur(8px);
+            animation: fadeInUp 0.4s ease-out;
+            z-index:  40;
+        }
+        .stats-table table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .stats-table th {
+            background: var(--surface-light);
+            color: var(--text-primary);
+            font-weight: 600;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 2px solid var(--border-light);
+        }
+        .stats-table td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-light);
+            color: var(--text-secondary);
+        }
+        .stats-table tr:hover td {
+            background: var(--surface-hover);
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .control-panel {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            gap: 12px;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+        }
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            color: var(--text-primary);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s;
+        }
+        .control-btn:hover {
+            background: var(--gradient-start);
+            color: #fff;
+            border-color: var(--info);
+            transform: translateY(-3px) scale(1.08);
+            box-shadow: var(--shadow-md);
+        }
+        .control-btn:active {
+            background: var(--primary-dark);
+        }
+        .search-panel {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            z-index: 50;
+        }
+        .search-input {
+            padding: 12px 16px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--primary-light);
+            transform: scale(1.02);
+        }
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+        .tooltip {
+            position: fixed;
+            background: var(--surface);
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            padding: 16px 18px;
+            box-shadow: var(--shadow-xl);
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            transform: translateY(10px) scale(0.95);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            z-index: 200;
+        }
+        .tooltip-title {
+            font-size: 1em;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .tooltip-type {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            background: var(--primary-light);
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .tooltip-desc {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 6px;
+        }
+        .tooltip-connections {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-light);
+            font-size: 0.8em;
+            color: var(--text-secondary);
+        }
+        .tooltip-conn {
+            padding: 2px 0;
+            color: var(--text-muted);
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .loading-container {
+            text-align: center;
+        }
+        .loading-text {
+            font-size: 1.5em;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--accent);
+            border-radius: 50%;
+            border-top-color: var(--accent);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .graph-container {
+            position: fixed;
+            left: 300px;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            cursor: grab;
+            transition: left 0.3s ease-out;
+        }
+        .graph-container:active {
+            cursor: grabbing;
+        }
+        .graph-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.1; transform: scale(1); }
+            50% { opacity: 0.05; transform: scale(1); }
+            }
+    </style>
+</head>
+<body>
+    <div class="grid-background"></div>
+    <div class="scanlines"></div>
+    <canvas id="graphCanvas"></canvas>
+    <div class="glow-overlay"></div>
+    <canvas id="particlesCanvas"></canvas>
+
+    <!-- 控制面板 -->
+    <div class="control-panel">
+        <button class="control-btn" id="autoLayoutBtn" title="自动布局">
+            <svg width="20" height="20" viewBox="0 0 20" fill="currentColor">
+                <path d="M4 4v2h12V14a2 0 0 1 2-2.83V12H14a2 0 0 1-4 4 2.83V12H9a2 0 0 1 2-4 4 2.83V3.41L1 7l-4 4 2.83V17 7l-4 4 2.83V12H17 7l-4 4 2-4 4z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="layoutBtn" title="切换布局">
+            <svg width="20" height="20" viewBox="0 0 20" fill="currentColor">
+                <path d="M5 2a2 0 0 1 2-2.83V12H14a2 2 0 0 1 2-4 4 2.83V12H9a2 0 0 1 2-4 2.83V12H3.41L9 2.83V12H17 7l-4 4 2.83z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="zoomInBtn" title="放大">
+            <svg width="20" height="20" viewBox="0 0 20" fill="currentColor">
+                <path d="M3 12h18v12a2 0 0 1 2 4h18v-2a2 0 0 1 2 4h10v-2a2 0 0 1 2 4z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="zoomOutBtn" title="缩小">
+            <svg width="20" height="20" viewBox="0 0 20" fill="currentColor">
+                <path d="M17 12v2a2 0 0 1 2-4h10v-2a2 0 0 1 2 4z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="resetBtn" title="重置视图">
+            <svg width="20" height="20" viewBox="0 0 20" fill="currentColor">
+                <path d="M10 2a2 0 0 1 2-4 2.83V8.5l-4 4 2.83V12M5l-4 4 2.83V12H15l-4 4 2z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="saveBtn" title="保存截图">
+            <svg width="20" height="20" viewBox="0 0 20" fill="currentColor">
+                <path d="M4 16v2a2 0 0 1 2-4h16v-2a2 0 0 1 2 4h16v-2a2 0 0 1 2 4z"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 图例 -->
+    <div class="legend">
+        <div class="legend-title">节点类型</div>
+        <div class="legend-item" onclick="filterNodes('algo')" data-type="algo">
+            <svg class="legend-icon" style="color: var(--primary);">
+                <path d="M10 2a2 0 0 1 2 4h2a2 2 0 1 4z"/>
+            </svg>
+            <span class="legend-label">算法功能</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('param')" data-type="param">
+            <svg class="legend-icon" style="color: var(--info);">
+                <path d="M11 4a2 2 0 0 1 2 4h2a2 2 0 1 2 4 2.83z"/>
+            </svg>
+            <span class="legend-label">参数配置</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('data')" data-type="data">
+            <svg class="legend-icon" style="color: var(--success);">
+                <path d="M4 16v2a2 0 0 1 2 4h10v-2a2 0 0 1 2 4z"/>
+            </svg>
+            <span class="legend-label">基础数据</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('core')" data-type="core">
+            <svg class="legend-icon" style="color: var(--accent);">
+                <path d="M12 2a2 2 0 0 1 2 4h2a2 2 0 1 2 4 2.83z"/>
+            </svg>
+            <span class="legend-label">核心算法</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('advanced')" data-type="advanced">
+            <svg class="legend-icon" style="color: #8B5CF6;">
+                <path d="M12 2a2 2 0 0 1 2 4h2a2 2 0 1 2 4z"/>
+            </svg>
+            <span class="legend-label">高级功能</span>
+        </div>
+        <div class="legend-divider"></div>
+        <div class="legend-title">层级过滤</div>
+        <div class="legend-item" onclick="filterLevel(0)" data-level="0">
+            <svg class="legend-icon" style="color: var(--accent);">
+                <circle cx="10" cy="10" r="4" fill="currentColor"/>
+            </svg>
+            <span class="legend-label">L0 概述</span>
+        </div>
+        <div class="legend-item" onclick="filterLevel(1)" data-level="1">
+            <svg class="legend-icon" style="color: var(--primary);">
+                <rect x="2" y="8" width="16" height="16" rx="3" fill="currentColor"/>
+            </svg>
+            <span class="legend-label">L1 系统模块</span>
+        </div>
+        <div class="legend-item" onclick="filterLevel(2)" data-level="2">
+            <svg class="legend-icon" style="color: var(--info);">
+                <circle cx="10" cy="10" r="4" fill="currentColor"/>
+                <circle cx="6" cy="10" r="4" fill="currentColor"/>
+            </svg>
+            <span class="legend-label">L2 算法函数</span>
+        </div>
+        <div class="legend-item" onclick="filterLevel(3)" data-level="3">
+            <svg class="legend-icon" style="color: var(--success);">
+                <circle cx="10" cy="10" r="4" fill="currentColor"/>
+                <circle cx="6" cy="10" r="4" fill="currentColor"/>
+            </svg>
+            <span class="legend-label">L3 参数数据</span>
+        </div>
+        <div class="legend-item" onclick="filterLevel(-1)" data-level="-1">
+            <svg class="legend-icon" style="color: var(--text-secondary);">
+                <path d="M4 4h16v2a2 2 0 1 2 4h16v-2a2 2 0 0 1 2 4z"/>
+            </svg>
+            <span class="legend-label">显示全部</span>
+        </div>
+    </div>
+
+    <!-- 节点统计表格 -->
+    <div class="stats-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>层级</th>
+                    <th>节点数</th>
+                    <th>说明</th>
+                </tr>
+            </thead>
+            <tbody id="statsTableBody">
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 提示框 -->
+    <div class="tooltip" id="tooltip">
+        <div class="tooltip-title" id="tooltipTitle"></div>
+        <div class="tooltip-type" id="tooltipType"></div>
+        <div class="tooltip-desc" id="tooltipDesc"></div>
+        <div class="tooltip-connections" id="tooltipConnections"></div>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">正在加载...</div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 算法库节点数据 ====================
+        // 4层层级结构
+        // Level 0: 概述
+        // Level 1: 系统模块
+        // Level 2: 算法函数
+        // Level 3: 参数数据
+
+        const nodes = [
+            // Level 0: 概述节点
+            { id: 'overview', label: '算法库', type: 'core', x: 0, y: 0, level: 0, connections: ['lighting', 'hvac', 'solar', 'integrated', 'pmv', 'v2g', 'battery', 'digital-twin', 'rl'], description: 'AI平台算法库完整介绍' },
+
+            // Level 1: 系统模块 (8个)
+            { id: 'lighting', label: '照明系统', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-base', 'calc-savings'], description: '照明基准和节能计算' },
+            { id: 'hvac', label: '空调系统', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-hvac-base', 'calc-hvac-savings'], description: '空调基准和节能计算' },
+            { id: 'solar', label: '光储系统', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-pv', 'calc-storage', 'calc-battery'], description: '光伏和储能优化' },
+            { id: 'pmv', label: '舒适度计算', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-pmv', 'calc-ppd', 'calc-comfort'], description: 'PMV/PPD舒适度评估' },
+            { id: 'v2g', label: 'V2G交互', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-v2g-opt', 'ev-params'], description: '车辆到电网交互' },
+            { id: 'digital-twin', label: '数字孪生', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-thermal', 'building-params'], description: '建筑热状态模拟' },
+            { id: 'integrated', label: '综合优化', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-integrated', 'thermal-eco'], description: '多系统协同优化与热经济' },
+            { id: 'rl', label: '强化学习', type: 'algo', x: 0, y: 0, level: 1, connections: ['calc-dqn', 'rl-params'], description: 'DQN强化学习优化策略' },
+
+            // Level 2: 算法函数 (15个)
+            { id: 'calc-base', label: '照明基准', type: 'algo', x: 0, y: 0, level: 2, connections: ['area', 'power', 'hours'], description: 'calculateLightingBaseline' },
+            { id: 'calc-savings', label: '照明节能', type: 'algo', x: 0, y: 0, level: 2, connections: ['led-eff', 'smart-eff', 'traffic'], description: 'calculateLightingSavings' },
+            { id: 'calc-hvac-base', label: '空调基准', type: 'algo', x: 0, y: 0, level: 2, connections: ['area-hvac', 'cop-curr', 'cop-target'], description: 'calculateHVACBaseline' },
+            { id: 'calc-hvac-savings', label: '空调节能', type: 'algo', x: 0, y: 0, level: 2, connections: ['cop-eff', 'fresh-air', 'demand-ctrl'], description: 'calculateHVACSavings' },
+            { id: 'calc-pv', label: '光伏发电', type: 'algo', x: 0, y: 0, level: 2, connections: ['pv-capacity', 'sunshine-data', 'env-factors'], description: 'calculateSolarGeneration' },
+            { id: 'calc-storage', label: '储能优化', type: 'algo', x: 0, y: 0, level: 2, connections: ['storage-cap', 'power-rate', 'eff-rate'], description: 'calculateStorageOptimization' },
+            { id: 'calc-battery', label: '电池衰减', type: 'algo', x: 0, y: 0, level: 2, connections: ['battery-type', 'cycle-count'], description: 'calculateBatteryDegradation' },
+
+            // Level 3: 参数数据 (30个)
+            { id: 'area', label: '区域面积', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'm² - 照明区域面积' },
+            { id: 'power', label: '灯具功率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kW - 现有灯具总功率' },
+            { id: 'hours', label: '运行时间', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'hour - 每天运行时间' },
+            { id: 'led-eff', label: 'LED效率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'lm/W - LED灯具效率' },
+            { id: 'smart-eff', label: '智能控制', type: 'param', x: 0, y: 0, level: 3, connections: ['light-sensor'], description: '%' - 智能控制节能率' },
+            { id: 'traffic', label: '人流量模式', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'pattern - 24小时流量模式' },
+            { id: 'area-hvac', label: '空调面积', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'm² - 空调区域面积' },
+            { id: 'cop-curr', label: '当前COP', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'ratio - 当前能效系数' },
+            { id: 'cop-target', label: '目标COP', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'ratio - 改造后能效系数' },
+            { id: 'cop-eff', label: 'COP效率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '%' - COP提升率' },
+            { id: 'fresh-air', label: '新风系统', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '%' - 新风系统效率' },
+            { id: 'demand-ctrl', label: '需求控制', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'type - 控制器类型' },
+            { id: 'pv-capacity', label: '光伏容量', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kWp - 光伏装机容量' },
+            { id: 'sunshine-data', label: '日照数据', type: 'data', x: 0, y: 0, level: 3, connections: ['city-sunshine'], description: '20+城市年日照时数' },
+            { id: 'env-factors', label: '环境因素', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '温度/云量/辐射' },
+            { id: 'storage-cap', label: '储能容量', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kWh - 储能容量' },
+            { id: 'power-rate', label: '充放电功率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'kW - 最大充放电功率' },
+            { id: 'eff-rate', label: '往返效率', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '%' - 往返效率' },
+            { id: 'battery-type', label: '电池类型', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'LFP/NCM/铅酸' },
+            { id: 'cycle-count', label: '循环次数', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '次 - 累计充放电循环' },
+            { id: 'fanger-eq', label: 'Fanger方程', type: 'data', x: 0, y: 0, level: 3, connections: [], description: 'Fanger热舒适度计算模型' },
+            { id: 'thermal-params', label: '热参数', type: 'param', x: 0, y: 0, level: 3, connections: ['inertia', 'capacity'], description: '温度/湿度/风速/服装' },
+            { id: 'building-params', label: '建筑参数', type: 'param', x: 0, y: 0, level: 3, connections: ['thermal-zones', 'heatCapacity'], description: '热区数量/热容量' },
+            { id: 'hvac-params', label: 'HVAC参数', type: 'param', x: 0, y: 0, level: 3, connections: ['responseTime', 'setpointDeadband'], description: '响应时间/死区' },
+            { id: 'env-forecast', label: '环境预测', type: 'param', x: 0, y: 0, level: 3, connections: ['forecastHorizon', 'predictionAccuracy'], description: '预测时长/精度' },
+            { id: 'soc', label: 'SOC状态', type: 'param', x: 0, y: 0, level: 3, connections: [], description: '%' - 电池荷电状态' },
+            { id: 'priority', label: '用户优先级', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'low/medium/high' },
+            { id: 'schedule', label: '可放电时段', type: 'param', x: 0, y: 0, level: 3, connections: [], description: 'hours - [[开始,结束]]' },
+
+            // 舒适度计算节点
+            { id: 'calc-pmv', label: 'PMV计算', type: 'algo', x: 0, y: 0, level: 2, connections: ['fanger-eq'], description: '基于Fanger方程计算PMV' },
+            { id: 'calc-ppd', label: 'PPD计算', type: 'algo', x: 0, y: 0, level: 2, connections: ['fanger-eq'], description: '基于PMV计算PPD' },
+            { id: 'calc-comfort', label: '综合指标', type: 'algo', x: 0, y: 0, level: 2, connections: [], description: 'PMV/PPD舒适度指标综合' },
+
+            // V2G节点
+            { id: 'calc-v2g-opt', label: 'V2G调度', type: 'algo', x: 0, y: 0, level: 2, connections: ['soc', 'priority'], description: 'calculateV2GOptimization' },
+            { id: 'ev-params', label: 'EV设备', type: 'param', x: 0, y: 0, level: 3, connections: ['device-cap', 'device-power', 'currentSoc', 'availableHours'], description: '容量/功率/SOC/可放电时段' },
+
+            // 数字孪生节点
+            { id: 'calc-thermal', label: '热状态模拟', type: 'algo', x: 0, y: 0, level: 2, connections: ['thermal-params', 'hvac-params', 'env-forecast'], description: '建筑热状态模拟' },
+
+            // 综合优化节点
+            { id: 'calc-integrated', label: '综合优化', type: 'algo', x: 0, y: 0, level: 2, connections: ['agg-level', 'traffic-pattern'], description: 'calculateIntegratedOptimization' },
+
+            // 强化学习节点
+            { id: 'calc-dqn', label: 'DQN算法', type: 'algo', x: 0, y: 0, level: 2, connections: ['q-learning', 'neural-net'], description: 'DQN算法实现' },
+
+            // 电池衰减节点
+            { id: 'calc-battery', label: '电池衰减', type: 'algo', x: 0, y: 0, level: 2, connections: ['degrad-rate', 'health-score'], description: 'calculateBatteryDegradation' },
+        ];
+
+        // 节点类型颜色
+        const nodeTypes = {
+            'core': { color: '#F59E0B', label: '核心算法' },
+            'algo': { color: '#0891B2', label: '算法功能' },
+            'param': { color: '#22D3EE', label: '参数配置' },
+            'data': { color: '#22C55E', label: '基础数据' },
+            'advanced': { color: '#8B5CF6', label: '高级功能' }
+        };
+
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let draggingNode = null;
+        let draggingCanvas = false;
+        let lastMouseX, lastMouseY;
+        let physicsEnabled = false;
+        let currentFilter = 'all';
+        let currentLevel = -1;
+        let animationsEnabled = true;
+        let frameCount = 0;
+        let lastTime = Date.now();
+        let hoveredNode = null;
+
+        const MAX_PARTICLES = 80;
+        const PARTICLE_COLORS = ['#0891B2', '#22D3EE', '#22C55E', '#F59E0B', '#8B5CF6', '#0E7490'];
+
+        function getNodeColor(type) {
+            return nodeTypes[type]?.color || nodeTypes['algo'].color;
+        }
+
+        function initPositions() {
+            const centerX = 0;
+            const centerY = 0;
+            const canvasSize = Math.min(canvas.width, canvas.height);
+
+            // 按层级环形分布
+            const levelRadii = {
+                0: 0,
+                1: canvasSize * 0.25,
+                2: canvasSize * 0.38,
+                3: canvasSize * 0.48
+            };
+
+            // 按层级分组
+            const nodesByLevel = {};
+            nodes.forEach(node => {
+                const level = node.level || 1;
+                if (!nodesByLevel[level]) nodesByLevel[level] = [];
+                nodesByLevel[level].push(node);
+            });
+
+            // 为每个层级计算位置
+            Object.keys(nodesByLevel).forEach(levelStr => {
+                const level = parseInt(levelStr);
+                const radius = levelRadii[level] || canvasSize * 0.3;
+                const nodesInLevel = nodesByLevel[level];
+                const totalInLevel = nodesInLevel.length;
+
+                nodesInLevel.forEach((node, i) => {
+                    const angle = (2 * Math.PI * i) / totalInLevel;
+                    node.x = centerX + radius * Math.cos(angle);
+                    node.y = centerY + radius * Math.sin(angle);
+                    node.vx = 0;
+                    node.vy = 0;
+                    node.targetX = node.x;
+                    node.targetY = node.y;
+                    node.opacity = 0;
+                    node.scale = 0;
+                    node.enterTime = Date.now() + Math.random() * 500;
+                });
+            });
+
+            // 固定overview在中心
+            const overview = nodes.find(n => n.id === 'overview');
+            if (overview) {
+                overview.x = centerX;
+                overview.y = centerY;
+            }
+        }
+
+        function simulatePhysics() {
+            const repulsionStrength = 40000;
+            const attractionStrength = 0.01;
+            const levelCenterStrength = 0.005;
+            const damping = 0.88;
+            const minDist = 100;
+            const canvasSize = Math.min(canvas.width, canvas.height);
+
+            // 层级半径配置
+            const levelRadii = {
+                0: 0,
+                1: canvasSize * 0.25,
+                2: canvasSize * 0.38,
+                3: canvasSize * 0.48
+            };
+
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+
+                if (currentLevel !== -1 && node.level !== currentLevel) continue;
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                // 节点间斥力
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const other = nodes[j];
+                    if (currentLevel !== -1 && other.level !== currentLevel) continue;
+                    if (currentFilter !== 'all' && other.type !== currentFilter) continue;
+
+                    const dx = node.x - other.x;
+                    const dy = node.y - other.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    if (dist < minDist) {
+                        const force = repulsionStrength / (dist * dist);
+                        const fx = force * dx / dist;
+                        const fy = force * dy / dist;
+
+                        node.vx += fx;
+                        node.vy += fy;
+                        other.vx -= fx;
+                        other.vy -= fy;
+                    }
+                }
+
+                // 连接吸引力
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode &&
+                        (currentLevel === -1 || connNode.level === currentLevel) &&
+                        (currentFilter === 'all' || connNode.type === currentFilter)) {
+
+                        const dx = connNode.x - node.x;
+                        const dy = connNode.y - node.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        const fx = dx * attractionStrength;
+                        const fy = dy * attractionStrength;
+
+                        node.vx += fx;
+                        node.vy += fy;
+                        connNode.vx -= fx;
+                        connNode.vy -= fy;
+                    }
+                });
+
+                // 层级中心吸引力（让节点保持在对应层级圆环上）
+                const level = node.level || 1;
+                if (level > 0) {
+                    const levelRadius = levelRadii[level] || canvasSize * 0.3;
+                    const dist = Math.sqrt(node.x * node.x + node.y * node.y);
+                    const targetDist = dist > 0 ? levelRadius : 0;
+
+                    if (Math.abs(dist - targetDist) > 50) {
+                        const levelFx = -node.x * levelCenterStrength * (dist / levelRadius);
+                        const levelFy = -node.y * levelCenterStrength * (dist / levelRadius);
+                        node.vx += levelFx;
+                        node.vy += levelFy;
+                    }
+                }
+            }
+
+                node.vx -= node.x * 0.001;
+                node.vy -= node.y * 0.001;
+
+                node.vx *= damping;
+                node.vy *= damping;
+
+                if (node.id !== 'overview') {
+                    node.x += node.vx;
+                    node.y += node.vy;
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(canvas.width / 2 + offsetX, canvas.height / 2 + offsetY);
+            ctx.scale(scale, scale);
+
+            // 绘制连线
+            nodes.forEach(node => {
+                if (currentLevel !== -1 && node.level !== currentLevel) return;
+                if (!node.connections || node.connections.length === 0) return;
+
+                const color = getNodeColor(node.type);
+
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode &&
+                        (currentLevel === -1 || connNode.level === currentLevel) &&
+                        (currentFilter === 'all' || connNode.type === currentFilter)) {
+
+                        const gradient = ctx.createLinearGradient(node.x, node.y, connNode.x, connNode.y);
+                        const nodeColor = getNodeColor(node.type);
+                        const connColor = getNodeColor(connNode.type);
+                        gradient.addColorStop(0, nodeColor + '60');
+                        gradient.addColorStop(1, connColor + '60');
+
+                        ctx.beginPath();
+                        ctx.moveTo(node.x, node.y);
+                        ctx.lineTo(connNode.x, connNode.y);
+                        ctx.strokeStyle = gradient;
+                        ctx.lineWidth = 2 / scale;
+                        ctx.globalAlpha = 0.5;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1;
+
+                        // 绘制连接点动画
+                        if (currentLevel === -1 || connNode.level === currentLevel) {
+                            const time = Date.now() / 1000;
+                            const t = (time + node.connections.indexOf(connId) * 0.5) % 1;
+                            const x = node.x + (connNode.x - node.x) * t;
+                            const y = node.y + (connNode.y - node.y) * t;
+
+                            ctx.beginPath();
+                            ctx.arc(x, y, 3 / scale, 0, Math.PI * 2);
+                            ctx.fillStyle = getNodeColor(connNode.type);
+                            ctx.globalAlpha = 0.7;
+                            ctx.fill();
+                            ctx.globalAlpha = 1;
+                        }
+                    }
+                });
+
+            // 绘制节点
+            nodes.forEach(node => {
+                if (currentLevel !== -1 && node.level !== currentLevel) return;
+                if (currentFilter !== 'all' && node.type !== currentFilter) return;
+
+                const color = getNodeColor(node.type);
+
+                const progress = Math.min(1, (Date.now() - node.enterTime) / 500);
+
+                if (progress >= 0) {
+                    node.scale = 1;
+                    node.opacity = 1;
+                } else {
+                    node.scale = 0;
+                    node.opacity = 0;
+                }
+
+                const baseRadius = node.id === 'overview' ? 40 : 25;
+
+                // 节点光晕效果
+                if (node === hoveredNode) {
+                    const glowRadius = baseRadius * 1.4;
+                    const glowGradient = ctx.createRadialGradient(node.x, node.y, baseRadius * 0.5, node.x, node.y, glowRadius);
+                    glowGradient.addColorStop(0, color + '30');
+                    glowGradient.addColorStop(1, color + '00');
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, glowRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = glowGradient;
+                    ctx.globalAlpha = 0.5;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, baseRadius * node.scale, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.globalAlpha = node.opacity;
+                ctx.fill();
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2 / scale;
+                ctx.stroke();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = node.id === 'overview' ? 'bold 13' : '12';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                const maxWidth = baseRadius * 1.5;
+                let label = node.label;
+                if (ctx.measureText(label).width > maxWidth) {
+                    while (ctx.measureText(label + '...').width > maxWidth && label.length > 2) {
+                        label = label.slice(0, -1);
+                    }
+                    label += '...';
+                }
+                ctx.fillText(label, node.x, node.y);
+            });
+
+            ctx.restore();
+        }
+
+        function animate() {
+            frameCount++;
+
+            if (frameCount % 30 === 0) {
+                const fps = Math.round(1000 / (Date.now() - lastTime));
+                lastTime = Date.now();
+            }
+
+            if (physicsEnabled) {
+                simulatePhysics();
+            }
+
+            draw();
+            requestAnimationFrame(animate);
+            updateStatsTable();
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('graphContainer');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            initPositions();
+        }
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left - canvas.width / 2 - offsetX) / scale,
+                y: (e.clientY - rect.top - canvas.height / 2 - offsetY) / scale
+            };
+        }
+
+        // 鼠标拖拽
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(e);
+            let clickedNode = null;
+
+            for (const node of nodes) {
+                if (currentLevel !== -1 && node.level !== currentLevel) continue;
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                const dx = pos.x - node.x;
+                const dy = pos.y - node.y;
+                const radius = node.id === 'overview' ? 40 : 25;
+
+                if (Math.sqrt(dx * dx + dy * dy) < radius) {
+                    clickedNode = node;
+                    break;
+                }
+            }
+
+            if (clickedNode) {
+                draggingNode = clickedNode;
+                showNodeInfo(clickedNode);
+            } else {
+                draggingCanvas = true;
+            }
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const pos = getMousePos(e);
+            hoveredNode = null;
+
+            for (const node of nodes) {
+                if (currentLevel !== -1 && node.level !== currentLevel) continue;
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                const dx = pos.x - node.x;
+                const dy = pos.y - node.y;
+                const radius = node.id === 'overview' ? 40 : 25;
+
+                if (Math.sqrt(dx * dx + dy * dy) < radius) {
+                    hoveredNode = node;
+                    canvas.style.cursor = 'pointer';
+                    break;
+                }
+            }
+
+            if (hoveredNode) {
+                showTooltip(e.clientX, e.clientY, hoveredNode);
+            } else {
+                hideTooltip();
+                canvas.style.cursor = draggingCanvas ? 'grabbing' : (draggingNode ? 'grabbing' : 'grab');
+            }
+
+            if (draggingNode) {
+                draggingNode.x = pos.x;
+                draggingNode.y = pos.y;
+                draggingNode.vx = 0;
+                draggingNode.vy = 0;
+            } else if (draggingCanvas) {
+                offsetX += e.clientX - lastMouseX;
+                offsetY += e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            draggingNode = null;
+            draggingCanvas = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            draggingNode = null;
+            draggingCanvas = false;
+            hideTooltip();
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            scale *= zoomFactor;
+            scale = Math.max(0.2, Math.min(3, scale));
+        });
+
+        // 粒子系统
+        class ParticleSystem {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.maxParticles = MAX_PARTICLES;
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < this.maxParticles; i++) {
+                    this.particles.push(this.createParticle());
+                }
+            }
+        }
+
+            createParticle() {
+                return {
+                    x: 0,
+                    y: 0,
+                    vx: 0,
+                    vy: 0,
+                    size: Math.random() * 3 + 2,
+                    alpha: Math.random() * 0.3 + 0.2,
+                    color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]
+                };
+            }
+
+            update() {
+                this.particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.alpha -= 0.01;
+
+                    if (p.x < -50 || p.x > 50 || p.y < -50 || p.alpha <= 0.01) {
+                        p.x += Math.random() - 0.5;
+                        p.y += Math.random() - 0.5;
+                        p.alpha += Math.random() * 0.1;
+                    }
+                });
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, canvas.width, canvas.height);
+                this.particles.forEach(p => {
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.globalAlpha = p.alpha;
+                    this.ctx.fill();
+                });
+            }
+        }
+
+        const particleSystem = new ParticleSystem(document.getElementById('particlesCanvas'));
+        particleSystem.init();
+        particleSystem.update();
+
+        // 页面初始化
+        window.addEventListener('load', () => {
+            initPositions();
+            draw();
+            particleSystem.update();
+            hideLoadingOverlay();
+            animate();
+        });
+    </script>
+</body>
+</html>

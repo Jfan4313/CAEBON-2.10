@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ComposedChart, Line, Area, Bar, BarChart, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine, Cell } from 'recharts';
 import { useProject } from '../context/ProjectContext';
+import MicrogridVisual from './microgrid/MicrogridVisual';
 
-type Tab = 'simulation' | 'financial' | 'dynamic-visual';
+type Tab = 'simulation' | 'financial' | 'dynamic-visual' | 'microgrid-visual';
 
 // 电价数据类型
 interface PriceData {
@@ -437,6 +438,12 @@ export default function RetrofitAI() {
                     className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'dynamic-visual' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}
                 >
                     <span className="material-icons text-lg">visibility</span> 动态分析
+                </button>
+                <button
+                    onClick={() => setActiveTab('microgrid-visual')}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'microgrid-visual' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                    <span className="material-icons text-lg">grid_view</span> 微电网可视化
                 </button>
             </div>
 
@@ -1028,6 +1035,24 @@ export default function RetrofitAI() {
                                     </div>
                                 </section>
                             </div>
+                        </div>
+                    )}
+
+                    {/* --- TAB 4: MICROGRID VISUALIZATION --- */}
+                    {activeTab === 'microgrid-visual' && (
+                        <div className="animate-fade-in">
+                            <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                                <div className="mb-6">
+                                    <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                                        <span className="material-icons text-blue-500">grid_view</span>
+                                        微电网实时可视化
+                                    </h3>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        基于15个组件图片的微电网动态展示，支持设备状态控制、能源流动可视化和昼夜场景切换
+                                    </p>
+                                </div>
+                                <MicrogridVisual />
+                            </section>
                         </div>
                     )}
                 </div>

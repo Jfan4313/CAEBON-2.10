@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全参数字典 - AI平台算法</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <style>
+        /* Obsidian风格CSS */
+        :root {
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #252525;
+            --text-primary: #dcddde;
+            --text-secondary: #a8a8a8;
+            --accent: #7b6cd1;
+            --border: #444444;
+            --code-bg: #0d0d0d;
+            --table-row: #303030;
+            --hover: #3a3a3a;
+        }
+        [data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f4f6;
+            --text-primary: #1f1f1f;
+            --text-secondary: #6b6b6b;
+            --accent: #5c6bc0;
+            --border: #e0e0e0;
+            --code-bg: #f5f5f5;
+            --table-row: #fafafa;
+            --hover: #e8e8e8;
+        }
+        /* 基础样式 */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        /* 侧边栏 */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px 0;
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        .sidebar.collapsed {
+            transform: translateX(-280px);
+        }
+        /* 主内容 */
+        .main-content {
+            margin-left: 280px;
+            padding: 30px 50px;
+            max-width: 1200px;
+            transition: margin-left 0.3s ease;
+        }
+        .main-content.expanded {
+            margin-left: 0;
+        }
+        /* 导航链接 */
+        .nav-link {
+            display: block;
+            padding: 10px 20px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: var(--hover);
+            border-left-color: var(--accent);
+        }
+        .nav-link.active {
+            color: var(--text-primary);
+            border-left-color: var(--accent);
+            background: var(--table-row);
+        }
+        /* 章节标题 */
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            color: var(--accent);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 10px;
+        }
+        h2 {
+            font-size: 1.8em;
+            margin: 40px 0 20px 0;
+            color: var(--text-primary);
+            border-left: 4px solid var(--accent);
+            padding-left: 15px;
+        }
+        h3 {
+            font-size: 1.4em;
+            margin: 25px 0 15px 0;
+            color: var(--text-primary);
+        }
+        h4 {
+            font-size: 1.2em;
+            margin: 20px 0 10px 0;
+            color: var(--text-secondary);
+        }
+        /* 可折叠章节 */
+        details {
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        details > summary {
+            padding: 15px 20px;
+            cursor: pointer;
+            background: var(--bg-secondary);
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        details > summary:hover {
+            background: var(--hover);
+        }
+        details[open] > summary {
+            border-bottom: 1px solid var(--border);
+        }
+        details > div {
+            padding: 20px;
+            background: var(--bg-primary);
+        }
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            background: var(--bg-primary);
+            font-weight: 600;
+            color: var(--accent);
+        }
+        tr:hover td {
+            background: var(--hover);
+        }
+        /* 代码块 */
+        pre, code {
+            background: var(--code-bg);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+        }
+        pre {
+            padding: 15px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        /* 标签切换 */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            padding: 10px 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover {
+            background: var(--hover);
+            color: var(--text-primary);
+        }
+        .tab-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        /* 搜索框 */
+        .search-box {
+            width: 100%;
+            padding: 12px 15px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+        /* 参数徽章 */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+        .badge.type {
+            background: var(--accent);
+            color: white;
+        }
+        .badge.default {
+            background: var(--text-secondary);
+            color: var(--bg-primary);
+        }
+        /* 返回顶部按钮 */
+        .back-to-top {
+            position: fixed;
+            right: 30px;
+            bottom: 30px;
+            width: 50px;
+            height: 50px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+            z-index: 999;
+        }
+        .back-to-top:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <!-- 侧边栏导航 -->
+    <nav class="sidebar">
+        <div style="padding: 0 20px 20px;">
+            <h3 style="margin: 0 0 15px 0;">📚 参数字典</h3>
+            <input type="text" class="search-box" placeholder="搜索参数..." id="searchInput">
+        </div>
+        <div id="nav-content">
+            <!-- 导航链接将通过JS动态生成 -->
+        </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+        <header>
+            <h1>全参数字典 (Full Parameter Dictionary)</h1>
+            <p style="color: var(--text-secondary);">AI平台算法参数完整参考 | v1.0 | ZeroCarbon Team</p>
+        </header>
+
+        <!-- 参数分类体系 -->
+        <section id="classification">
+            <h2>📊 参数分类体系</h2>
+            <div style="font-family: monospace; font-size: 14px; line-height: 1.8;">
+参数字典
+├── 系统输入参数 (System Input Parameters)
+│   ├── 照明系统参数
+│   ├── 空调系统参数
+│   ├── 光储系统参数
+│   ├── 建筑参数
+│   ├── 环境因素参数
+│   ├── V2G设备参数
+│   └── 强化学习配置参数
+├── 内部计算参数 (Internal Calculation Parameters)
+│   ├── 电价模式枚举
+│   ├── 电价时段类型
+│   ├── 电价配置参数
+│   ├── 数字孪生模型参数
+│   └── 热经济优化配置参数
+├── 常量基准值 (Constant Baseline Values)
+│   ├── 城市日照数据
+│   ├── 建筑热导系数
+│   ├── 照明效率基准
+│   ├── 空调能效参数
+│   ├── 光储性能参数
+│   ├── 季节系数
+│   ├── 时间段定义
+│   └── 光照等级
+├── 输出结果类型 (Output Result Types)
+│   ├── 计算结果接口
+│   ├── 热状态接口
+│   ├── 电池健康状态接口
+│   ├── 舒适度指标接口
+│   ├── 预测结果接口
+│   └── 决策结果接口
+└── 算法常量 (Algorithm Constants)
+    ├── 效率系数
+    ├── 成本系数
+    ├── 阈值参数
+    └── 时间常数
+            </div>
+        </section>
+
+        <!-- 系统输入参数 -->
+        <section id="system-input">
+            <h2>🏠 一、系统输入参数 (System Input Parameters)</h2>
+
+            <!-- 照明系统参数 -->
+            <details id="lighting-params">
+                <summary>1.1 照明系统参数 (LightingSystemParams)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>单位</th><th>默认值</th><th>范围</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>area</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>m²</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>1-100000</td>
+                                <td>照明区域面积</td>
+                                <td>calculateLightingBaseline, calculateLightingSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>totalPower</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>kW</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-10000</td>
+                                <td>现有灯具总功率</td>
+                                <td>calculateLightingBaseline, calculateLightingSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>dailyHours</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>hour</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-24</td>
+                                <td>每天运行时间</td>
+                                <td>calculateLightingBaseline, calculateLightingSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>sensorDensity</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>个/m²</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-10</td>
+                                <td>传感器安装密度（可选）</td>
+                                <td>calculateLightingBaseline</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border-radius: 6px;">
+                        <strong>计算依赖关系：</strong>
+                        <ul style="margin: 10px 0 10px 20px;">
+                            <li><code>powerDensity = totalPower / area</code> (单位面积功率密度，W/m²)</li>
+                            <li><code>baselineLoad = powerDensity * area * trafficMultiplier / 1000</code> (基准负荷，kW)</li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
+
+            <!-- 空调系统参数 -->
+            <details id="hvac-params">
+                <summary>1.2 空调系统参数 (HVACSystemParams)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>单位</th><th>默认值</th><th>范围</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>area</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>m²</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>1-100000</td>
+                                <td>空调区域面积</td>
+                                <td>calculateHVACBaseline, calculateHVACSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>currentCOP</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>1-10</td>
+                                <td>当前COP值</td>
+                                <td>calculateHVACBaseline, calculateHVACSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>targetCOP</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>1-10</td>
+                                <td>目标COP值（改造后）</td>
+                                <td>calculateHVACSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>annualCoolingHours</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>hour</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-8760</td>
+                                <td>每年制冷时长</td>
+                                <td>calculateHVACBaseline, calculateHVACSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>buildingType</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">'standard'</span></td>
+                                <td>围护结构类型</td>
+                                <td>calculateHVACBaseline</td>
+                            </tr>
+                            <tr>
+                                <td><code>freshAirEfficiency</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">0.85</span></td>
+                                <td>0-1</td>
+                                <td>新风系统效率</td>
+                                <td>calculateHVACSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>controllerType</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">'on-off'</span></td>
+                                <td>控制器类型</td>
+                                <td>-</td>
+                            </tr>
+                            <tr>
+                                <td><code>humidityControl</code></td>
+                                <td><span class="badge type">boolean</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">false</span></td>
+                                <td>湿度控制</td>
+                                <td>-</td>
+                            </tr>
+                            <tr>
+                                <td><code>coolingCapacity</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>kW</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-10000</td>
+                                <td>制冷容量</td>
+                                <td>-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border-radius: 6px;">
+                        <strong>buildingType 枚举值</strong>：
+                        <ul style="margin: 10px 0;">
+                            <li><code>'standard'</code> - 标准建筑</li>
+                            <li><code>'insulated'</code> - 保温建筑</li>
+                            <li><code>'high-performance'</code> - 高性能建筑</li>
+                        </ul>
+                        <strong>controllerType 枚举值</strong>：
+                        <ul style="margin: 10px 0;">
+                            <li><code>'on-off'</code> - 开关控制</li>
+                            <li><code>'vrf'</code> - 变频多联机</li>
+                            <li><code>'chiller'</code> - 冷水机组</li>
+                        </ul>
+                        <div style="margin-top: 15px;">
+                            <strong>vrfSystem 子参数</strong>：
+                            <table>
+                                <tr><th>参数名</th><th>类型</th><th>说明</th></tr>
+                                <tr><td><code>outdoorUnitCount</code></td><td>number</td><td>室外机数量</td></tr>
+                                <tr><td><code>indoorUnitCount</code></td><td>number</td><td>室内机数量</td></tr>
+                                <tr><td><code>refrigerantType</code></td><td>enum</td><td>制冷剂类型：'R410A' | 'R32'</td></tr>
+                            </table>
+                        </div>
+                        <strong>计算依赖关系</strong>：
+                        <ul style="margin: 10px 0 10px 20px;">
+                            <li><code>coolingLoad = (area * 100 / thermalCoef) * (annualCoolingHours / 24) / 1000</code> [kW]</li>
+                            <li><code>copSavings = coolingLoad * (1 - targetCOP / currentCOP) * equipmentEfficiencyFactor * systemDesignMargin</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
+
+            <!-- 光储系统参数 -->
+            <details id="solar-storage-params">
+                <summary>1.3 光储系统参数 (SolarStorageSystemParams)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>单位</th><th>默认值</th><th>范围</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>pvCapacity</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>kWp</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-10000</td>
+                                <td>光伏装机容量</td>
+                                <td>calculateSolarGeneration, calculateStorageOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>storageCapacity</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>kWh</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-10000</td>
+                                <td>储能容量</td>
+                                <td>calculateStorageOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>storagePower</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>kW</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-5000</td>
+                                <td>储能功率</td>
+                                <td>calculateStorageOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>roundTripEfficiency</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>%</td>
+                                <td><span class="badge default">90</span></td>
+                                <td>0-100</td>
+                                <td>往返效率</td>
+                                <td>calculateStorageOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>dod</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>%</td>
+                                <td><span class="badge default">90</span></td>
+                                <td>0-100</td>
+                                <td>最大充放电深度</td>
+                                <td>calculateStorageOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>batteryType</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td><span class="badge default">'LFP'</span></td>
+                                <td>见下表 | 电池类型 | calculateBatteryDegradation</td>
+                            </tr>
+                            <tr>
+                                <td><code>batteryAge</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>年</td>
+                                <td><span class="badge default">0</span></td>
+                                <td>0-20</td>
+                                <td>电池使用年限 | calculateBatteryDegradation</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border-radius: 6px;">
+                        <strong>batteryType 枚举值</strong>：
+                        <ul style="margin: 10px 0;">
+                            <li><code>'LFP'</code> - 磷酸铁锂电池 (衰减率 2%/1000次)</li>
+                            <li><code>'NCM'</code> - 三元锂电池 (衰减率 3%/1000次)</li>
+                            <li><code>'LeadAcid'</code> - 铅酸电池 (衰减率 5%/1000次)</li>
+                        </ul>
+                        <strong>计算依赖关系</strong>:
+                        <ul style="margin: 10px 0 10px 20px;">
+                            <li><code>dailyGeneration = pvCapacity * dailySunshineHours * inverterEfficiency * systemLoss * efficiencyFactor</code></li>
+                            <li><code>annualArbitrage = sum(discharge_power * price * efficiency * 365)</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
+
+            <!-- 建筑参数 -->
+            <details id="building-params">
+                <summary>1.4 建筑参数 (BuildingParams)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>单位</th><th>默认值</th><th>范围</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>type</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>见下表 | 建筑类型 | 全部</td>
+                            </tr>
+                            <tr>
+                                <td><code>area</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>m²</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>1-100000</td>
+                                <td>建筑面积 | 全部</td>
+                            </tr>
+                            <tr>
+                                <td><code>orientation</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">'south'</span></td>
+                                <td>见下表 | 建筑朝向 | calculateSolarGeneration</td>
+                            </tr>
+                            <tr>
+                                <td><code>insulationLevel</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">'average'</span></td>
+                                <td>见下表 | 建筑隔热等级 | calculateHVACBaseline</td>
+                            </tr>
+                            <tr>
+                                <td><code>glazingRatio</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>%</td>
+                                <td><span class="badge default">30</span></td>
+                                <td>0-100</td>
+                                <td>玻璃窗占比 | calculateDigitalTwinThermalModel</td>
+                            </tr>
+                            <tr>
+                                <td><code>thermalMass</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>kJ/(m²·K)</td>
+                                <td><span class="badge default">100</span></td>
+                                <td>50-500</td>
+                                <td>热质量 | calculateDigitalTwinThermalModel</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border-radius: 6px;">
+                        <strong>type 枚举值及对应热导系数</strong>：
+                        <table>
+                            <thead>
+                                <tr><th>建筑类型</th><th>热导系数 K (W/(m²·K))</th><th>说明</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>'factory'</code></td><td>2.5</td><td>标准工厂墙体</td></tr>
+                                <tr><td><code>'school'</code></td><td>2.0</td><td>学校教室结构</td></tr>
+                                <tr><td><code>'office'</code></td><td>2.8</td><td>办公建筑</td></tr>
+                                <tr><td><code>'hospital'</code></td><td>1.5</td><td>医院保温较好</td></tr>
+                                <tr><td><code>'mall'</code></td><td>1.8</td><td>商场玻璃较多</td></tr>
+                            </tbody>
+                        </table>
+                        <strong>orientation 枚举值</strong>：
+                        <ul style="margin: 10px 0;">
+                            <li><code>'south'</code> - 南向</li>
+                            <li><code>'south-east'</code> - 东南向</li>
+                            <li><code>'east'</code> - 东向</li>
+                            <li><code>'north'</code> - 北向</li>
+                            <li><code>'west'</code> - 西向</li>
+                        </ul>
+                        <strong>insulationLevel 枚举值</strong>：
+                        <ul style="margin: 10px 0;">
+                            <li><code>'poor'</code> - 保温差</li>
+                            <li><code>'average'</code> - 保温一般</li>
+                            <li><code>'good'</code> - 保温好</li>
+                            <li><code>'excellent'</code> - 保温优秀</li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
+
+            <!-- 环境因素参数 -->
+            <details id="environmental-params">
+                <summary>1.5 环境因素参数 (EnvironmentalFactors)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>单位</th><th>默认值</th><th>范围</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>region</code></td>
+                                <td><span class="badge type">string</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>所在地区（城市名）</td>
+                                <td>calculateSolarGeneration</td>
+                            </tr>
+                            <tr>
+                                <td><code>avgTemperature</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>°C</td>
+                                <td><span class="badge default">20</span></td>
+                                <td>-30-50</td>
+                                <td>平均气温</td>
+                                <td>calculateHVACBaseline, calculateSolarGeneration</td>
+                            </tr>
+                            <tr>
+                                <td><code>annualSunshineHours</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>hour</td>
+                                <td><span class="badge default">1650</span></td>
+                                <td>500-3000</td>
+                                <td>年日照时数</td>
+                                <td>calculateSolarGeneration</td>
+                            </tr>
+                            <tr>
+                                <td><code>peakPrice</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>元/kWh</td>
+                                <td><span class="badge default">1.2</span></td>
+                                <td>0-5</td>
+                                <td>峰值电价</td>
+                                <td>calculateIntegratedOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>valleyPrice</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>元/kWh</td>
+                                <td><span class="badge default">0.32</span></td>
+                                <td>0-2</td>
+                                <td>谷值电价</td>
+                                <td>calculateIntegratedOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>flatPrice</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>元/kWh</td>
+                                <td><span class="badge default">0.65</span></td>
+                                <td>平值电价</td>
+                                <td>calculateIntegratedOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>solarIrradiance</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>W/m²</td>
+                                <td><span class="badge default">500</span></td>
+                                <td>0-1200</td>
+                                <td>太阳辐射 | calculateDigitalTwinThermalModel</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border-radius: 6px;">
+                        <strong>城市日照数据（部分）</strong>：
+                        <table>
+                            <thead>
+                                <tr><th>城市</th><th>年日照时数 (小时)</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>北京</code></td><td>1650</td></tr>
+                                <tr><td><code>上海</code></td><td>1420</td></tr>
+                                <tr><td><code>广州</code></td><td>1580</td></tr>
+                                <tr><td><code>深圳</code></td><td>1720</td></tr>
+                                <tr><td><code>成都</code></td><td>1250</td></tr>
+                                <tr><td><code>昆明</code></td><td>2100</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </details>
+
+            <!-- V2G设备参数 -->
+            <details id="v2g-params">
+                <summary>1.7 V2G设备参数 (V2GDevice)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>单位</th><th>默认值</th><th>范围</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>id</code></td>
+                                <td><span class="badge type">string</span></td>
+                                <td>-</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>设备ID</td>
+                                <td>calculateV2GOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>capacity</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>kWh</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>10-200</td>
+                                <td>电池容量</td>
+                                <td>calculateV2GOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>maxPower</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>kW</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>1-100</td>
+                                <td>最大充放电功率</td>
+                                <td>calculateV2GOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>currentSoc</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>%</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>0-100</td>
+                                <td>当前SOC | calculateV2GOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>availableHours</code></td>
+                                <td><span class="badge type">tuple[]</span></td>
+                                <td>hour</td>
+                                <td><span class="badge default">-</span></td>
+                                <td>-</td>
+                                <td>可放电时段 [[小时开始, 小时结束],...] | calculateV2GOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>degradationCost</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td>元/kWh</td>
+                                <td><span class="badge default">0.1</span></td>
+                                <td>0-1</td>
+                                <td>电池衰减成本 | calculateV2GOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>userPriority</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td><span class="badge default">'medium'</span></td>
+                                <td>见下表 | 用户优先级 | calculateV2GOptimization</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 15px;">
+                        <strong>userPriority 枚举值</strong>：
+                        <ul style="margin: 10px 0;">
+                            <li><code>'low'</code> - 低优先级（可调度）</li>
+                            <li><code>'medium'</code> - 中优先级</li>
+                            <li><code>'high'</code> - 高优先级（不调度）</li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
+
+            <!-- 强化学习配置参数 -->
+            <details id="rl-config">
+                <summary>1.8 强化学习配置参数 (RLConfig)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>单位</th><th>默认值</th><th>范围</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>algorithm</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td><span class="badge default">'dqn'</span></td>
+                                <td>见下表 | 算法类型 | runRLOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>learningRate</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td><span class="badge default">0.001</span></td>
+                                <td>0-1</td>
+                                <td>学习率 | runRLOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>discountFactor</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td><span class="badge default">0.99</span></td>
+                                <td>0-1</td>
+                                <td>折扣因子 | runRLOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>explorationRate</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td><span class="badge default">0.1</span></td>
+                                <td>0-1</td>
+                                <td>探索率 | runRLOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>batchSize</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td><span class="badge default">32</span></td>
+                                <td>1-512</td>
+                                <td> 批次大小 | runRLOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>trainingEpisodes</code></td>
+                                <td><span class="badge type">number</span></td>
+                                <td><span class="badge default">1000</span></td>
+                                <td>1-100000</td>
+                                <td>训练回合数 | runRLOptimization</td>
+                            </tr>
+                            <tr>
+                                <td><code>rewardFunction</code></td>
+                                <td><span class="badge type">enum</span></td>
+                                <td><span class="badge default">'cost'</span></td>
+                                <td>见下表 | 奖励函数类型 | runRLOptimization</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 15px;">
+                        <strong>algorithm 枚举值</strong>：
+                        <ul style="margin: 10px 0;">
+                            <li><code>'dqn'</code> - Deep Q-Network</li>
+                            <li><code>'ppo'</code> - Proximal Policy Optimization</li>
+                            <li><code>'sac'</code> - Soft Actor-Critic</li>
+                        </ul>
+                        <strong>rewardFunction 枚举值</strong>：
+                        <ul style="margin: 10px 0;">
+                            <li><code>'cost'</code> - 仅考虑成本</li>
+                            <li><code>'emission'</code> - 仅考虑排放</li>
+                            <li><code>'multi-objective'</code> - 多目标优化</li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
+        </section>
+
+        <!-- 内部计算参数 -->
+        <section id="internal-calc">
+            <h2>⚙️ 二、内部计算参数 (Internal Calculation Parameters)</h2>
+            <details id="price-mode">
+                <summary>2.1 电价模式枚举 (PriceMode)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>枚举值</th><th>说明</th><th>时段数量</th><th>适用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>TOU_3_SEG</code></td><td>固定分时电价（三段）</td><td>3 | 谷、平、峰</td></tr>
+                            <tr><td><code>TOU_4_SEG</code></td><td>四段式电价（含尖峰）| 4 | 谷、平、峰、尖峰</td></tr>
+                            <tr><td><code>REAL_TIME</code></td><td>实时动态电价</td><td>24 | 每小时独立定价</td></tr>
+                            <tr><td><code>HYBRID</code></td><td>混合预测模式 |td><td>24 | 结合历史和预测td></tr>
+                            <tr><td><code>FIXED</code></td><td>固定电价 | 1 | 单一价格td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="price-period-type">
+                <summary>2.2 电价时段类型 (PricePeriodType)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>枚举值</th><th>说明</th><th>典型电价范围（元/kWh）|</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>VALLEY</code></td><td>谷时段</td><td>0.3-0.5</td></tr>
+                                <td>0.5-0.8</td></tr>
+                                <td>低谷电价</td>
+                            </tr>
+                            <tr>
+                                <td><code>FLAT</code></td><td>平时段</td><td>0.5-0.8</td></tr>
+                                <td>0.5-0.8td></tr>
+                                <td>平时段电价td>
+                            </tr>
+                            <tr>
+                                <td><code>PEAK</code></td><td>峰时段</td><td>0.8-1.2</td></tr>
+                                <td>0.8-1.2td></tr>
+                                <td>峰时段电价td>
+                            </tr>
+                                <td><code>SHARP_PEAK</code></td><td>尖峰时段</td><td>1.2-1.8td></tr>
+                                <td>1.2-1.8td></tr>
+                                <td>尖峰时段电价td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+
+        <!-- 常量基准值 -->
+        <section id="constants">
+            <h2>📏 三、常量基准值 (Constant Baseline Values)</h2>
+            <details id="thermal-coefficients">
+                <summary>3.1 建筑热导系数 (BUILDING_THERMAL_COEFFICIENTS)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>建筑类型</th><th>热导系数 K (W/(m²·K))</th><th>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>'factory'</code></td><td>2.5</td><td>标准工厂墙体</td></tr>
+                            </tr>
+                            <tr>
+                                <td><code>'school'</code></td><td>2.0</td><td>学校教室结构td></tr>
+                            </tr>
+                            <tr>
+                                <td><code>'office'</code></td><td>2.8</td><td>办公建筑td></tr>
+                            </tr>
+                            <tr>
+                                <td><code>'hospital'</code></td><td>1.5</td><td>医院保温较好td></tr>
+                            </tr>
+                            <tr>
+                                <td><code>'mall'</code></td><td>1.8</td><td>商场玻璃较多td></tr>
+                            </tbody>
+                        </table>
+                </div>
+            </details>
+
+            <details id="lighting-efficiency-baseline">
+                <summary>3.2 照明效率基准 (LIGHTING_EFFICIENCY_BASELINE)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数</th><th>值</th><th>单位</th><th>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>ledEfficiency</code></td><td>100</td>
+                                <td>lm/W</td>
+                                <td>LED灯具效率td>
+                            </tr>
+                            <tr>
+                                <td><code>fluorescentEfficiency</code></td>
+                                <td>60</td>
+                                <td>lm/W</td>
+                                <td>荧光灯效率td>
+                            </tr>
+                            <tr>
+                                <td><code>incandescentEfficiency</code></td>
+                                <td>15</td>
+                                <td>lm/W</td>
+                                <td>白炽灯效率td>
+                            </tr>
+                            <tr>
+                                <td><code>smartControlSavings</code></td>
+                                <td>0.25</td>
+                                <td>-</td>
+                                <td>智能照度控制系统节能率 (25%)td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+
+        <!-- 输出结果类型 -->
+        <section id="output-types">
+            <h2>📤 四、输出结果类型 (Output Result Types)</h2>
+            <details id="storage-precool-decision">
+                <summary>4.1 储能-预冷决策结果 (StoragePrecoolDecision)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>decision</code></td>
+                                <td>enum</td>
+                                <td>决策类型：'storage' | 'precool' | 'hybrid' | 'storage_required'</td>
+                            </tr>
+                            <tr>
+                                <td><code>reason</code></td>
+                                <td>string</td>
+                                <td>决策原因说明td>
+                            </tr>
+                            <tr>
+                                <td><code>precoolDuration</code></td>
+                                <td>number</td>
+                                <td>预冷持续时间（小时）|td>
+                            </tr>
+                            <tr>
+                                <td><code>storageCapacityNeeded</code></td>
+                                <td>number</td>
+                                <td>所需储能容量（kWh）|td>
+                            </tr>
+                            <tr>
+                                <td><code>precoolTargetTemp</code></td>
+                                <td>number | 预冷目标温度（℃）(可选）|td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="comfort-metrics">
+                <summary>4.4 舒适度指标 (ComfortMetrics)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>参数名</th><th>类型</th><th>范围</th><th>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>pmv</code></td>
+                                <td>number</td>
+                                <td>-3 to +3</td>
+                                <td>预测平均投票值</td>
+                            </tr>
+                                <tr>
+                                <td><code>ppd</code></td>
+                                <td>number</td>
+                                <td>0-100</td>
+                                <td>预测不满意百分比</td>
+                            </tr>
+                            <tr>
+                                <td><code>setpointTemperature</code></td>
+                                <td>number</td>
+                                <td>-</td>
+                                <td>设定点温度（℃）|td>
+                            </tr>
+                            <tr>
+                                <td><code>humidity</code></td>
+                                <td>number</td>
+                                <td>0-100</td>
+                                <td>湿度 (%)</td>
+                            </tr>
+                            <tr>
+                                <td><code>airVelocity</code></td>
+                                <td>number</td>
+                                <td>0-5</td>
+                                <td>空气气流速 (m/s)td>
+                            </tr>
+                            <tr>
+                                <td><code>cloValue</code></td>
+                                <td>number</td>
+                                <td>0-2</td>
+                                <td>服装热阻 (clo)</td>
+                            </tr>
+                            <tr>
+                                <td><code>metValue</code></td>
+                                <td>number</td>
+                                <td>0.8-2.0</td>
+                                <td>新陈代谢率 (met)td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border-radius: 6px;">
+                        <strong>PMV/PPD舒适度对应关系</strong>：
+                        <ul style="margin: 10px 0 10px 20px;">
+                            <li>PMV = 0, PPD < 10%: 舒适</li>
+                            <li>PMV = ±1, PPD ≈ 25%: 稍冷/稍热</li>
+                            <li>PMV = ±2, PPD ≈ 75%: 冷/热</li>
+                            <li>PMV = ±3, PPD ≈ 100%: 很冷/很热</li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
+        </section>
+
+        <!-- 算法常量 -->
+        <section id="algorithm-constants">
+            <h2>⚡️ 五、算法常量 (Algorithm Constants)</h2>
+            <details id="efficiency-coefficients">
+                <summary>5.1 效率系数 (Efficiency Coefficients)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>常量名</th><th>值</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>chargeEfficiency</code></td>
+                                <td>0.95</td>
+                                <td>充电效率 | calculateStorageCost</td>
+                            </tr>
+                            <tr>
+                                <td><code>dischargeEfficiency</code></td>
+                                <td>0.95</td>
+                                <td>放电效率 | calculateStorageCost</td>
+                            </tr>
+                            <tr>
+                                <td><code>inverterEfficiency</code></td>
+                                <td>0.97</td>
+                                <td>逆变器效率 | calculateSolarGeneration</td>
+                            </tr>
+                            <tr>
+                                <td><code>systemLoss</code></td>
+                                <td>0.02</td>
+                                <td>系统线路损耗 | calculateSolarGeneration</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="cost-coefficients">
+                <summary>5.2 成本系数 (Cost Coefficients)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>常量名</th><th>值</th><th>单位</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>ledInvestment</code></td>
+                                <td>50</td>
+                                <td>元/W</td>
+                                <td>LED改造投资成本 | calculateLightingSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>smartControlInvestment</code></td>
+                                <td>30</td>
+                                <td>元/m²</td>
+                                <td>智能控制系统投资 | calculateLightingSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>hvacInvestment</code></td>
+                                <td>200</td>
+                                <td>元/m²</td>
+                                <td>空调改造投资 | calculateHVACSavings</td>
+                            </tr>
+                            <tr>
+                                <td><code>batteryDegradationCost</code></td>
+                                <td>0.5</td>
+                                <td>元/kWh</td>
+                                <td>电池衰减成本 | ThermalEconomicOptimizer</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="threshold-parameters">
+                <summary>5.3 阈值参数 (Threshold Parameters)</summary>
+                <div>
+                    <table>
+                        <thead>
+                            <tr><th>常量名</th><th>值</th><th>说明</th><th>使用场景</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>temperatureThreshold</code></td>
+                                <td>26</td>
+                                <td>°C</td>
+                                <td>温度影响负荷阈值 | calculateHVACBaseline</td>
+                            </tr>
+                            <tr>
+                                <td><code>priceStdMultiplier</code></td>
+                                <td>1</td>
+                                <td>-</td>
+                                <td>峰值识别标准差倍数 identifyFuturePricePeaks</td>
+                            </tr>
+                            <tr>
+                                <td><code>priceRatioHigh</code></td>
+                                <td>1.2</td>
+                                <td>-</td>
+                                <td>高电价判定阈值 balanceLightingAndHVAC</td>
+                            </tr>
+                            <tr>
+                                <td><code>decisionThreshold</code></td>
+                                <td>0.9</td>
+                                <td>-</td>
+                                <td>决策切换阈值（避免频繁切换）| decideStorageVsPrecool</td>
+                            </tr>
+                            <tr>
+                                <td><code>hybridRatio</code></td>
+                                <td>0.5</td>
+                                <td>-</td>
+                                <td>混合策略比例 decideStorageVsPrecool</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+
+        <!-- 核心算法公式 -->
+        <section id="formulas">
+            <h2>📐 六、核心算法公式汇总 (Core Algorithm Formulas)</h2>
+            <details id="baseline-calculation">
+                <summary>6.1 基准负荷计算</summary>
+                <div>
+                    <h3>照明基准负荷</h3>
+                    <pre><code>powerDensity = totalPower / area</code></pre>
+                    <p>单位面积功率密度，W/m²</p></pre>
+                    <pre><code>baselineLoad = powerDensity * area * trafficMultiplier / 1000</code></pre>
+                    <p>单位：基准负荷，kW</p></pre>
+                    <pre>code class="language-typescript">baselineLoad = powerDensity * area * trafficMultiplier / 1000; // kW</code></pre>
+                </div>
+                <div>
+                    <h3>空调基准负荷</h3>
+                    <pre><code>coolingLoad = (area * 100 / thermalCoef) * (annualCoolingHours / 24) / 1000</code></pre>
+                    <p>单位：基准负荷，kW</p></pre>
+                    <pre><code>class="language-typescript">baselineLoad = coolingLoad * seasonMultiplier * tempFactor</code></pre>
+                    </div>
+                </div>
+            </details>
+
+            <details id="solar-calculation">
+                <summary>6.2 光伏发电量计算</summary>
+                <div>
+                    <h3>光伏发电量计算</h3>
+                    <pre><code>dailySunshineHours = annualSunshineHours / 365</code></pre>
+                    <pre><code>efficiencyFactor = irradianceAdjustment * tempAdjustment</code></pre>
+                    <pre><code>dailyGeneration = pvCapacity * dailySunshineHours * inverterEfficiency * systemLoss * efficiencyFactor  [kWh]</code></pre>
+                    <p>单位：日发电量，kWh</p></pre>
+                </div>
+            </details>
+
+            <details id="storage-calculation">
+                <summary>6.3 储能套利收益summary>
+                <div>
+                    <h3>储能套利收益计算</h3>
+                    <pre><code>dailyArbitrage = sum(discharge_power * price * dischargeEfficiency)</code></pre>
+                    <pre><code>annualArbitrage = dailyArbitrage * 365</code></pre>
+                    <p>单位：日套利收益，元；年套利收益，元</p></pre>
+                </div>
+            </details>
+
+            <details id="comfort-calculation">
+                <summary>6.4 舒适度计算 (PMV/PPD)summary>
+                <div>
+                    <h3>PMV/PPD舒适度计算h3>
+                    <pre><code>PMV = (0.303 * exp(-0.036 * met) + 0.028) * (M/W - 0.055 * met - 0.04 * met * (5.27 + 0.172 * v) * (35.7 - tcl))</code></pre>
+                    <pre><code>PPD = 100 - 95 * exp(-0.03353 * PMV² - 0.2179 * PMV⁴)</code></pre>
+                    <p>单位：PMV值范围 (-3 to +3)；PPD值范围 (0-100%)</p></pre>
+                </div>
+            </details>
+
+            <details id="battery-degradation-calculation">
+                <summary>6.5 电池衰减计算h3>
+                    <div>
+                    <pre><code>cycleDegradation = (cycles / 1000) * baseDegradationRate * DoD_factor * tempFactor</code></pre>
+                    <pre><code>ageDegradation = age * 0.01  [每年1%]</code></pre>
+                    <pre><code>totalDegradation = min(0.8, cycleDegradation + ageDegradation)</code></pre>
+                    <pre><code>health = max(0.2, 1 - totalDegradation) * 100 [%]</code></pre>
+                </div>
+            </details>
+
+            <details id="cross-sector-optimization">
+                <summary>6.6 跨板块优化summary>
+                <div>
+                    <h3>动态热导系数计算h3>
+                    <pre><code>K_dynamic(t) = K_building / (1 + β * (R_price(t) - R_price_avg) / R_price_std)</code></pre>
+                    <p>其中 β = 0.3 为电价响应敏感度系数</p></pre>
+                </div>
+                <div style="margin: 15px 0;">
+                    <p><strong>储能 vs 预冷决策</strong>：</p>
+                    <pre><code>if (precoolCost < storageCost * 0.9) → 预冷</code></pre>
+                    <pre><code>else if (storageCost < precoolCost * 0.9) → 储能</code></pre>
+                    <pre><code>else → 混合策略 (50:50)</code></pre>
+                </div>
+            </details>
+        </section>
+
+        <!-- 参数验证规则 -->
+        <section id="validation-rules">
+            <h2>✅ 七、参数验证规则 (Parameter Validation Rules)</h2>
+            <div>
+                <table>
+                    <thead>
+                            <tr><th>参数</th><th>验证规则</th><th>错误提示</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>area</code></td>
+                                <td>> 0</td>
+                                <td>面积必须大于0</td>
+                            </tr>
+                            <tr>
+                                <td><code>totalPower</code></td>
+                                <td>≥ 0</td>
+                                <td>功率不能为负</td>
+                            </tr>
+                            <tr>
+                                <td><code>dailyHours</code></td>
+                                <td>0-24</td>
+                                <td>每天运行时间必须在0-24小时之间</td>
+                            </tr>
+                            <tr>
+                                <td><code>COP</code></td>
+                                <td>1-10</td>
+                                <td>COP值必须在1-10之间</td>
+                            </tr>
+                            <tr>
+                                <td><code>roundTripEfficiency</code></td>
+                                <td>0-1</td>
+                                <td>效率必须在0-100%之间</td>
+                            </tr>
+                            <tr>
+                                <td><code>dod</code></td>
+                                <td>充放电深度必须在0-100%之间</td>
+                            </tr>
+                            <tr>
+                                <td><code>price</code></td>
+                                <td>>=0</td>
+                                <td>电价不能为负</td>
+                            </tr>
+                            <tr>
+                                <td><code>temperature</code></td>
+                                <td>-30-50</td>
+                                <td>温度超出合理范围</td>
+                            </tr>
+                            <tr>
+                                <td><code>humidity</code></td>
+                                <td>0-100</td>
+                                <td>湿度必须在0-100%之间td>
+                            </tr>
+                            <tr>
+                                <td><code>soc</code></td>
+                                <td>0-100</td>
+                                <td>SOC必须在0-100%之间</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+        <!-- 参数默认值汇总表 -->
+        <section id="defaults">
+            <h2>📋 八、参数默认值汇总表 (Default Values Summary)</h2>
+            <details id="lighting-defaults">
+                <summary>照明默认值</summary>
+                <div>
+                    <table>
+                        <tr><th>参数</th><th>默认值</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>传感器密度</td><td><span class="badge default">未指定</span></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            <details id="hvac-defaults">
+                <summary>空调默认值summary>
+                <div>
+                    <table>
+                        <tr><th>参数</th><th>默认值</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>建筑类型</td><td><span class="badge default">'standard'</span></td></tr>
+                            </tr>
+                            <tr><td>新风效率</td><td>0.85</td></tr>
+                            </tr>
+                            <tr><td>控制器类型</td><td><span class="badge default">'on-off'</span></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="solar-storage-defaults">
+                <summary>光储默认值summary</div>
+                    <table>
+                        <tr><th>参数</th><th>默认值</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>往返效率</td><td>90%</td>
+                            </tr>
+                            <tr>
+                                <td>DOD</td><td>90%</td>
+                            </tr>
+                                <td>电池类型</td><td><span class="badge default">'LFP'</span></td>
+                            </tr>
+                                <td>电池衰减率</td><td>2%/年</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="building-defaults">
+                <summary>建筑默认值summary>
+                <div>
+                    <table>
+                        <tr><th>参数</th><th>默认值</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>朝向</td><td><span class="badge default">'south'</span></td>
+                            </tr>
+                            <tr>
+                                <td>隔热等级</td><td><span class="badge default">'average'</span></td>
+                            </tr>
+                            <tr>
+                                <td>玻璃窗占比</td><td>30%</td>
+                            </tr>
+                                <td>热质量</td><td>100 kJ/(m²·K) |</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="price-defaults">
+                <summary>电价默认值summarydiv>
+                    <table>
+                        <tr><th>参数</th><th>默认值</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>峰值电价</td><td>1.2 元/kWh</td>
+                            </tr>
+                                <td>谷值电价</td><td>0.32 元/kWh</td>
+                            </tr>
+                                <td>平值电价</td><td>0.65 元/kWh</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="battery-defaults">
+                <summary>电池默认值summarydiv>
+                    <table>
+                        <tr><th>参数</th><th>默认值th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>充电效率</td><td>95%</td>
+                            </tr>
+                                <td>放电效率</td><td>95%</td>
+                            </tr>
+                                <tr>
+                                <td>衰减成本</td><td>0.5 元/kWh</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="digital-twin-defaults">
+                <summary>数字孪生默认值summarydiv>
+                    <table>
+                        <tr>
+                                <th>参数</th><th>默认值</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>热区数量</td><td>5</td>
+                                <td>5个</td>
+                            </tr>
+                                <tr>
+                                <td>热惯性</td><td>1-5小时</td>
+                            </tr>
+                                <tr>
+                                <td>响应时间</td><td>15分钟</td>
+                            </tr>
+                                <td>预测时长</td><td>24小时</td>
+                            </tr>
+                                <tr>
+                                <td>预测精度</td><td>85%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details id="rl-defaults">
+                <summary>强化学习默认值summarydiv>
+                    <table>
+                        <tr>
+                                <th>参数</th><th>默认值</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>学习率</td><td>0.001</td>
+                            </tr>
+                                <td>折扣因子</td><td>0.99</td>
+                            </tr>
+                                <td>探索率</td><td>0.1</td>
+                            </tr>
+                                <td>批次大小</td><td>32</td>
+                            </tr>
+                                <tr>
+                                <td>训练回合数</td><td>1000</td>
+                            </tr>
+                                <tr>
+                            <td>算法类型</td><td><span class="badge default">'dqn'</span></td>
+                            </tr>
+                            <tr>
+                                <td>奖励函数类型</td><td><span class="badge default">'cost'</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+
+        <!-- 参数使用场景索引 -->
+        <section id="usage-index">
+            <h2>🔗 九、参数使用场景索引 (Parameter Usage Index)</h2>
+            <div>
+                <table>
+                    <thead>
+                            <tr><th>参数</th>calculateLightingBaseline</th><th>calculateHVACBaseline</th>calculateSolarGeneration</th>calculateStorageOptimization</th><th>calculateBatteryDegradation</th>calculateV2GOptimization</th></tr></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>area</code></td>
+                                <td><span class="badge type">✓</span></td>
+                                <td><span class="badge type">✓</span></td>
+                                <td><span class="badge type">✓</span></td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                            </tr>
+                            <tr>
+                                <td><code>totalPower</code></td>
+                                <td><span class="badge type">✓</span></td>
+                                <td><span class="badge type">✓</span></td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>-</td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>-</td>-</td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>-</td>-</td>-</td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>-</td>-</td>-</td>-</td>-</td>
+                                <td>-</td>-</td>-</td>-</td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>
+                                <td><span class="badge type">✓</span></td>
+                                <td>-</td>-</td>-</td>-</td>-</td>-</td>
+                                <td>-</td>-</td>-</td>
+                                <td>-</td>
+                                <td>-</td>-</td>-</td>-</td>-</td>-</td>-</td>
+                                <td>-</td>-</td>-</td>-</td>-</td>-</td>-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <!-- 扩展建议 -->
+            <section id="recommendations">
+                <h2>💡 十、扩展建议 (Extension Recommendations)</h2>
+                <ol style="margin-left: 20px;">
+                    <li><strong>参数分组</strong>：可以按业务板块将参数分组到独立的配置文件中</li>
+                    <li><strong>参数验证</strong>：建议增加运行时参数验证函数</li>
+                    <li><strong>参数可视化</strong>：可以开发参数配置面板，方便实时调整</li>
+                    <li><strong>参数敏感性分析</strong>：建议添加参数敏感性分析功能</li>
+                    <li><strong>参数优化</strong>：可以使用强化学习自动优化参数配置</li>
+                </ol>
+            </section>
+
+        <footer style="margin-top: 50px; padding: 30px 0; border-top: 1px solid var(--border); color: var(--text-secondary);">
+            <p><strong>文档版本</strong>: v1.0 | <strong>最后更新</strong>: 2026-02-17 | <strong>维护者</strong>: ZeroCarbon Team</p>
+        </footer>
+    </main>
+
+    <!-- 返回顶部按钮 -->
+    <div class="back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'});" title="返回顶部">↑</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        // 导航链接配置
+        const navLinks = [
+            { id: 'classification', title: '📊 参数分类体系', icon: '📊' },
+            { id: 'system-input', title: '🏠 一、系统输入参数', icon: '🏠' },
+            { id: 'internal-calc', title: '⚙️ 二、内部计算参数', icon: '⚙️' },
+            { id: 'constants', title: '📏 三、常量基准值', icon: '📏' },
+            { id: 'output-types', title: '📤 四、输出结果类型', icon: '📤' },
+            { id: 'algorithm-constants', title: '⚡️ 五、算法常量', icon: '⚡️' },
+            { id: 'formulas', title: '📐 六、核心算法公式', icon: '📐' },
+            { id: 'validation-rules', title: '✅ 七、参数验证规则', icon: '✅' },
+            { id: 'defaults', title: '📋 八、参数默认值汇总', icon: '📋' },
+            { id: 'usage-index', title: '🔗 九、参数使用场景索引', icon: '🔗' },
+            { id: 'recommendations', title: '💡 十、扩展建议', icon: '💡' },
+        ];
+
+        // 生成导航
+        const navContent = document.getElementById('nav-content');
+        navContent.innerHTML = navLinks.map(link =>
+            `<a href="#${link.id}" class="nav-link">${link.title}</a>`
+        ).join('');
+
+        // 侧边栏切换
+        let sidebarCollapsed = false;
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'b' || e.key === 'B') {
+                sidebarCollapsed = !sidebarCollapsed;
+                document.querySelector('.sidebar').classList.toggle('collapsed', sidebarCollapsed);
+                document.querySelector('.main-content').classList.toggle('expanded', sidebarCollapsed);
+            }
+        });
+
+        // 搜索功能
+        const searchInput = document.getElementById('searchInput');
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const links = document.querySelectorAll('.nav-link');
+            links.forEach(link => {
+                const text = link.textContent.toLowerCase();
+                link.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        });
+
+        // 平滑滚动和导航高亮
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                    this.classList.add('active');
+                }
+            });
+        });
+
+        // 代码高亮
+        document.querySelectorAll('pre, code').forEach((block) => {
+            hljs.highlightElement(block, { language: 'typescript' });
+        });
+
+        // 页面加载时高亮当前章节
+        const currentSection = window.location.hash.substring(1);
+        if (currentSection) {
+            const activeLink = document.querySelector(`a[href="#${currentSection}"]`);
+            if (activeLink) activeLink.classList.add('active');
+        }
+
+        // 标签页切换
+        const tabs = ['system-input', 'internal-calc', 'constants', 'output-types', 'algorithm-constants', 'formulas', 'validation-rules', 'defaults', 'usage-index', 'recommendations'];
+        const tabsContainer = document.createElement('div');
+        tabsContainer.className = 'tabs';
+
+        tabs.forEach((tabId, index) => {
+            const tabBtn = document.createElement('button');
+            tabBtn.className = 'tab-btn';
+            tabBtn.textContent = tabs.find(t => t.id === tabId)?.title?.split(' ')[1] || tabId;
+            tabBtn.onclick = () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                tabBtn.classList.add('active');
+            };
+            tabsContainer.appendChild(tabBtn);
+        });
+
+        // 在第一个section之前插入标签页切换器
+        const firstSection = document.querySelector('section');
+        if (firstSection) {
+            firstSection.parentNode.insertBefore(tabsContainer, firstSection);
+        }
+    </script>
+</body>
+</html>

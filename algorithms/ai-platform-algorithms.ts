@@ -137,11 +137,14 @@ export interface BuildingParams {
   /** 遮阳系数 */
   shadingCoefficient?: number;
 
-  /** 通风率 (m³/h) */
+  /** 通风率 (m³/h) | Ventilation rate */
   ventilationRate?: number;
 
-  /** 热质量 (kJ/(m²·K)) */
+  /** 热质量 (kJ/(m²·K)) | Thermal mass */
   thermalMass?: number;
+
+  /** 热惯性（小时）| Thermal inertia (hours) */
+  thermalInertia?: number;
 }
 
 /**
@@ -1038,16 +1041,383 @@ export function calculateStorageOptimization(
 // ============================================================================
 // 综合优化算法
 // ============================================================================
+// 跨板块优化 | Cross-Sector Optimization
+// ============================================================================
 
 /**
- * 计算多系统协同优化
- * @param lightingParams 照明系统参数
- * @param hvacParams 空调系统参数
- * @param solarStorageParams 光储系统参数
- * @param buildingParams 建筑参数
- * @param environmentalFactors 环境因素
- * @param trafficPattern 人流量模式
- * @returns {optimizedLoadProfile: 优化后的负荷曲线, totalSavings: 总节电量}
+ * 储能-预冷决策结果 | Storage - Precool Decision Result
+ */
+export interface StoragePrecoolDecision {
+  /** 决策类型 | Decision type */
+  decision: 'storage' | 'precool' | 'hybrid' | 'storage_required';
+  /** 决策原因说明 | Reason for the decision */
+  reason: string;
+  /** 预冷持续时间（小时） | Precooling duration (hours) */
+  precoolDuration: number;
+  /** 所需储能容量（kWh） | Required storage capacity (kWh) */
+  storageCapacityNeeded: number;
+  /** 预冷目标温度（℃） | Precooling target temperature (°C) */
+  precoolTargetTemp?: number;
+}
+
+/**
+ * 光热耦合平衡结果 | Lighting-HVAC Balance Result
+ */
+export interface LightingHVACBalance {
+  /** 照明水平（0-1） | Lighting level (0-1) */
+  lightingLevel: number;
+  /** 遮阳系数（0-1） | Shading coefficient (0-1) */
+  shadingCoefficient: number;
+  /** 空调设定点调整（℃） | HVAC setpoint adjustment (°C) */
+  hvacSetpointAdjustment: number;
+  /** 预期净成本（元） | Expected net cost (CNY) */
+  expectedNetCost: number;
+}
+
+/**
+ * 热经济优化配置 | Thermal Economic Optimization Configuration
+ */
+export interface ThermalEconomicConfig {
+  /** 建筑参数 | Building parameters */
+  buildingParams: BuildingParams;
+  /** 数字孪生模型 | Digital twin model */
+  thermalModel: DigitalTwinModel;
+  /** 电价预测结果 | Price forecast result */
+  priceForecast: PriceForecastResult;
+  /** 电池参数 | Battery parameters */
+  batteryParams?: {
+    /** 充电效率 | Charge efficiency */
+    chargeEfficiency: number;
+    /** 放电效率 | Discharge efficiency */
+    dischargeEfficiency: number;
+    /** 电池衰减成本（元/kWh） | Battery degradation cost (CNY/kWh) */
+    degradationCost: number;
+  };
+}
+
+/**
+ * 热经济优化器 | Thermal Economic Optimizer
+ * 专门处理"建筑即电池"的热惯性与经济性权衡
+ * Specialized in handling the trade-off between building thermal inertia and economic efficiency
+ */
+export class ThermalEconomicOptimizer {
+  private buildingParams: BuildingParams;
+  private thermalModel: DigitalTwinModel;
+  private priceForecast: PriceForecastResult;
+  private batteryParams: {
+    chargeEfficiency: number;
+    dischargeEfficiency: number;
+    degradationCost: number;
+  };
+
+  constructor(config: ThermalEconomicConfig) {
+    this.buildingParams = config.buildingParams;
+    this.thermalModel = config.thermalModel;
+    this.priceForecast = config.priceForecast;
+    this.batteryParams = config.batteryParams || {
+      chargeEfficiency: 0.95,  // 充电效率 95% | Charge efficiency 95%
+      dischargeEfficiency: 0.95,  // 放电效率 95% | Discharge efficiency 95%
+      degradationCost: 0.5,  // 电池衰减成本 0.5元/kWh | Battery degradation cost 0.5 CNY/kWh
+    };
+  }
+
+  /**
+   * 计算建筑热导系数与电价的动态响应 | Calculate building thermal coefficient dynamic response to electricity price
+   * 电价高时降低等效热导（减少热交换），电价低时提高等效热导（促进热交换）
+   * High price reduces effective thermal conductivity (reduce heat exchange), low price increases effective thermal conductivity (promote heat exchange)
+   * @returns 动态热导系数时间序列（24小时） | Dynamic thermal coefficient time series (24 hours)
+   */
+  calculateDynamicThermalCoefficient(): number[] {
+    const coefficients: number[] = [];
+    const baseCoefficient = BUILDING_THERMAL_COEFFICIENTS[this.buildingParams.type];
+
+    const prices = this.priceForecast.prices;
+    const avgPrice = this.priceForecast.avgPrice;
+    const priceStd = Math.sqrt(
+      prices.reduce((sum, p) => sum + Math.pow(p.price - avgPrice, 2), 0) / prices.length
+    );
+
+    const beta = 0.3; // 电价响应敏感度系数 | Price response sensitivity coefficient
+
+    for (let i = 0; i < prices.length; i++) {
+      const priceFactor = 1 + beta * (prices[i].price - avgPrice) / (priceStd || 1);
+      const dynamicCoefficient = baseCoefficient / priceFactor;
+      coefficients.push(dynamicCoefficient);
+    }
+
+    return coefficients;
+  }
+
+  /**
+   * "建筑即电池"决策函数 | "Building as Battery" Decision Function
+   * 决策：将电能存入化学电池（储能）vs 存入物理空间（空调预冷）
+   * Decision: Store energy in chemical battery (storage) vs physical space (AC precooling)
+   * @param currentHour 当前小时（0-23） | Current hour (0-23)
+   * @param peakHour 峰值时段小时 | Peak period hour
+   * @param currentThermalState 当前热状态 | Current thermal state
+   * @returns 决策结果 | Decision result
+   */
+  decideStorageVsPrecool(
+    currentHour: number,
+    peakHour: number,
+    currentThermalState: ThermalState
+  ): StoragePrecoolDecision {
+    const hoursToPeak = peakHour - currentHour;
+    const thermalInertia = this.thermalModel.building.thermalInertia || 1;
+
+    if (thermalInertia < hoursToPeak) {
+      return {
+        decision: 'storage_required',
+        reason: `Thermal inertia (${thermalInertia}h) insufficient to cover peak period`,
+        precoolDuration: 0,
+        storageCapacityNeeded: this.calculateStorageCapacityNeeded(hoursToPeak),
+      };
+    }
+
+    const storageCost = this.calculateStorageCost(currentHour, peakHour);
+    const precoolCost = this.calculatePrecoolCost(currentHour, peakHour, currentThermalState, thermalInertia);
+    const threshold = 0.9;
+
+    if (precoolCost < storageCost * threshold) {
+      const precoolTargetTemp = this.calculatePrecoolTarget(hoursToPeak, currentThermalState);
+      return {
+        decision: 'precool',
+        reason: `Precooling (¥${precoolCost.toFixed(2)}) is more cost-effective than storage (¥${storageCost.toFixed(2)})`,
+        precoolDuration: Math.min(hoursToPeak, thermalInertia),
+        storageCapacityNeeded: 0,
+        precoolTargetTemp,
+      };
+    } else if (storageCost < precoolCost * threshold) {
+      return {
+        decision: 'storage',
+        reason: `Battery storage (¥${storageCost.toFixed(2)}) is more cost-effective than precooling (¥${precoolCost.toFixed(2)})`,
+        precoolDuration: 0,
+        storageCapacityNeeded: this.calculateStorageCapacityNeeded(hoursToPeak),
+      };
+    } else {
+      const hybridRatio = 0.5;
+      return {
+        decision: 'hybrid',
+        reason: `Costs comparable (storage: ¥${storageCost.toFixed(2)}, precool: ¥${precoolCost.toFixed(2)}), using hybrid strategy`,
+        precoolDuration: Math.floor(hoursToPeak * hybridRatio),
+        storageCapacityNeeded: this.calculateStorageCapacityNeeded(hoursToPeak * hybridRatio),
+        precoolTargetTemp: this.calculatePrecoolTarget(hoursToPeak * hybridRatio, currentThermalState),
+      };
+    }
+  }
+
+  /**
+   * 计算储能成本 | Calculate storage cost
+   * 成本 = 充电成本 - 放电收益 + 电池衰减成本
+   * Cost = charge cost - discharge revenue + battery degradation cost
+   * @param currentHour 当前小时 | Current hour
+   * @param peakHour 峰值时段小时 | Peak period hour
+   * @returns 储能成本（元）| Storage cost (CNY)
+   */
+  private calculateStorageCost(currentHour: number, peakHour: number): number {
+    const chargePrice = this.priceForecast.prices[currentHour].price;
+    const dischargePrice = this.priceForecast.prices[peakHour].price;
+    const thermalMass = this.buildingParams.thermalMass || 100; // kJ/(m²·K)
+    const energyAmount = thermalMass * 4 / 3600; // kWh
+
+    const chargeCost = energyAmount * chargePrice;
+    const dischargeRevenue = energyAmount * dischargePrice * this.batteryParams.dischargeEfficiency;
+    const degradationCost = energyAmount * this.batteryParams.degradationCost;
+
+    return chargeCost - dischargeRevenue + degradationCost;
+  }
+
+  /**
+   * 计算预冷成本 | Calculate precooling cost
+   * 成本 = 预冷电费 + 热量流失成本
+   * Cost = precooling electricity cost + heat loss cost
+   * @param currentHour 当前小时 | Current hour
+   * @param peakHour 峰值时段小时 | Peak period hour
+   * @param currentThermalState 当前热状态 | Current thermal state
+   * @param thermalInertia 热惯性（小时）| Thermal inertia (hours)
+   * @returns 预冷成本（元）| Precooling cost (CNY)
+   */
+  private calculatePrecoolCost(
+    currentHour: number,
+    peakHour: number,
+    currentThermalState: ThermalState,
+    thermalInertia: number
+  ): number {
+    const currentTemp = currentThermalState.indoorTemperature;
+    const targetTemp = 20;
+    const thermalMass = this.buildingParams.thermalMass || 100;
+    const tempDifference = currentTemp - targetTemp;
+    const precoolEnergy = thermalMass * tempDifference / thermalInertia;
+
+    let totalCost = 0;
+    const precoolHours = Math.min(peakHour - currentHour, thermalInertia);
+
+    for (let h = currentHour; h < currentHour + precoolHours; h++) {
+      totalCost += this.priceForecast.prices[h % 24].price * precoolEnergy / thermalInertia;
+    }
+
+    const heatLossRate = BUILDING_THERMAL_COEFFICIENTS[this.buildingParams.type];
+    const heatLossCost = heatLossRate * tempDifference * precoolHours * 0.1;
+
+    return totalCost + heatLossCost;
+  }
+
+  /**
+   * 计算预冷目标温度 | Calculate precooling target temperature
+   * 考虑热流失，反推预冷目标 | Consider heat loss, back-calculate precooling target
+   * @param hoursToPeak 到峰值的时长 | Duration to peak
+   * @param currentThermalState 当前热状态 | Current thermal state
+   * @returns 目标温度（℃）| Target temperature (°C)
+   */
+  private calculatePrecoolTarget(hoursToPeak: number, currentThermalState: ThermalState): number {
+    const currentTemp = currentThermalState.indoorTemperature;
+    const heatLossRate = BUILDING_THERMAL_COEFFICIENTS[this.buildingParams.type];
+    const tempRiseDueToLoss = heatLossRate * hoursToPeak * 2;
+    const targetTemp = Math.max(18, currentTemp - tempRiseDueToLoss - 2);
+    return targetTemp;
+  }
+
+  /**
+   * 计算所需储能容量 | Calculate required storage capacity
+   * @param hours 需要覆盖的时长 | Duration to cover
+   * @returns 所需容量（kWh）| Required capacity (kWh)
+   */
+  private calculateStorageCapacityNeeded(hours: number): number {
+    const thermalMass = this.buildingParams.thermalMass || 100;
+    const averageTempDiff = 4;
+    return thermalMass * averageTempDiff * hours / 24;
+  }
+
+  /**
+   * 识别未来电价峰值时段 | Identify future electricity price peak periods
+   * @param currentHour 当前小时 | Current hour
+   * @returns 峰值时段数组 | Peak periods array
+   */
+  identifyFuturePricePeaks(currentHour: number): Array<{ hour: number; price: number }> {
+    const peaks: Array<{ hour: number; price: number }> = [];
+    const prices = this.priceForecast.prices;
+
+    const avgPrice = this.priceForecast.avgPrice;
+    const priceStd = Math.sqrt(
+      prices.reduce((sum, p) => sum + Math.pow(p.price - avgPrice, 2), 0) / prices.length
+    );
+    const threshold = avgPrice + priceStd;
+
+    for (let h = currentHour + 1; h < Math.min(currentHour + 6, 24); h++) {
+      if (prices[h].price > threshold) {
+        peaks.push({ hour: h, price: prices[h].price });
+      }
+    }
+
+    return peaks.sort((a, b) => b.price - a.price);
+  }
+
+  /**
+   * 计算基于自然光照的照明节能 | Calculate lighting energy saving based on natural light
+   * @param hour 当前小时 | Current hour
+   * @param solarIrradiance 太阳辐照度（W/m²）| Solar irradiance (W/m²)
+   * @returns 节能比例（0-1）| Energy saving ratio (0-1)
+   */
+  private calculateLightingSaving(hour: number, solarIrradiance: number): number {
+    const ambientLux = solarIrradiance * 100;
+    const requiredLux = 500;
+
+    if (ambientLux >= requiredLux) {
+      return 1;
+    }
+
+    const savingRatio = (ambientLux / requiredLux) * 0.9;
+    return Math.min(1, Math.max(0, savingRatio));
+  }
+
+  /**
+   * 计算太阳辐射导致的额外空调负荷 | Calculate extra HVAC load caused by solar radiation
+   * @param hour 当前小时 | Current hour
+   * @param solarIrradiance 太阳辐照度（W/m²）| Solar irradiance (W/m²)
+   * @param shadingCoefficient 遮阳系数（0-1）| Shading coefficient (0-1)
+   * @returns 额外空调负荷（kW）| Extra HVAC load (kW)
+   */
+  private calculateHVACExtraLoad(hour: number, solarIrradiance: number, shadingCoefficient: number): number {
+    const area = this.buildingParams.area || 1000;
+    const glazingRatio = this.buildingParams.glazingRatio || 0.3;
+    const solarHeatGain = solarIrradiance * glazingRatio * 0.7 * area / 1000;
+    const effectiveHeatGain = solarHeatGain * (1 - shadingCoefficient);
+    const cop = this.getHourlyCOP(hour);
+    const extraLoad = effectiveHeatGain / cop;
+    return extraLoad;
+  }
+
+  /**
+   * 计算最优遮阳系数 | Calculate optimal shading coefficient
+   * 电价越高，越倾向于遮阳（减少空调负荷）
+   * Higher electricity price tends to use more shading (reduce HVAC load)
+   * @param hour 当前小时 | Current hour
+   * @param price 当前电价 | Current electricity price
+   * @returns 遮阳系数（0-1）| Shading coefficient (0-1)
+   */
+  private calculateOptimalShading(hour: number, price: number): number {
+    const maxPrice = this.priceForecast.maxPrice;
+    const priceRatio = price / (maxPrice || 1);
+    const priceFactor = 0.5;
+    const shadingCoefficient = 1 - priceRatio * priceFactor;
+    return Math.max(0, Math.min(1, shadingCoefficient));
+  }
+
+  /**
+   * 光热耦合平衡函数 | Lighting-HVAC Balance Function
+   * 计算照明节能 vs 空调额外负荷的净成本
+   * Calculate net cost of lighting saving vs HVAC extra load
+   * @param hour 当前小时 | Current hour
+   * @param price 当前电价 | Current electricity price
+   * @returns 平衡结果 | Balance result
+   */
+  balanceLightingAndHVAC(hour: number, price: number): LightingHVACBalance {
+    const solarIrradiance = this.priceForecast.prices[hour].price > 1.2 ? 800 : 400;
+    const lightingSaving = this.calculateLightingSaving(hour, solarIrradiance);
+    const shadingCoefficient = this.calculateOptimalShading(hour, price);
+    const hvacExtraLoad = this.calculateHVACExtraLoad(hour, solarIrradiance, shadingCoefficient);
+
+    const baseLightingPower = 10; // kW
+    const baseHVACPower = 50; // kW
+    const cop = 2.5;
+
+    const lightingCost = (baseLightingPower * (1 - lightingSaving)) * price;
+    const hvacCost = (baseHVACPower + hvacExtraLoad) * price / cop;
+    const netCost = lightingCost + hvacCost;
+
+    return {
+      lightingLevel: 1 - lightingSaving,
+      shadingCoefficient,
+      hvacSetpointAdjustment: -1 * (hvacExtraLoad / 50),
+      expectedNetCost: netCost,
+    };
+  }
+
+  /**
+   * 获取逐时COP值 | Get hourly COP value
+   * @param hour 小时 | Hour
+   * @returns COP值 | COP value
+   */
+  private getHourlyCOP(hour: number): number {
+    // COP随环境温度变化：温度越高，COP越低
+    const avgTemp = this.priceForecast.prices[hour].price > 1 ? 30 : 25;
+    return Math.max(2, 3.5 - 0.05 * (avgTemp - 25));
+  }
+}
+
+// ============================================================================
+
+/**
+ * 计算多系统协同优化 | Calculate multi-system collaborative optimization
+ * @param lightingParams 照明系统参数 | Lighting system parameters
+ * @param hvacParams 空调系统参数 | HVAC system parameters
+ * @param solarStorageParams 光储系统参数 | Solar storage system parameters
+ * @param buildingParams 建筑参数 | Building parameters
+ * @param environmentalFactors 环境因素 | Environmental factors
+ * @param trafficPattern 人流量模式 | Traffic pattern
+ * @param aggressiveness 激进程度 (0-1: 保守到激进) | Aggressiveness level (0-1: conservative to aggressive)
+ * @param thermalEconomicConfig 热经济优化配置（可选）| Thermal economic optimization configuration (optional)
+ * @returns {optimizedLoadProfile: 优化后的负荷曲线, totalSavings: 总节电量, recommendations: 建议, crossSectorMetrics: 跨板块指标} | Return value
  */
 export function calculateIntegratedOptimization(
   lightingParams: LightingSystemParams,
@@ -1056,18 +1426,102 @@ export function calculateIntegratedOptimization(
   buildingParams?: BuildingParams,
   environmentalFactors?: EnvironmentalFactors,
   trafficPattern?: TrafficPattern,
-  aggressiveness: number = 0.5 // 0-1: 保守到激进
-): { optimizedLoadProfile: number[]; totalSavings: number; recommendations: string[] } {
+  aggressiveness: number = 0.5, // 0-1: 保守到激进 | 0-1: conservative to aggressive
+  thermalEconomicConfig?: ThermalEconomicConfig  // 如果提供，启用跨板块协调 | If provided, enable cross-sector coordination
+): {
+  optimizedLoadProfile: number[];
+  totalSavings: number;
+  recommendations: string[];
+  crossSectorMetrics?: {  // Cross-sector metrics | 跨板块指标
+    storagePrecoolDecisions: StoragePrecoolDecision[];  // 储能-预冷决策 | Storage-precool decisions
+    thermalCoefficients: number[];  // 热导系数 | Thermal coefficients
+    lightingHVACBalances: LightingHVACBalance[];  // 光热耦合平衡 | Lighting-HVAC balance
+  };
+} {
   const recommendations: string[] = [];
 
-  // 1. 计算各系统基准
+  // 如果提供了热经济配置，使用新的跨板块协调逻辑 | If thermal economic configuration is provided, use new cross-sector coordination logic
+  if (thermalEconomicConfig && buildingParams && environmentalFactors) {
+    const thermalOptimizer = new ThermalEconomicOptimizer(thermalEconomicConfig);
+
+    // 计算动态热导系数序列 | Calculate dynamic thermal coefficient sequence
+    const dynamicCoefficients = thermalOptimizer.calculateDynamicThermalCoefficient();
+
+    // 初始化跨板块指标 | Initialize cross-sector metrics
+    const crossSectorMetrics = {
+      storagePrecoolDecisions: [] as StoragePrecoolDecision[],
+      thermalCoefficients: dynamicCoefficients,
+      lightingHVACBalances: [] as LightingHVACBalance[],
+    };
+
+    // 对每个小时进行跨板块决策 | Perform cross-sector decision for each hour
+    for (let hour = 0; hour < 24; hour++) {
+      const price = thermalEconomicConfig.priceForecast.prices[hour].price;
+
+      // "建筑即电池"决策 | "Building as Battery" decision
+      const futurePeaks = thermalOptimizer.identifyFuturePricePeaks(hour);
+      if (futurePeaks.length > 0) {
+        const storagePrecoolDecision = thermalOptimizer.decideStorageVsPrecool(
+          hour,
+          futurePeaks[0].hour,
+          calculateDigitalTwinThermalModel(buildingParams, environmentalFactors, {
+            building: {
+              thermalZones: 5,
+              thermalInertia: buildingParams.thermalInertia || 1,
+              heatCapacity: buildingParams.thermalMass || 1000,
+            },
+            hvac: {
+              responseTime: 15,
+              setpointDeadband: 1.0,
+            },
+            environment: {
+              forecastHorizon: 24,
+              predictionAccuracy: 85,
+            },
+          })
+        );
+        crossSectorMetrics.storagePrecoolDecisions.push(storagePrecoolDecision);
+      }
+
+      // "光热耦合"平衡 | "Lighting-HVAC Coupling" balance
+      const lightingHVACBalance = thermalOptimizer.balanceLightingAndHVAC(hour, price);
+      crossSectorMetrics.lightingHVACBalances.push(lightingHVACBalance);
+    }
+
+    // 在原有推荐基础上增加跨板块建议 | Add cross-sector recommendations on top of original recommendations
+    if (aggressiveness > 0.8) {
+      recommendations.push('建议启用储能削峰填谷功能'); // Suggest enabling storage peak-valley function
+    }
+
+    // 统计预冷使用情况 | Statistics of precooling usage
+    const precoolCount = crossSectorMetrics.storagePrecoolDecisions.filter(d => d.decision === 'precool').length;
+    if (precoolCount > 4) {
+      recommendations.push(`建筑热容利用效率高，${precoolCount}小时建议使用预冷策略`); // High building thermal capacity efficiency, suggest using precooling strategy
+    }
+
+    const storageCount = crossSectorMetrics.storagePrecoolDecisions.filter(d => d.decision === 'storage').length;
+    if (storageCount > 4) {
+      recommendations.push(`储能策略活跃，${storageCount}小时建议使用电池套利`); // Storage strategy active, suggest using battery arbitrage
+    }
+
+    // 返回跨板块协调结果（保持向后兼容）| Return cross-sector coordination result (maintain backward compatibility)
+    return {
+      optimizedLoadProfile: [], // 简化处理，保持原有逻辑 | Simplified processing, keep original logic
+      totalSavings: 0,
+      recommendations,
+      crossSectorMetrics,
+    };
+  }
+
+  // 否则继续使用原有逻辑（向后兼容）| Otherwise continue using original logic (backward compatible)
+  // 1. 计算各系统基准 | 1. Calculate baseline for each system
   const lightingBaseline = calculateLightingBaseline(lightingParams, trafficPattern);
   const hvacBaseline = calculateHVACBaseline(hvacParams, buildingParams, environmentalFactors, trafficPattern);
 
-  // 2. 计算光伏发电
+  // 2. 计算光伏发电 | 2. Calculate solar power generation
   const solarGeneration = calculateSolarGeneration(solarStorageParams, environmentalFactors);
 
-  // 3. 计算储能优化
+  // 3. 计算储能优化 | 3. Calculate storage optimization
   const priceCurve = environmentalFactors?.peakPrice ?
     Array.from({ length: 24 }, (_, i) => {
       if (i < 8) return environmentalFactors!.valleyPrice;
@@ -1076,7 +1530,7 @@ export function calculateIntegratedOptimization(
       if (i < 24) return environmentalFactors!.flatPrice;
       return environmentalFactors!.valleyPrice;
     }) :
-    Array.from({ length: 24 }, () => 0.5); // 默认价格
+    Array.from({ length: 24 }, () => 0.5); // 默认价格 | Default price
 
   const storageOptimization = calculateStorageOptimization(
     solarStorageParams,
@@ -1084,57 +1538,57 @@ export function calculateIntegratedOptimization(
     trafficPattern
   );
 
-  // 4. 生成优化后的24小时负荷曲线
+  // 4. 生成优化后的24小时负荷曲线 | 4. Generate optimized 24-hour load curve
   const optimizedLoadProfile: number[] = [];
   let totalSavingsKWh = 0;
 
   for (let hour = 0; hour < 24; hour++) {
-    // 基础负荷
+    // 基础负荷 | Base load
     const baseLoad = lightingBaseline.baselineLoad + hvacBaseline.baselineLoad;
 
-    // 激进程度调整
+    // 激进程度调整 | Aggressiveness adjustment
     const intensityFactor = 0.5 + aggressiveness * 0.5; // 0.5-1.0
 
-    // 光储协同：光伏优先自用，降低电网购电
+    // 光储协同：光伏优先自用，降低电网购电 | Solar-storage synergy: prioritize solar self-use, reduce grid purchase
     const solarSelfUseRatio = Math.min(
-      solarGeneration.dailyGeneration / (baseLoad * 1.2), // 假设最大负荷是基准的120%
+      solarGeneration.dailyGeneration / (baseLoad * 1.2), // 假设最大负荷是基准的120% | Assume max load is 120% of baseline
       0.8 + aggressiveness * 0.2
     );
 
     const netGridPurchase = baseLoad * (1 - solarSelfUseRatio) * intensityFactor;
 
-    // 考虑人流量调整
+    // 考虑人流量调整 | Consider traffic pattern adjustment
     let trafficFactor = 1;
     if (trafficPattern) {
       const index = hour % 24;
       const pattern = hour < 7 ? trafficPattern.weekendPattern
                     : hour < 18 ? trafficPattern.workdayPattern
                     : trafficPattern.holidayPattern;
-      trafficFactor = 1 + (pattern[index] - 0.5) * 0.2; // 流量每偏离10%影响20%
+      trafficFactor = 1 + (pattern[index] - 0.5) * 0.2; // 流量每偏离10%影响20% | Traffic deviation of 10% affects 20%
     }
 
-    // 最终优化负荷
+    // 最终优化负荷 | Final optimized load
     const optimizedLoad = netGridPurchase * trafficFactor * intensityFactor;
     optimizedLoadProfile.push(optimizedLoad);
 
-    // 计算节电量（简化计算）
+    // 计算节电量（简化计算）| Calculate energy savings (simplified calculation)
     const hourlySaving = baseLoad * (1 - optimizedLoad / baseLoad) * intensityFactor;
     totalSavingsKWh += hourlySaving;
   }
 
-  // 5. 生成建议
+  // 5. 生成建议 | 5. Generate recommendations
   if (aggressiveness > 0.8) {
-    recommendations.push('建议启用储能削峰填谷功能，利用峰谷价差最大化收益');
-    recommendations.push('考虑安装需求响应系统，实现精准负荷控制');
+    recommendations.push('建议启用储能削峰填谷功能，利用峰谷价差最大化收益'); // Suggest enabling storage peak-valley function to maximize revenue from price spread
+    recommendations.push('考虑安装需求响应系统，实现精准负荷控制'); // Consider installing demand response system for precise load control
   }
   if (solarGeneration.dailyGeneration / (lightingBaseline.baselineLoad + hvacBaseline.baselineLoad) < 0.5) {
-    recommendations.push('光伏装机容量偏小，建议扩容以提升自用率');
+    recommendations.push('光伏装机容量偏小，建议扩容以提升自用率'); // Solar capacity is small, suggest expansion to improve self-use ratio
   }
   if (buildingParams?.insulationLevel === 'poor') {
-    recommendations.push('建议加强建筑保温，降低热负荷');
+    recommendations.push('建议加强建筑保温，降低热负荷'); // Suggest improving building insulation to reduce thermal load
   }
 
-  const totalAnnualSavings = totalSavingsKWh * 365 / 1000; // 转换为MWh
+  const totalAnnualSavings = totalSavingsKWh * 365 / 1000; // 转换为MWh | Convert to MWh
 
   return { optimizedLoadProfile, totalSavings: totalAnnualSavings, recommendations };
 }
@@ -2079,10 +2533,10 @@ export class PriceDataAdapter {
   }
 
   /**
-   * 生成模拟历史数据
+   * 生成模拟历史数据 | Generate simulated historical data
    */
   private generateSimulatedHistory(days: number): Array<{ timestamp: number; price: number }> {
-    const history: Array<{ timestamp: number; price: number }>([]);
+    const history: Array<{ timestamp: number; price: number }> = [];
 
     const now = Date.now();
 
@@ -2156,79 +2610,9 @@ export class PriceDataCacheManager {
   }
 
   /**
-   * 清除所有缓存
+   * 清除所有缓存 | Clear all cached items
    */
   clearAll(): void {
     this.cache.clear();
-  }
-}
-
-export function calculateIntegratedOptimization(
-  lightingParams: LightingSystemParams,
-  hvacParams: HVACSystemParams,
-  solarStorageParams: SolarStorageSystemParams,
-  buildingParams?: BuildingParams,
-  environmentalFactors?: EnvironmentalFactors,
-  trafficPattern?: TrafficPattern,
-  aggressiveness: number = 0.5,
-  thermalEconomicConfig?: ThermalEconomicConfig
-): {
-  optimizedLoadProfile: number[];
-  totalSavings: number;
-  recommendations: string[];
-  crossSectorMetrics?: {
-    storagePrecoolDecisions: StoragePrecoolDecision[];
-    thermalCoefficients: number[];
-    lightingHVACBalances: LightingHVACBalance[];
-  };
-} {
-  const recommendations: string[] = [];
-
-  if (thermalEconomicConfig && buildingParams && environmentalFactors) {
-    const thermalOptimizer = new ThermalEconomicOptimizer(thermalEconomicConfig);
-    const dynamicCoefficients = thermalOptimizer.calculateDynamicThermalCoefficient();
-    const crossSectorMetrics = {
-      storagePrecoolDecisions: [] as StoragePrecoolDecision[],
-      thermalCoefficients: dynamicCoefficients,
-      lightingHVACBalances: [] as LightingHVACBalance[],
-    };
-
-    for (let hour = 0; hour < 24; hour++) {
-      const price = thermalEconomicConfig.priceForecast.prices[hour].price;
-      const futurePeaks = thermalOptimizer.identifyFuturePricePeaks(hour);
-      if (futurePeaks.length > 0) {
-        const storagePrecoolDecision = thermalOptimizer.decideStorageVsPrecool(
-          hour,
-          futurePeaks[0].hour,
-          calculateDigitalTwinThermalModel(buildingParams, environmentalFactors, {
-            building: { thermalInertia: buildingParams.thermalInertia || 1 },
-          })
-        );
-        crossSectorMetrics.storagePrecoolDecisions.push(storagePrecoolDecision);
-      }
-      const lightingHVACBalance = thermalOptimizer.balanceLightingAndHVAC(hour, price);
-      crossSectorMetrics.lightingHVACBalances.push(lightingHVACBalance);
-    }
-
-    if (aggressiveness > 0.8) {
-      recommendations.push('建议启用储能削峰填谷功能');
-    }
-
-    const precoolCount = crossSectorMetrics.storagePrecoolDecisions.filter(d => d.decision === 'precool').length;
-    if (precoolCount > 4) {
-      recommendations.push('建筑热容利用效率高，' + precoolCount + '小时建议使用预冷策略');
-    }
-
-    const storageCount = crossSectorMetrics.storagePrecoolDecisions.filter(d => d.decision === 'storage').length;
-    if (storageCount > 4) {
-      recommendations.push('储能策略活跃，' + storageCount + '小时建议使用电池套利');
-    }
-
-    return {
-      optimizedLoadProfile: [],
-      totalSavings: 0,
-      recommendations,
-      crossSectorMetrics,
-    };
   }
 }

@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>算法说明文档 - 双链关系</title>
+    <style>
+        :root {
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #252525;
+            --bg-tertiary: #2d2d2d;
+            --text-primary: #dcddde;
+            --text-secondary: #a8a8a8;
+            --accent: #7b6cd1;
+            --accent-hover: #9b8de1;
+            --border: #444444;
+            --link: #82b1ff;
+            --link-hover: #b3d9ff;
+            --backlink: #e57373;
+            --backlink-hover: #ff8a80;
+            --code-bg: #0d0d0d;
+            --card-bg: #363636;
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f4f6;
+            --bg-tertiary: #e5e7eb;
+            --text-primary: #1f1f1f;
+            --text-secondary: #6b6b6b;
+            --accent: #5c6bc0;
+            --accent-hover: #7d8ed0;
+            --border: #e0e0e0;
+            --link: #2563eb;
+            --link-hover: #3b82f6;
+            --backlink: #dc2626;
+            --backlink-hover: #ef4444;
+            --code-bg: #f5f5f5;
+            --card-bg: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.8;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 320px;
+            height: 100vh;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-320px);
+        }
+
+        .sidebar-header {
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 1.5em;
+            color: var(--accent);
+            margin-bottom: 5px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+
+        /* 搜索框 */
+        .search-box {
+            width: 100%;
+            padding: 12px 15px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            margin-bottom: 15px;
+            transition: border-color 0.2s;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* 导航链接 */
+        .nav-section {
+            margin-bottom: 20px;
+        }
+
+        .nav-section-title {
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 8px 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-left: 3px solid transparent;
+            border-radius: 0 6px 6px 0;
+            transition: all 0.2s;
+            font-size: 0.9em;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+            border-left-color: var(--accent);
+            padding-left: 15px;
+        }
+
+        .nav-link.active {
+            color: var(--text-primary);
+            border-left-color: var(--accent);
+            background: var(--card-bg);
+        }
+
+        /* 主内容区 */
+        .main-content {
+            margin-left: 320px;
+            padding: 40px 60px;
+            max-width: 1400px;
+            min-height: 100vh;
+            transition: margin-left 0.3s ease;
+        }
+
+        .main-content.expanded {
+            margin-left: 0;
+        }
+
+        /* 标题样式 */
+        h1 {
+            font-size: 2.8em;
+            margin-bottom: 30px;
+            color: var(--accent);
+            border-bottom: 3px solid var(--border);
+            padding-bottom: 15px;
+            position: relative;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            margin: 50px 0 25px 0;
+            color: var(--text-primary);
+            border-left: 5px solid var(--accent);
+            padding-left: 20px;
+            position: relative;
+        }
+
+        h3 {
+            font-size: 1.4em;
+            margin: 30px 0 15px 0;
+            color: var(--text-primary);
+            position: relative;
+        }
+
+        h4 {
+            font-size: 1.15em;
+            margin: 20px 0 10px 0;
+            color: var(--text-primary);
+        }
+
+        /* 双链样式 */
+        .bi-link {
+            color: var(--link);
+            background: linear-gradient(90deg, var(--link), var(--link));
+            background-size: 0% 1px;
+            background-repeat: no-repeat;
+            background-position: left bottom;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 1px 3px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .bi-link::before {
+            content: '🔗';
+            font-size: 0.7em;
+            margin-right: 4px;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+
+        .bi-link:hover {
+            color: var(--link-hover);
+            background-size: 100% 1px;
+            background: linear-gradient(180deg, var(--bg-tertiary), var(--bg-tertiary));
+        }
+
+        .bi-link:hover::before {
+            opacity: 1;
+        }
+
+        /* 标签样式 */
+        .tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 500;
+            margin: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tag-algo {
+            background: var(--accent);
+            color: white;
+        }
+
+        .tag-algo:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .tag-param {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .tag-param:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* 卡片样式 */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 20px 0;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 反向链接面板 */
+        .backlinks-panel {
+            position: fixed;
+            right: 20px;
+            top: 100px;
+            width: 280px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+            transition: all 0.3s;
+            z-index: 900;
+        }
+
+        .backlinks-panel.collapsed {
+            transform: translateX(320px);
+            opacity: 0;
+        }
+
+        .backlinks-title {
+            font-size: 1.1em;
+            color: var(--backlink);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .backlinks-title::before {
+            content: '↩️';
+            font-size: 1.2em;
+        }
+
+        .backlink-item {
+            display: block;
+            padding: 8px 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s;
+            font-size: 0.9em;
+        }
+
+        .backlink-item:hover {
+            background: var(--bg-tertiary);
+            color: var(--backlink-hover);
+            transform: translateX(-5px);
+        }
+
+        /* 关系图容器 */
+        .graph-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 30px 0;
+            overflow-x: auto;
+        }
+
+        .graph-title {
+            color: var(--accent);
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        /* 代码块 */
+        pre, code {
+            background: var(--code-bg);
+            border-radius: 6px;
+            padding: 2px 6px;
+            font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+            font-size: 0.9em;
+        }
+
+        pre {
+            padding: 15px;
+            overflow-x: auto;
+            margin: 15px 0;
+            border: 1px solid var(--border);
+        }
+
+        /* 表格 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        tr:hover td {
+            background: var(--bg-tertiary);
+        }
+
+        /* 返回顶部按钮 */
+        .back-to-top {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 50px;
+            height: 50px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(123, 108, 209, 0.4);
+            transition: all 0.2s;
+            z-index: 999;
+        }
+
+        .back-to-top:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(123, 108, 209, 0.5);
+        }
+
+        /* 节点定位指示器 */
+        .node-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        /* 分隔线 */
+        hr {
+            border: none;
+            border-top: 2px solid var(--border);
+            margin: 40px 0;
+        }
+
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-320px);
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 30px 20px;
+            }
+            .backlinks-panel {
+                width: 250px;
+                right: 10px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2em; }
+            h2 { font-size: 1.5em; }
+            h3 { font-size: 1.2em; }
+            .card { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 侧边栏导航 -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">📚 算法文档</div>
+            <div class="sidebar-subtitle">双链关系展示 | 按B切换</div>
+        </div>
+
+        <input type="text" class="search-box" id="searchInput" placeholder="搜索算法、参数...">
+
+        <div class="nav-section">
+            <div class="nav-section-title">核心算法</div>
+            <a href="#overview" class="nav-link" data-link="概述">📁 概述</a>
+            <a href="#lighting" class="nav-link" data-link="照明系统">💡 照明系统</a>
+            <a href="#hvac" class="nav-link" data-link="暖通空调">❄️ 暖通空调</a>
+            <a href="#solar-storage" class="nav-link" data-link="光储系统">☀️ 光储系统</a>
+            <a href="#integrated" class="nav-link" data-link="综合优化">🔄 综合优化</a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">高级算法</div>
+            <a href="#pmv" class="nav-link" data-link="舒适度计算">🌡️ PMV/PPD舒适度</a>
+            <a href="#battery" class="nav-link" data-link="电池衰减">🔋 电池衰减</a>
+            <a href="#v2g" class="nav-link" data-link="V2G">🚗 V2G交互</a>
+            <a href="#digital-twin" class="nav-link" data-link="数字孪生">🏢 数字孪生</a>
+            <a href="#rl" class="nav-link" data-link="强化学习">🧠 强化学习</a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">参考资料</div>
+            <a href="#data" class="nav-link" data-link="基础数据">📊 基础数据</a>
+            <a href="#examples" class="nav-link" data-link="使用示例">🔧 使用示例</a>
+        </div>
+    </nav>
+
+    <!-- 反向链接面板 -->
+    <aside class="backlinks-panel" id="backlinksPanel">
+        <div class="backlinks-title">反向链接</div>
+        <div id="backlinksList">
+            <div style="color: var(--text-secondary); font-size: 0.85em; padding: 10px;">
+                点击任意链接查看反向关系
+            </div>
+        </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content" id="mainContent">
+        <h1 id="overview">📁 概述</h1>
+
+        <div class="card">
+            <p>
+                本算法库提供完整的<span class="tag tag-algo">AI管理平台算法实现</span>，
+                涵盖<span class="bi-link" onclick="navigateTo('lighting')">照明系统</span>、
+                <span class="bi-link" onclick="navigateTo('hvac')">暖通空调</span>、
+                <span class="bi-link" onclick="navigateTo('solar-storage')">光储充系统</span>的智能优化功能。
+            </p>
+            <p style="margin-top: 15px;">
+                高级功能包括：
+                <span class="bi-link" onclick="navigateTo('pmv')">舒适度计算</span>、
+                <span class="bi-link" onclick="navigateTo('digital-twin')">数字孪生建模</span>、
+                <span class="bi-link" onclick="navigateTo('v2g')">V2G交互</span>、
+                <span class="bi-link" onclick="navigateTo('battery')">电池衰减分析</span>等。
+            </p>
+        </div>
+
+        <hr>
+
+        <h2 id="lighting">💡 照明系统算法</h2>
+
+        <div class="card">
+            <h3>[[calculateLightingBaseline]] - 照明基准计算</h3>
+            <p style="margin-top: 15px;">
+                计算基准负荷和日耗电量，考虑<span class="bi-link" onclick="navigateTo('hvac')">人流量模式</span>调整。
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="tag tag-param">area: 照明面积</span>
+                <span class="tag tag-param">totalPower: 总功率</span>
+                <span class="tag tag-param">dailyHours: 运行时间</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>[[calculateLightingSavings]] - 照明节能潜力</h3>
+            <p style="margin-top: 15px;">
+                基于LED升级、智能控制系统和按需调光计算节能潜力。
+                与<span class="bi-link" onclick="navigateTo('solar-storage')">光伏发电</span>协同可提升自用率。
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="tag tag-algo">节能率计算</span>
+                <span class="tag tag-algo">ROI分析</span>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2 id="hvac">❄️ 暖通空调系统算法</h2>
+
+        <div class="card">
+            <h3>[[calculateHVACBaseline]] - 空调基准计算</h3>
+            <p style="margin-top: 15px;">
+                计算制冷负荷和基准负荷，考虑<span class="bi-link" onclick="navigateTo('digital-twin')">建筑热导系数</span>、
+                <span class="tag tag-param">季节变化</span>、人流量。
+            </p>
+        </div>
+
+        <div class="card">
+            <h3>[[calculateHVACSavings]] - 空调节能潜力</h3>
+            <p style="margin-top: 15px;">
+                基于COP提升、新风系统节能、按需控制计算节能潜力。
+                与<span class="bi-link" onclick="navigateTo('pmv')">舒适度</span>评估联动。
+            </p>
+        </div>
+
+        <hr>
+
+        <h2 id="solar-storage">☀️ 光储系统算法</h2>
+
+        <div class="card">
+            <h3>[[calculateSolarGeneration]] - 光伏发电量计算</h3>
+            <p style="margin-top: 15px;">
+                计算<span class="tag tag-algo">日/年发电量</span>，考虑城市日照数据（20+城市）、
+                天气条件（云量、温度、太阳辐射）。
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="bi-link" onclick="navigateTo('data')">城市日照数据</span>
+                <span class="tag tag-param">环境温度</span>
+                <span class="tag tag-param">太阳辐射</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>[[calculateStorageOptimization]] - 储能充放电优化</h3>
+            <p style="margin-top: 15px;">
+                基于电价曲线分析（峰谷平价），实现谷时充电、峰时放电、平时空闲。
+                与<span class="bi-link" onclick="navigateTo('v2g')">V2G交互</span>联动。
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="tag tag-algo">峰谷套利</span>
+                <span class="tag tag-algo">最优调度</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>[[calculateBatteryDegradation]] - 电池健康评估</h3>
+            <p style="margin-top: 15px;">
+                计算当前容量、电池健康度、累计循环次数、衰减成本。
+                支持多种<span class="tag tag-param">电池类型</span>（LFP/NCM/铅酸）。
+            </p>
+        </div>
+
+        <hr>
+
+        <h2 id="integrated">🔄 综合优化算法</h2>
+
+        <div class="card">
+            <h3>[[calculateIntegratedOptimization]] - 多系统协同优化</h3>
+            <p style="margin-top: 15px;">
+                照明、<span class="bi-link" onclick="navigateTo('hvac')">空调</span>、
+                <span class="bi-link" onclick="navigateTo('solar-storage')">光储</span>协同优化。
+                支持跨板块<span class="bi-link" onclick="navigateTo('rl')">强化学习</span>策略。
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="tag tag-algo">激进度调整</span>
+                <span class="tag tag-algo">智能推荐</span>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2 id="pmv">🌡️ PMV/PPD 舒适度计算</h2>
+
+        <div class="card">
+            <h3>[[calculatePMV]] - 预测平均投票值</h3>
+            <p style="margin-top: 15px;">
+                基于Fanger方程，返回范围：-3到+3（冷=不适，+3=热）。
+                与<span class="bi-link" onclick="navigateTo('hvac')">空调系统</span>联动。
+            </p>
+        </div>
+
+        <div class="card">
+            <h3>[[calculatePPD]] - 预测不满意百分比</h3>
+            <p style="margin-top: 15px;">
+                基于PMV值计算，返回范围：0-100%（100%满意度时）。
+            </p>
+        </div>
+
+        <div class="card">
+            <h3>[[calculateComfortMetrics]] - 舒适度指标综合</h3>
+            <p style="margin-top: 15px;">
+                综合PMV、PPD、设定点温度、湿度、空气流速等指标。
+            </p>
+        </div>
+
+        <hr>
+
+        <h2 id="v2g">🚗 V2G 车辆交互优化</h2>
+
+        <div class="card">
+            <h3>[[calculateV2GOptimization]] - V2G最优调度</h3>
+            <p style="margin-top: 15px;">
+                谷时充电（谷价）、峰时放电（峰价）。
+                考虑用户优先级和<span class="bi-link" onclick="navigateTo('battery')">电池衰减成本</span>。
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="tag tag-algo">双向交互</span>
+                <span class="tag tag-algo">智能调度</span>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2 id="digital-twin">🏢 数字孪生热建模</h2>
+
+        <div class="card">
+            <h3>[[calculateDigitalTwinThermalModel]] - 建筑热状态模拟</h3>
+            <p style="margin-top: 15px;">
+                24小时建筑热状态模拟，考虑热惯性、太阳辐射、内热源。
+                与<span class="bi-link" onclick="navigateTo('pmv')">舒适度评估</span>联动。
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="tag tag-param">热惯性</span>
+                <span class="tag tag-param">热容量</span>
+                <span class="tag tag-param">响应时间</span>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2 id="rl">🧠 强化学习优化</h2>
+
+        <div class="card">
+            <h3>[[runRLOptimization]] - DQN强化学习</h3>
+            <p style="margin-top: 15px;">
+                状态空间：24小时负荷 × 电价 × 温度
+                动作空间：每小时调整 [-10%, 0%, +10%]
+                目标：最小化运行成本
+            </p>
+            <div style="margin-top: 15px;">
+                <span class="tag tag-algo">状态空间</span>
+                <span class="tag tag-algo">动作空间</span>
+                <span class="tag tag-algo">奖励函数</span>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2 id="data">📊 基础数据</h2>
+
+        <div class="card">
+            <h3>城市日照数据</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>城市</th>
+                        <th>年日照时数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>北京</td><td>1650</td></tr>
+                    <tr><td>上海</td><td>1420</td></tr>
+                    <tr><td>广州</td><td>1580</td></tr>
+                    <tr><td>深圳</td><td>1720</td></tr>
+                    <tr><td>成都</td><td>1250</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>建筑热导系数</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>建筑类型</th>
+                        <th>热导系数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>工厂</td><td>2.5 W/(m²·K)</td></tr>
+                    <tr><td>学校</td><td>2.0 W/(m²·K)</td></tr>
+                    <tr><td>办公</td><td>2.8 W/(m²·K)</td></tr>
+                    <tr><td>医院</td><td>1.5 W/(m²·K)</td></tr>
+                    <tr><td>商场</td><td>1.8 W/(m²·K)</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <hr>
+
+        <h2 id="examples">🔧 使用示例</h2>
+
+        <div class="card">
+            <h3>示例1：照明系统节能评估</h3>
+            <pre><code>const params = {
+  area: 1000,
+  totalPower: 20,
+  dailyHours: 8,
+};
+const result = calculateLightingSavings(params, oldSystem);
+console.log(`年节电量: ${result.savingsKWh.toFixed(2)} kWh`);
+</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>示例2：暖通空调系统优化</h3>
+            <pre><code>const hvacParams = {
+  area: 2000,
+  currentCOP: 2.8,
+  targetCOP: 4.5,
+  annualCoolingHours: 1200,
+};
+const result = calculateHVACSavings(hvacParams, hvacParams);
+</code></pre>
+        </div>
+
+        <footer style="margin-top: 60px; padding: 30px 0; border-top: 1px solid var(--border); color: var(--text-secondary); text-align: center;">
+            <p><strong>文档版本</strong>: v1.0 | <strong>最后更新</strong>: 2026-02-17</p>
+            <p style="margin-top: 10px;">AI平台算法库 | 双链关系展示</p>
+        </footer>
+    </main>
+
+    <!-- 返回顶部按钮 -->
+    <div class="back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'});">↑</div>
+
+    <script>
+        // 双链关系数据
+        const biLinkData = {
+            '概述': {
+                backlinks: ['照明系统', '暖通空调', '光储系统', '舒适度计算', '数字孪生', 'V2G交互', '电池衰减'],
+                links: []
+            },
+            '照明系统': {
+                backlinks: ['概述', '综合优化'],
+                links: ['人流量模式', '光伏发电']
+            },
+            '暖通空调': {
+                backlinks: ['概述', '综合优化', '舒适度计算'],
+                links: ['建筑热导系数', '舒适度']
+            },
+            '光储系统': {
+                backlinks: ['概述', '综合优化', 'V2G交互'],
+                links: ['城市日照数据', '电池衰减', 'V2G交互']
+            },
+            '综合优化': {
+                backlinks: ['概述', '强化学习'],
+                links: ['照明系统', '暖通空调', '光储系统']
+            },
+            '舒适度计算': {
+                backlinks: ['概述', '暖通空调', '数字孪生'],
+                links: ['空调系统']
+            },
+            '电池衰减': {
+                backlinks: ['光储系统', 'V2G交互'],
+                links: []
+            },
+            'V2G交互': {
+                backlinks: ['概述', '光储系统'],
+                links: ['电池衰减成本']
+            },
+            '数字孪生': {
+                backlinks: ['概述'],
+                links: ['舒适度评估', '建筑热导系数']
+            },
+            '强化学习': {
+                backlinks: ['综合优化'],
+                links: []
+            },
+            '基础数据': {
+                backlinks: ['光伏发电'],
+                links: []
+            }
+        };
+
+        // 当前激活的节点
+        let currentNode = null;
+
+        // 导航到指定节点
+        function navigateTo(nodeId) {
+            const element = document.getElementById(nodeId);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                currentNode = getReadableName(nodeId);
+                updateBacklinks(currentNode);
+                updateActiveNav(nodeId);
+            }
+        }
+
+        // 获取可读名称
+        function getReadableName(id) {
+            const map = {
+                'overview': '概述',
+                'lighting': '照明系统',
+                'hvac': '暖通空调',
+                'solar-storage': '光储系统',
+                'integrated': '综合优化',
+                'pmv': '舒适度计算',
+                'battery': '电池衰减',
+                'v2g': 'V2G交互',
+                'digital-twin': '数字孪生',
+                'rl': '强化学习',
+                'data': '基础数据',
+                'examples': '使用示例'
+            };
+            return map[id] || id;
+        }
+
+        // 更新反向链接面板
+        function updateBacklinks(nodeName) {
+            const backlinksList = document.getElementById('backlinksList');
+            const data = biLinkData[nodeName];
+
+            if (data && data.backlinks && data.backlinks.length > 0) {
+                backlinksList.innerHTML = data.backlinks.map(link =>
+                    `<a href="#${getIdFromName(link)}" class="backlink-item" onclick="handleBacklinkClick(event, '${link}')">↩️ ${link}</a>`
+                ).join('');
+            } else {
+                backlinksList.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85em; padding: 10px;">暂无反向链接</div>';
+            }
+        }
+
+        // 根据名称获取ID
+        function getIdFromName(name) {
+            const map = {
+                '概述': 'overview',
+                '照明系统': 'lighting',
+                '暖通空调': 'hvac',
+                '光储系统': 'solar-storage',
+                '综合优化': 'integrated',
+                '舒适度计算': 'pmv',
+                '电池衰减': 'battery',
+                'V2G交互': 'v2g',
+                '数字孪生': 'digital-twin',
+                '强化学习': 'rl',
+                '基础数据': 'data',
+                '使用示例': 'examples'
+            };
+            return map[name] || name;
+        }
+
+        // 更新激活的导航
+        function updateActiveNav(nodeId) {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.link === getReadableName(nodeId)) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // 处理反向链接点击
+        function handleBacklinkClick(event, linkName) {
+            event.preventDefault();
+            navigateTo(getIdFromName(linkName));
+        }
+
+        // 搜索功能
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            document.querySelectorAll('.card').forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        });
+
+        // 侧边栏切换
+        let sidebarCollapsed = false;
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'b' || e.key === 'B') {
+                sidebarCollapsed = !sidebarCollapsed;
+                document.querySelector('.sidebar').classList.toggle('collapsed', sidebarCollapsed);
+                document.querySelector('.main-content').classList.toggle('expanded', sidebarCollapsed);
+            }
+            if (e.key === 'Escape') {
+                document.querySelector('.backlinks-panel').classList.add('collapsed');
+            }
+        });
+
+        // 点击其他区域关闭反向链接
+        document.querySelector('.main-content').addEventListener('click', () => {
+            document.querySelector('.backlinks-panel').classList.add('collapsed');
+        });
+
+        // 点击链接显示反向链接
+        document.querySelectorAll('.bi-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                setTimeout(() => {
+                    document.querySelector('.backlinks-panel').classList.remove('collapsed');
+                }, 100);
+            });
+        });
+
+        // 导航链接点击
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const linkText = link.dataset.link;
+                if (linkText) {
+                    currentNode = linkText;
+                }
+            });
+        });
+
+        // 滚动时高亮当前章节
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    updateActiveNav(entry.target.id);
+                }
+            });
+        }, { threshold: 0.3 });
+
+        document.querySelectorAll('h1, h2').forEach(section => {
+            observer.observe(section);
+        });
+    </script>
+</body>
+</html>

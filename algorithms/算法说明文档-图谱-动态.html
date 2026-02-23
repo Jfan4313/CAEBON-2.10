@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>算法说明文档 - 动态图谱</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Cyberpunk 颜色系统 */
+            --primary: #1E40AF;
+            --secondary: #3B82F6;
+            --accent: #F59E0B;
+            --background: #0A0E27;
+            --background-light: #16213E;
+            --surface: #1F2937;
+            --surface-light: #374151;
+            --text-primary: #1E3A8A;
+            --text-secondary: #94A3B8;
+            --text-muted: #64748B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --info: #3B82F6;
+            --border: #374151;
+            --border-light: #4B5563;
+
+            /* 霓虹颜色 */
+            --neon-blue: #00D4FF;
+            --neon-purple: #A855F7;
+            --neon-green: #00FF9D;
+            --neon-pink: #FF00FF;
+            --neon-orange: #FF6B00;
+        }
+
+        /* 重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Fira Code', 'Fira Sans', monospace;
+            background: var(--background);
+            color: var(--text-primary);
+            overflow: hidden;
+            line-height: 1.6;
+        }
+
+        /* 扫描线效果 */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.03;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 212, 255, 0.1) 2px
+            );
+        }
+
+        .scanlines::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0) 0%,
+                rgba(0, 212, 255, 0.1) 100%
+            );
+            animation: scan 8s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 320px;
+            height: 100vh;
+            background: var(--surface);
+            border-right: 2px solid var(--border);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 2px solid var(--border-light);
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+        }
+
+        .sidebar-title {
+            font-family: 'Fira Code', monospace;
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-purple);
+            margin-bottom: 4px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .sidebar-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-content::-webkit-scrollbar-track {
+            background: var(--background);
+        }
+
+        .sidebar-content::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        .node-info-panel {
+            background: var(--background-light);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 16px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .node-info-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-blue), transparent, var(--neon-purple), transparent);
+            animation: borderGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes borderGlow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .node-info-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .node-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        .node-info-connections {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+
+        .connection-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            margin: 6px 0;
+            background: var(--surface);
+            border-left: 3px solid var(--primary);
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .connection-item:hover {
+            background: var(--surface-light);
+            border-left-color: var(--neon-blue);
+            transform: translateX(4px);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+        }
+
+        .connection-type {
+            font-size: 0.7em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-right: 10px;
+        }
+
+        .type-forward {
+            background: linear-gradient(135deg, rgba(30, 64, 175, 0.3), rgba(59, 130, 246, 0.3));
+            color: var(--neon-blue);
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+        }
+
+        .type-backward {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(245, 158, 11, 0.3));
+            color: var(--neon-pink);
+            box-shadow: 0 0 8px rgba(255, 0, 255, 0.3);
+        }
+
+        .sidebar-footer {
+            padding: 20px;
+            border-top: 2px solid var(--border-light);
+            font-size: 0.8em;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        /* 图谱容器 */
+        .graph-container {
+            position: fixed;
+            left: 320px;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--background);
+            cursor: grab;
+        }
+
+        .graph-container:active {
+            cursor: grabbing;
+        }
+
+        .graph-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 800px;
+            height: 800px;
+            transform: translate(-50%, -50%);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            opacity: 0.1;
+            pointer-events: none;
+        }
+
+        #graphCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 控制面板 */
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            gap: 12px;
+            z-index: 50;
+        }
+
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            color: var(--text-primary);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .control-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 10px;
+            border: 2px solid var(--neon-blue);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .control-btn:hover::before {
+            opacity: 1;
+        }
+
+        .control-btn:hover {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--neon-blue);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        .control-btn:active {
+            transform: translateY(0) scale(0.95);
+        }
+
+        /* 图例 */
+        .legend {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            background: var(--surface);
+            border: 2px solid var(--border-light);
+            border-radius: 12px;
+            padding: 20px;
+            z-index: 50;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .legend::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple), var(--neon-green), var(--neon-pink));
+            border-radius: 12px 12px 0 0;
+        }
+
+        .legend-title {
+            font-family: 'Fira Code', monospace;
+            font-size: 1em;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            gap: 12px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .legend-item:hover {
+            transform: translateX(-4px);
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid;
+            transition: all 0.3s;
+        }
+
+        .legend-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* 搜索框 */
+        .search-panel {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            margin-top: 280px;
+            z-index: 50;
+        }
+
+        .search-input {
+            padding: 12px 16px;
+            background: var(--background-light);
+            border: 2px solid var(--border-light);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            width: 220px;
+            font-family: 'Fira Code', monospace;
+            transition: all 0.3s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 0 4px var(--neon-blue), 0 0 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* 提示框 */
+        .tooltip {
+            position: fixed;
+            background: var(--surface);
+            border: 2px solid var(--neon-blue);
+            border-radius: 12px;
+            padding: 16px 20px;
+            pointer-events: none;
+            z-index: 200;
+            max-width: 320px;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.5), 0 10px 20px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip::before {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 20px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid var(--neon-blue);
+        }
+
+        .tooltip-title {
+            font-family: 'Fira Code', monospace;
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            text-shadow: 0 0 8px var(--neon-blue);
+        }
+
+        .tooltip-type {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .tooltip-desc {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .tooltip-connections {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .tooltip-conn {
+            font-size: 0.85em;
+            padding: 4px 0;
+            color: var(--text-secondary);
+        }
+
+        /* 加载动画 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--background);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+
+        .loading-text {
+            font-family: 'Fira Code', monospace;
+            font-size: 1.2em;
+            color: var(--neon-blue);
+            animation: glitch 1s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 90%, 100% { transform: translate(0); }
+            92% { transform: translate(-2px, 0); }
+            94% { transform: translate(2px, 0); }
+            96% { transform: translate(-2px, 2px); }
+            98% { transform: translate(2px, -2px); }
+        }
+
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .graph-container {
+                left: 0;
+            }
+            .legend, .search-panel {
+                display: none;
+            }
+            .controls {
+                bottom: 20px;
+                right: 20px;
+            }
+        }
+
+        /* 减少动画偏好 */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            .loading-text {
+                animation: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 加载界面 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-text">INITIALIZING GRAPH SYSTEM...</div>
+    </div>
+
+    <!-- 扫描线效果 -->
+    <div class="scanlines"></div>
+
+    <!-- 粒子背景 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">GRAPH_SYSTEM</div>
+            <div class="sidebar-subtitle">Interactive Visualization v2.0</div>
+        </div>
+
+        <div class="sidebar-content">
+            <div class="node-info-panel" id="nodeInfo" style="display: none;">
+                <div class="node-info-title">
+                    <span class="node-indicator"></span>
+                    <span id="selectedNodeName">SELECT_NODE</span>
+                </div>
+                <div class="node-info-connections" id="nodeConnections">
+                    >_CLICK_A_NODE_TO_VIEW_DETAILS
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <p style="margin-bottom: 12px;">
+                <span style="color: var(--neon-blue);">■</span> DRAG CANVAS TO PAN
+            </p>
+            <p style="margin-bottom: 12px;">
+                <span style="color: var(--neon-green);">▲</span> SCROLL TO ZOOM
+            </p>
+            <p>
+                <span style="color: var(--neon-purple);">⬡</span> DRAG NODES TO REPOSITION
+            </p>
+        </div>
+    </aside>
+
+    <!-- 图谱容器 -->
+    <div class="graph-container" id="graphContainer">
+        <canvas id="graphCanvas"></canvas>
+    </div>
+
+    <!-- 控制按钮 -->
+    <div class="controls">
+        <button class="control-btn" onclick="resetView()" title="重置视图" aria-label="Reset view">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 0 1 9 9 0 0 1-9-9 0 0 1 9 9 0 0 1 0-9 0 0 1-9 9 0 0 1-9-9-0-1.5"/>
+            </svg>
+        </button>
+        <button class="control-btn" onclick="togglePhysics()" id="physicsBtn" title="切换物理模拟" aria-label="Toggle physics">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1.5-5.5L13 2zM13 22l9-12H4l1.5 5.5L13 22z"/>
+            </svg>
+        </button>
+        <button class="control-btn" onclick="fitToScreen()" title="适配屏幕" aria-label="Fit to screen">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 3h6v6h-6V3zM9 9H3v6h6V9zM9 15H3v6h6v-6zM15 15h6v6h-6v-6z"/>
+            </svg>
+        </button>
+        <button class="control-btn" onclick="toggleLayout()" id="layoutBtn" title="切换布局" aria-label="Toggle layout">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a10 10 0 1 0 0 1 10 10 0 0 1-1.4-1.4-1.4"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 图例 -->
+    <div class="legend">
+        <div class="legend-title">NODE_TYPES</div>
+        <div class="legend-item" onclick="filterNodes('algo')">
+            <div class="legend-color" style="background: var(--primary); border-color: var(--neon-blue);"></div>
+            <span class="legend-label">ALGORITHM_FUNCTIONS</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('param')">
+            <div class="legend-color" style="background: var(--secondary); border-color: var(--neon-green);"></div>
+            <span class="legend-label">PARAMETER_CONFIG</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('data')">
+            <div class="legend-color" style="background: var(--danger); border-color: var(--neon-pink);"></div>
+            <span class="legend-label">BASE_DATA</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('core')">
+            <div class="legend-color" style="background: var(--accent); border-color: var(--neon-orange);"></div>
+            <span class="legend-label">CORE_ALGORITHM</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('advanced')">
+            <div class="legend-color" style="background: #8B5CF6; border-color: #A855F7;"></div>
+            <span class="legend-label">ADVANCED_FEATURES</span>
+        </div>
+        <div class="legend-item" onclick="filterNodes('all')">
+            <div class="legend-color" style="background: var(--text-secondary); border-color: var(--text-muted);"></div>
+            <span class="legend-label">SHOW_ALL</span>
+        </div>
+    </div>
+
+    <!-- 搜索框 -->
+    <div class="search-panel">
+        <input type="text" class="search-input" id="searchInput" placeholder="SEARCH_NODES..." aria-label="Search nodes">
+    </div>
+
+    <!-- 提示框 -->
+    <div class="tooltip" id="tooltip">
+        <div class="tooltip-title" id="tooltipTitle"></div>
+        <div class="tooltip-type" id="tooltipType"></div>
+        <div class="tooltip-desc" id="tooltipDesc"></div>
+        <div class="tooltip-connections" id="tooltipConnections"></div>
+    </div>
+
+    <script>
+        // 节点数据
+        const nodes = [
+            // 核心节点
+            { id: 'overview', label: '概述', type: 'core', x: 0, y: 0, connections: ['lighting', 'hvac', 'solar', 'integrated', 'pmv', 'v2g', 'battery', 'digital-twin'], description: '算法库整体介绍' },
+            { id: 'integrated', label: '综合优化', type: 'algo', x: 0, y: 0, connections: ['lighting', 'hvac', 'solar', 'rl'], description: '多系统协同优化' },
+
+            // 照明系统
+            { id: 'lighting', label: '照明系统', type: 'algo', x: 0, y: 0, connections: ['baseline', 'savings'], description: '照明基准和节能计算' },
+            { id: 'baseline', label: '基准计算', type: 'algo', x: 0, y: 0, connections: [], description: 'calculateLightingBaseline' },
+            { id: 'savings', label: '节能潜力', type: 'algo', x: 0, y: 0, connections: ['led', 'smart'], description: 'calculateLightingSavings' },
+            { id: 'led', label: 'LED升级', type: 'param', x: 0, y: 0, connections: [], description: '从白炽灯到LED' },
+            { id: 'smart', label: '智能控制', type: 'param', x: 0, y: 0, connections: ['light-sensor'], description: '光感+调光系统' },
+            { id: 'light-sensor', label: '光照传感器', type: 'param', x: 0, y: 0, connections: [], description: '传感器安装密度' },
+
+            // 暖通空调
+            { id: 'hvac', label: '暖通空调', type: 'algo', x: 0, y: 0, connections: ['hvac-baseline', 'hvac-savings', 'thermal-coef'], description: '空调基准和节能计算' },
+            { id: 'hvac-baseline', label: '空调基准', type: 'algo', x: 0, y: 0, connections: [], description: 'calculateHVACBaseline' },
+            { id: 'hvac-savings', label: '空调节能', type: 'algo', x: 0, y: 0, connections: ['cop', 'fresh-air'], description: 'calculateHVACSavings' },
+            { id: 'cop', label: 'COP提升', type: 'param', x: 0, y: 0, connections: [], description: '能效系数提升' },
+            { id: 'fresh-air', label: '新风系统', type: 'param', x: 0, y: 0, connections: [], description: '新风系统效率' },
+            { id: 'thermal-coef', label: '热导系数', type: 'data', x: 0, y: 0, connections: [], description: '建筑热导系数常量' },
+
+            // 光储系统
+            { id: 'solar', label: '光储系统', type: 'algo', x: 0, y: 0, connections: ['pv', 'storage-opt', 'battery-degrad'], description: '光伏和储能优化' },
+            { id: 'pv', label: '光伏发电', type: 'algo', x: 0, y: 0, connections: ['sunshine', 'weather'], description: 'calculateSolarGeneration' },
+            { id: 'storage-opt', label: '储能优化', type: 'algo', x: 0, y: 0, connections: ['price-curve', 'arbitrage'], description: 'calculateStorageOptimization' },
+            { id: 'sunshine', label: '日照数据', type: 'data', x: 0, y: 0, connections: ['cities'], description: '城市年日照时数' },
+            { id: 'weather', label: '天气因素', type: 'param', x: 0, y: 0, connections: [], description: '云量、温度、辐射' },
+            { id: 'cities', label: '城市数据', type: 'data', x: 0, y: 0, connections: [], description: '20+城市日照数据' },
+            { id: 'price-curve', label: '电价曲线', type: 'param', x: 0, y: 0, connections: [], description: '峰谷平电价' },
+            { id: 'arbitrage', label: '峰谷套利', type: 'param', x: 0, y: 0, connections: [], description: '谷充峰放策略' },
+            { id: 'battery-degrad', label: '电池衰减', type: 'algo', x: 0, y: 0, connections: ['battery-type', 'cycle-count'], description: 'calculateBatteryDegradation' },
+            { id: 'battery-type', label: '电池类型', type: 'param', x: 0, y: 0, connections: [], description: 'LFP/NCM/铅酸' },
+            { id: 'cycle-count', label: '循环次数', type: 'param', x: 0, y: 0, connections: [], description: '累计充放电循环' },
+
+            // 舒适度计算
+            { id: 'pmv', label: '舒适度计算', type: 'advanced', x: 0, y: 0, connections: ['pmv-fn', 'ppd-fn', 'comfort-metrics'], description: 'PMV/PPD舒适度评估' },
+            { id: 'pmv-fn', label: 'PMV函数', type: 'algo', x: 0, y: 0, connections: ['fanger'], description: '预测平均投票值' },
+            { id: 'ppd-fn', label: 'PPD函数', type: 'algo', x: 0, y: 0, connections: ['fanger'], description: '预测不满意百分比' },
+            { id: 'comfort-metrics', label: '综合指标', type: 'algo', x: 0, y: 0, connections: [], description: '舒适度指标综合' },
+            { id: 'fanger', label: 'Fanger方程', type: 'data', x: 0, y: 0, connections: [], description: '热舒适度计算模型' },
+
+            // V2G
+            { id: 'v2g', label: 'V2G交互', type: 'advanced', x: 0, y: 0, connections: ['v2g-opt', 'ev-device'], description: '车辆到电网交互优化' },
+            { id: 'v2g-opt', label: 'V2G调度', type: 'algo', x: 0, y: 0, connections: ['soc', 'priority'], description: 'calculateV2GOptimization' },
+            { id: 'ev-device', label: 'EV设备', type: 'param', x: 0, y: 0, connections: [], description: '容量、功率、SOC' },
+            { id: 'soc', label: 'SOC状态', type: 'param', x: 0, y: 0, connections: [], description: '电池荷电状态' },
+            { id: 'priority', label: '用户优先级', type: 'param', x: 0, y: 0, connections: [], description: 'low/medium/high' },
+
+            // 数字孪生
+            { id: 'digital-twin', label: '数字孪生', type: 'advanced', x: 0, y: 0, connections: ['thermal-model', 'hvac-response'], description: '建筑热状态模拟' },
+            { id: 'thermal-model', label: '热模型', type: 'param', x: 0, y: 0, connections: ['inertia', 'capacity'], description: '建筑热参数' },
+            { id: 'inertia', label: '热惯性', type: 'param', x: 0, y: 0, connections: [], description: '小时单位' },
+            { id: 'capacity', label: '热容量', type: 'param', x: 0, y: 0, connections: [], description: 'kJ/K单位' },
+            { id: 'hvac-response', label: 'HVAC响应', type: 'param', x: 0, y: 0, connections: [], description: '响应时间和死区' },
+
+            // 强化学习
+            { id: 'rl', label: '强化学习', type: 'advanced', x: 0, y: 0, connections: ['dqn', 'state-space', 'action-space'], description: 'DQN优化策略' },
+            { id: 'dqn', label: 'DQN算法', type: 'algo', x: 0, y: 0, connections: ['q-learning', 'neural-net'], description: '深度Q网络' },
+            { id: 'state-space', label: '状态空间', type: 'param', x: 0, y: 0, connections: [], description: '负荷×电价×温度' },
+            { id: 'action-space', label: '动作空间', type: 'param', x: 0, y: 0, connections: [], description: '[-10%, 0%, +10%]' },
+            { id: 'q-learning', label: 'Q-Learning', type: 'data', x: 0, y: 0, connections: [], description: '强化学习基础算法' },
+            { id: 'neural-net', label: '神经网络', type: 'data', x: 0, y: 0, connections: [], description: '深度学习网络' },
+
+            // 电池（独立节点，与V2G共享）
+            { id: 'battery', label: '电池衰减', type: 'algo', x: 0, y: 0, connections: ['degrad-rate', 'health-score'], description: '电池健康状态评估' },
+            { id: 'degrad-rate', label: '衰减率', type: 'param', x: 0, y: 0, connections: [], description: '%/1000次循环' },
+            { id: 'health-score', label: '健康度', type: 'param', x: 0, y: 0, connections: [], description: '0-100%范围' },
+        ];
+
+        // 粒子系统
+        class ParticleSystem {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.maxParticles = 150;
+                this.init();
+            }
+
+            init() {
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                this.animate();
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            createParticle() {
+                return {
+                    x: Math.random() * this.canvas.width,
+                    y: Math.random() * this.canvas.height,
+                    size: Math.random() * 2 + 0.5,
+                    speedX: (Math.random() - 0.5) * 0.5,
+                    speedY: (Math.random() - 0.5) * 0.5,
+                    opacity: Math.random() * 0.5 + 0.2,
+                    color: ['#00D4FF', '#A855F7', '#00FF9D', '#FF00FF', '#F59E0B'][Math.floor(Math.random() * 5)]
+                };
+            }
+
+            animate() {
+                if (this.particles.length < this.maxParticles) {
+                    this.particles.push(this.createParticle());
+                }
+
+                this.particles.forEach((p, index) => {
+                    p.x += p.speedX;
+                    p.y += p.speedY;
+                    p.opacity -= 0.001;
+
+                    if (p.x < 0 || p.x > this.canvas.width || p.y < 0 || p.y > this.canvas.height || p.opacity <= 0) {
+                        this.particles.splice(index, 1);
+                    }
+                });
+
+                this.draw();
+                requestAnimationFrame(() => this.animate());
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.particles.forEach(p => {
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.globalAlpha = p.opacity;
+                    this.ctx.fill();
+                });
+
+                this.ctx.globalAlpha = 1;
+            }
+        }
+
+        // 获取节点颜色
+        function getNodeColor(type) {
+            const colors = {
+                'algo': '#1E40AF',
+                'param': '#3B82F6',
+                'data': '#EF4444',
+                'core': '#F59E0B',
+                'advanced': '#8B5CF6'
+            };
+            return colors[type] || colors['algo'];
+        }
+
+        // 获取霓虹效果颜色
+        function getNeonColor(type) {
+            const colors = {
+                'algo': '#00D4FF',
+                'param': '#00FF9D',
+                'data': '#FF00FF',
+                'core': '#FF6B00',
+                'advanced': '#A855F7'
+            };
+            return colors[type] || colors['algo'];
+        }
+
+        // Canvas设置
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let draggingNode = null;
+        let draggingCanvas = false;
+        let lastMouseX, lastMouseY;
+        let physicsEnabled = true;
+        let currentLayout = 'force';
+        let currentFilter = 'all';
+
+        // 初始化节点位置（圆形布局）
+        function initPositions() {
+            const centerX = 0;
+            const centerY = 0;
+            const radius = Math.min(canvas.width, canvas.height) * 0.35;
+
+            nodes.forEach((node, i) => {
+                const angle = (2 * Math.PI * i) / nodes.length;
+                node.x = centerX + radius * Math.cos(angle);
+                node.y = centerY + radius * Math.sin(angle);
+                node.vx = 0;
+                node.vy = 0;
+                node.targetX = node.x;
+                node.targetY = node.y;
+            });
+
+            // 将概述放在中心
+            const overview = nodes.find(n => n.id === 'overview');
+            if (overview) {
+                overview.x = centerX;
+                overview.y = centerY;
+            }
+        }
+
+        // 物理模拟
+        function simulatePhysics() {
+            const repulsionStrength = 50000;
+            const attractionStrength = 0.01;
+            const damping = 0.85;
+            const minDist = 120;
+
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                // 斥力（节点之间）
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const other = nodes[j];
+                    if (currentFilter !== 'all' && other.type !== currentFilter) continue;
+
+                    const dx = node.x - other.x;
+                    const dy = node.y - other.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    if (dist < minDist) {
+                        const force = repulsionStrength / (dist * dist);
+                        const fx = force * dx / dist;
+                        const fy = force * dy / dist;
+
+                        node.vx += fx;
+                        node.vy += fy;
+                        other.vx -= fx;
+                        other.vy -= fy;
+                    }
+                }
+
+                // 引力（连接的节点之间）
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode && (currentFilter === 'all' || connNode.type === currentFilter)) {
+                        const dx = connNode.x - node.x;
+                        const dy = connNode.y - node.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        const fx = dx * attractionStrength;
+                        const fy = dy * attractionStrength;
+
+                        node.vx += fx;
+                        node.vy += fy;
+                        connNode.vx -= fx;
+                        connNode.vy -= fy;
+                    }
+                });
+
+                // 中心引力
+                node.vx -= node.x * 0.001;
+                node.vy -= node.y * 0.001;
+
+                // 阻尼
+                node.vx *= damping;
+                node.vy *= damping;
+
+                // 更新位置
+                if (node.id !== 'overview') {
+                    node.x += node.vx;
+                    node.y += node.vy;
+                }
+            }
+        }
+
+        // 绘制图谱
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(canvas.width / 2 + offsetX, canvas.height / 2 + offsetY);
+            ctx.scale(scale, scale);
+
+            // 绘制连接线
+            nodes.forEach(node => {
+                if (currentFilter !== 'all' && node.type !== currentFilter) return;
+
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode && (currentFilter === 'all' || connNode.type === currentFilter)) {
+                        const gradient = ctx.createLinearGradient(node.x, node.y, connNode.x, connNode.y);
+                        gradient.addColorStop(0, getNodeColor(node.type) + '40');
+                        gradient.addColorStop(1, getNodeColor(connNode.type) + '40');
+
+                        ctx.beginPath();
+                        ctx.moveTo(node.x, node.y);
+                        ctx.lineTo(connNode.x, connNode.y);
+                        ctx.strokeStyle = gradient;
+                        ctx.lineWidth = 2 / scale;
+                        ctx.stroke();
+
+                        // 霓虹发光效果
+                        ctx.beginPath();
+                        ctx.moveTo(node.x, node.y);
+                        ctx.lineTo(connNode.x, connNode.y);
+                        ctx.strokeStyle = getNeonColor(node.type);
+                        ctx.lineWidth = 0.5 / scale;
+                        ctx.globalAlpha = 0.5;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1;
+
+                        // 绘制箭头
+                        const angle = Math.atan2(connNode.y - node.y, connNode.x - node.x);
+                        const arrowLength = 12;
+                        ctx.beginPath();
+                        ctx.moveTo(connNode.x, connNode.y);
+                        ctx.lineTo(
+                            connNode.x - arrowLength * Math.cos(angle - Math.PI / 6),
+                            connNode.y - arrowLength * Math.sin(angle - Math.PI / 6)
+                        );
+                        ctx.lineTo(
+                            connNode.x - arrowLength * Math.cos(angle + Math.PI / 6),
+                            connNode.y - arrowLength * Math.sin(angle + Math.PI / 6)
+                        );
+                        ctx.fillStyle = getNodeColor(connNode.type);
+                        ctx.fill();
+                    }
+                });
+            });
+
+            // 绘制节点
+            nodes.forEach(node => {
+                if (currentFilter !== 'all' && node.type !== currentFilter) return;
+
+                const color = getNodeColor(node.type);
+                const neonColor = getNeonColor(node.type);
+                const baseRadius = node.id === 'overview' ? 40 : 28;
+                const isFiltered = currentFilter !== 'all' && node.type !== currentFilter;
+
+                // 节点发光效果
+                ctx.shadowColor = neonColor;
+                ctx.shadowBlur = isFiltered ? 5 : 20;
+
+                // 绘制节点背景
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, baseRadius, 0, Math.PI * 2);
+                ctx.fillStyle = isFiltered ? color + '40' : color;
+                ctx.fill();
+
+                ctx.shadowBlur = isFiltered ? 0 : 8;
+
+                // 绘制节点边框（霓虹效果）
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, baseRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = isFiltered ? color : neonColor;
+                ctx.lineWidth = isFiltered ? 1 : 2;
+                ctx.stroke();
+
+                // 绘制节点标签
+                ctx.fillStyle = '#fff';
+                ctx.font = `${node.id === 'overview' ? 'bold 13' : '12'}px 'Fira Code', monospace`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                const maxWidth = baseRadius * 1.5;
+                let label = node.label;
+                if (ctx.measureText(label).width > maxWidth) {
+                    while (ctx.measureText(label + '...').width > maxWidth && label.length > 2) {
+                        label = label.slice(0, -1);
+                    }
+                    label += '...';
+                }
+                ctx.fillText(label, node.x, node.y);
+            });
+
+            ctx.restore();
+        }
+
+        // 动画循环
+        function animate() {
+            if (physicsEnabled) {
+                simulatePhysics();
+            }
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        // 调整画布大小
+        function resizeCanvas() {
+            const container = document.getElementById('graphContainer');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            initPositions();
+        }
+
+        // 鼠标事件处理
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left - canvas.width / 2 - offsetX) / scale,
+                y: (e.clientY - rect.top - canvas.height / 2 - offsetY) / scale
+            };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(e);
+            let clickedNode = null;
+
+            for (const node of nodes) {
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                const dx = pos.x - node.x;
+                const dy = pos.y - node.y;
+                const radius = node.id === 'overview' ? 40 : 28;
+                if (Math.sqrt(dx * dx + dy * dy) < radius) {
+                    clickedNode = node;
+                    break;
+                }
+            }
+
+            if (clickedNode) {
+                draggingNode = clickedNode;
+                showNodeInfo(clickedNode);
+            } else {
+                draggingCanvas = true;
+            }
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const pos = getMousePos(e);
+
+            // 更新提示框
+            let hoveredNode = null;
+            for (const node of nodes) {
+                if (currentFilter !== 'all' && node.type !== currentFilter) continue;
+
+                const dx = pos.x - node.x;
+                const dy = pos.y - node.y;
+                const radius = node.id === 'overview' ? 40 : 28;
+                if (Math.sqrt(dx * dx + dy * dy) < radius) {
+                    hoveredNode = node;
+                    canvas.style.cursor = 'pointer';
+                    break;
+                }
+            }
+
+            if (hoveredNode) {
+                showTooltip(e.clientX, e.clientY, hoveredNode);
+            } else {
+                hideTooltip();
+                canvas.style.cursor = draggingCanvas ? 'grabbing' : (draggingNode ? 'grabbing' : 'grab');
+            }
+
+            if (draggingNode) {
+                draggingNode.x = pos.x;
+                draggingNode.y = pos.y;
+                draggingNode.vx = 0;
+                draggingNode.vy = 0;
+            } else if (draggingCanvas) {
+                offsetX += e.clientX - lastMouseX;
+                offsetY += e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            draggingNode = null;
+            draggingCanvas = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            draggingNode = null;
+            draggingCanvas = false;
+            hideTooltip();
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            scale *= zoomFactor;
+            scale = Math.max(0.2, Math.min(3, scale));
+        });
+
+        // 显示节点信息
+        function showNodeInfo(node) {
+            const infoPanel = document.getElementById('nodeInfo');
+            const nodeName = document.getElementById('selectedNodeName');
+            const connections = document.getElementById('nodeConnections');
+
+            infoPanel.style.display = 'block';
+            nodeName.textContent = node.label;
+
+            const typeLabels = {
+                'algo': { text: '算法功能', class: 'type-forward' },
+                'param': { text: '参数配置', class: 'type-forward' },
+                'data': { text: '基础数据', class: 'type-backward' },
+                'core': { text: '核心算法', class: 'type-forward' },
+                'advanced': { text: '高级功能', class: 'type-backward' }
+            };
+
+            let connectionsHtml = `
+                <div style="margin-bottom: 12px;">
+                    <span class="connection-type ${typeLabels[node.type].class}">${typeLabels[node.type].text}</span>
+                </div>
+                <div style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">${node.description}</div>
+            `;
+
+            if (node.connections && node.connections.length > 0) {
+                connectionsHtml += '<div style="margin-top: 12px; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">连接到:</div>';
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode) {
+                        connectionsHtml += `
+                            <div class="connection-item">
+                                <span class="connection-type type-forward">→</span>
+                                <span>${connNode.label}</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            if (node.connections && node.connections.length === 0) {
+                connectionsHtml += '<div style="margin-top: 12px; color: var(--text-muted); font-size: 0.85em;">[无连接 - 叶子节点]</div>';
+            }
+
+            connections.innerHTML = connectionsHtml;
+        }
+
+        // 显示提示框
+        function showTooltip(x, y, node) {
+            const tooltip = document.getElementById('tooltip');
+            const title = document.getElementById('tooltipTitle');
+            const type = document.getElementById('tooltipType');
+            const desc = document.getElementById('tooltipDesc');
+            const conns = document.getElementById('tooltipConnections');
+
+            const typeLabels = {
+                'algo': { text: '算法功能', color: 'var(--primary)', class: 'type-forward' },
+                'param': { text: '参数配置', color: 'var(--secondary)', class: 'type-forward' },
+                'data': { text: '基础数据', color: 'var(--danger)', class: 'type-backward' },
+                'core': { text: '核心算法', color: 'var(--accent)', class: 'type-forward' },
+                'advanced': { text: '高级功能', color: '#8B5CF6', class: 'type-backward' }
+            };
+
+            title.textContent = node.label;
+            type.textContent = typeLabels[node.type].text;
+            type.className = 'tooltip-type ' + typeLabels[node.type].class;
+            type.style.background = typeLabels[node.type].color;
+            desc.textContent = node.description;
+
+            if (node.connections && node.connections.length > 0) {
+                const connNames = node.connections.slice(0, 5).map(id => {
+                    const n = nodes.find(node => node.id === id);
+                    return n ? n.label : id;
+                }).join(', ');
+                conns.innerHTML = `<div class="tooltip-conn">连接: ${connNames}${node.connections.length > 5 ? '...' : ''}</div>`;
+            } else {
+                conns.innerHTML = '';
+            }
+
+            tooltip.style.left = (x + 20) + 'px';
+            tooltip.style.top = (y + 20) + 'px';
+            tooltip.classList.add('visible');
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').classList.remove('visible');
+        }
+
+        // 控制函数
+        function resetView() {
+            scale = 1;
+            offsetX = 0;
+            offsetY = 0;
+            initPositions();
+        }
+
+        function togglePhysics() {
+            physicsEnabled = !physicsEnabled;
+            document.getElementById('physicsBtn').style.background = physicsEnabled ? 'var(--primary)' : 'var(--surface)';
+            document.getElementById('physicsBtn').style.color = physicsEnabled ? '#fff' : 'var(--text-primary)';
+        }
+
+        function fitToScreen() {
+            const margin = 150;
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+            nodes.forEach(node => {
+                if (currentFilter === 'all' || node.type === currentFilter) {
+                    minX = Math.min(minX, node.x);
+                    maxX = Math.max(maxX, node.x);
+                    minY = Math.min(minY, node.y);
+                    maxY = Math.max(maxY, node.y);
+                }
+            });
+
+            const width = maxX - minX + margin * 2;
+            const height = maxY - minY + margin * 2;
+
+            scale = Math.min(canvas.width / width, canvas.height / height);
+            scale = Math.min(scale, 1.5);
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            offsetX = -centerX;
+            offsetY = -centerY;
+        }
+
+        function toggleLayout() {
+            currentLayout = currentLayout === 'force' ? 'circular' : 'force';
+            if (currentLayout === 'circular') {
+                initCircularLayout();
+            }
+        }
+
+        function initCircularLayout() {
+            const centerX = 0;
+            const centerY = 0;
+            const radius = Math.min(canvas.width, canvas.height) * 0.35;
+
+            nodes.forEach((node, i) => {
+                const angle = (2 * Math.PI * i) / nodes.length;
+                node.x = centerX + radius * Math.cos(angle);
+                node.y = centerY + radius * Math.sin(angle);
+                node.vx = 0;
+                node.vy = 0;
+            });
+
+            const overview = nodes.find(n => n.id === 'overview');
+            if (overview) {
+                overview.x = centerX;
+                overview.y = centerY;
+            }
+        }
+
+        // 节点过滤
+        function filterNodes(type) {
+            currentFilter = type === 'all' ? 'all' : type;
+            // 更新图例高亮
+            document.querySelectorAll('.legend-item').forEach(item => {
+                item.style.opacity = '1';
+            });
+        }
+
+        // 搜索功能
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+
+            nodes.forEach(node => {
+                const match = node.label.toLowerCase().includes(query) ||
+                             node.description.toLowerCase().includes(query);
+                node.highlighted = match;
+            });
+        });
+
+        // 初始化
+        window.addEventListener('resize', resizeCanvas);
+
+        // 启动粒子系统
+        setTimeout(() => {
+            const particlesCanvas = document.getElementById('particlesCanvas');
+            new ParticleSystem(particlesCanvas);
+
+            resizeCanvas();
+            animate();
+
+            // 隐藏加载界面
+            setTimeout(() => {
+                document.getElementById('loadingOverlay').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                }, 300);
+            }, 800);
+        }, 100);
+
+        // 默认关闭物理模拟
+        setTimeout(() => {
+            physicsEnabled = false;
+            document.getElementById('physicsBtn').style.background = 'var(--surface)';
+            document.getElementById('physicsBtn').style.color = 'var(--text-primary)';
+        }, 1200);
+    </script>
+</body>
+</html>

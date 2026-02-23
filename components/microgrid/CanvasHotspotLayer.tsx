@@ -1,22 +1,22 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { DeviceImageConfig } from '../../types';
 
 interface CanvasHotspotLayerProps {
     configs: DeviceImageConfig[];
     onDeviceClick?: (deviceId: string) => void;
-    children: React.ReactNode;  // 实际显示的图片（用于点击时切换透明度）
+    children: React.ReactNode;
     width?: number;
     height?: number;
 }
 
 /**
- * 基于像素的 Canvas 热区层
+ * 基于像素的 Canvas 热区层（性能优化版）
  *
- * 核心原理：
- * 1. 在内存 Canvas 中绘制每一层图片
- * 2. 通过 getImageData 获取鼠标位置的像素 Alpha 值
- * 3. 只有当 Alpha > 阈值时才认为鼠标"指在"该组件上
- * 4. 使用透明度控制显示/隐藏，而不是 CSS hover
+ * 性能优化策略：
+ * 1. 预计算 Alpha 映射：图片加载时一次性计算所有像素的 Alpha 值，存储为 Uint8Array
+ * 2. 使用 requestAnimationFrame 节流：避免每帧都进行昂贵操作
+ * 3. 缓存排序后的配置：避免每次鼠标移动都重新排序
+ * 4. 鼠标移动防抖：只在移动超过阈值时才重新检测
  */
 const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
     configs,
@@ -29,14 +29,38 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
     const offscreenCanvasRef = useRef<HTMLCanvasElement>(null);
     const [activeDevice, setActiveDevice] = useState<string | null>(null);
     const [hoveredDevice, setHoveredDevice] = useState<string | null>(null);
-    const [loadedImages, setLoadedImages] = useState<Map<string, HTMLImageElement>>(new Map());
 
-    // 预加载所有可见图片
+    // 存储已加载的图片和预计算的 Alpha 映射
+    const [layerData, setLayerData] = useState<Map<string, {
+        img: HTMLImageElement;
+        alphaMap: Uint8Array;
+    }>>(new Map());
+
+    // 鼠标位置跟踪，用于防抖
+    const lastMousePosRef = useRef<{ x: number; y: number }>({ x: -1, y: -1 });
+    const rafIdRef = useRef<number>();
+
+    // 缓存排序后的配置（从高到低 z-index）
+    const sortedConfigs = useMemo(() => {
+        return [...configs]
+            .filter(c => c.visible && !['sceneBackground', 'decorative'].includes(c.id))
+            .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+    }, [configs]);
+
+    // 预计算每个层的 Alpha 映射
     useEffect(() => {
         const visibleConfigs = configs.filter(c => c.visible);
-        const imageMap = new Map<string, HTMLImageElement>();
+        const layerMap = new Map<string, { img: HTMLImageElement; alphaMap: Uint8Array }>();
         let loadedCount = 0;
         const totalImages = visibleConfigs.length;
+
+        // 创建临时 Canvas 用于计算 Alpha 值
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        if (!tempCtx) return;
+
+        tempCanvas.width = width;
+        tempCanvas.height = height;
 
         visibleConfigs.forEach(config => {
             const img = new Image();
@@ -44,10 +68,24 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
             img.src = config.imageSrc;
 
             img.onload = () => {
-                imageMap.set(config.id, img);
+                // 绘制到临时 Canvas
+                tempCtx.clearRect(0, 0, width, height);
+                tempCtx.drawImage(img, 0, 0, width, height);
+
+                // 预计算所有像素的 Alpha 值
+                const imageData = tempCtx.getImageData(0, 0, width, height);
+                const alphaMap = new Uint8Array(width * height);
+
+                // 只存储 Alpha 值（每个像素取第4个字节）
+                for (let i = 0; i < width * height; i++) {
+                    alphaMap[i] = imageData.data[i * 4 + 3];
+                }
+
+                layerMap.set(config.id, { img, alphaMap });
                 loadedCount++;
+
                 if (loadedCount === totalImages) {
-                    setLoadedImages(imageMap);
+                    setLayerData(layerMap);
                 }
             };
 
@@ -55,39 +93,37 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
                 console.warn(`Failed to load image: ${config.imageSrc}`);
                 loadedCount++;
                 if (loadedCount === totalImages) {
-                    setLoadedImages(imageMap);
+                    setLayerData(layerMap);
                 }
             };
         });
 
         return () => {
-            imageMap.clear();
+            layerMap.clear();
         };
-    }, [configs]);
+    }, [configs, width, height]);
 
-    // 绘制 Canvas
+    // 绘制主 Canvas
     useEffect(() => {
-        if (!canvasRef.current || loadedImages.size === 0) return;
+        if (!canvasRef.current || layerData.size === 0) return;
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // 设置画布尺寸
         canvas.width = width;
         canvas.height = height;
-
-        // 清空画布
         ctx.clearRect(0, 0, width, height);
 
-        // 绘制所有层（按照 zIndex 排序）
+        // 按照 zIndex 排序
         const sortedConfigs = [...configs].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
 
         sortedConfigs.forEach(config => {
-            const img = loadedImages.get(config.id);
-            if (!img) return;
+            if (!config.visible) return;
 
-            // 底图始终可见，其他层根据状态决定可见性
+            const data = layerData.get(config.id);
+            if (!data) return;
+
             const isBaseLayer = ['sceneBackground', 'decorative'].includes(config.id);
             const isActive = config.id === activeDevice;
             const isHovered = config.id === hoveredDevice;
@@ -100,28 +136,55 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
             } else if (isHovered) {
                 alpha = 0.8;
             } else {
-                alpha = 0.0;  // 默认隐藏
+                alpha = 0.0;
             }
 
             ctx.globalAlpha = alpha;
-            ctx.drawImage(img, 0, 0, width, height);
+            ctx.drawImage(data.img, 0, 0, width, height);
 
-            // 激活时添加发光效果
             if (isActive) {
+                ctx.save();
+                ctx.globalAlpha = 1.0;
                 ctx.shadowBlur = 20;
                 ctx.shadowColor = '#00ffff';
-                ctx.drawImage(img, 0, 0, width, height);
-                ctx.shadowBlur = 0;
+                ctx.drawImage(data.img, 0, 0, width, height);
+                ctx.restore();
             }
         });
-    }, [loadedImages, activeDevice, hoveredDevice, configs, width, height]);
+    }, [layerData, activeDevice, hoveredDevice, configs, width, height]);
 
-    // 处理鼠标移动
+    // 检测指定位置的设备（使用预计算的 Alpha 映射）
+    const detectDeviceAt = useCallback((x: number, y: number): string | null => {
+        if (layerData.size === 0) return null;
+
+        const px = Math.floor(x);
+        const py = Math.floor(y);
+
+        // 边界检查
+        if (px < 0 || px >= width || py < 0 || py >= height) return null;
+
+        const index = py * width + px;
+
+        // 从最上层开始检测
+        for (const config of sortedConfigs) {
+            const data = layerData.get(config.id);
+            if (!data) continue;
+
+            // 直接查表获取 Alpha 值
+            const alpha = data.alphaMap[index];
+
+            if (alpha > 10) {
+                return config.id;
+            }
+        }
+
+        return null;
+    }, [layerData, sortedConfigs, width, height]);
+
+    // 使用 requestAnimationFrame 节流的鼠标移动处理
     const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!offscreenCanvasRef.current || loadedImages.size === 0) return;
-
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        if (!canvas || layerData.size === 0) return;
 
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -130,40 +193,33 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
 
-        const osCtx = offscreenCanvasRef.current.getContext('2d');
-        if (!osCtx) return;
+        const px = Math.floor(x);
+        const py = Math.floor(y);
 
-        // 按照 zIndex 从高到低检测（从最上层开始）
-        const sortedConfigs = [...configs]
-            .filter(c => !['sceneBackground', 'decorative'].includes(c.id))
-            .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+        // 防抖：只在移动超过 2 像素时才重新检测
+        const lastX = lastMousePosRef.current.x;
+        const lastY = lastMousePosRef.current.y;
 
-        let foundDevice: string | null = null;
-
-        for (const config of sortedConfigs) {
-            const img = loadedImages.get(config.id);
-            if (!img) continue;
-
-            // 在离屏 Canvas 上绘制这一层
-            osCtx.clearRect(0, 0, width, height);
-            osCtx.drawImage(img, 0, 0, width, height);
-
-            // 获取鼠标位置的像素
-            const pixel = osCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            const alpha = pixel[3];  // Alpha 值
-
-            // Alpha > 10 认为是"有内容"的像素（避免边缘杂色）
-            if (alpha > 10) {
-                foundDevice = config.id;
-                break;  // 找到最上层有内容的层就停止
-            }
+        if (Math.abs(px - lastX) < 2 && Math.abs(py - lastY) < 2) {
+            return;
         }
 
-        setHoveredDevice(foundDevice);
-        canvas.style.cursor = foundDevice ? 'pointer' : 'default';
-    }, [loadedImages, configs, width, height]);
+        lastMousePosRef.current = { x: px, y: py };
 
-    // 处理点击
+        // 取消之前的 RAF
+        if (rafIdRef.current !== undefined) {
+            cancelAnimationFrame(rafIdRef.current);
+        }
+
+        // 使用 requestAnimationFrame 延迟执行
+        rafIdRef.current = requestAnimationFrame(() => {
+            const foundDevice = detectDeviceAt(x, y);
+            setHoveredDevice(foundDevice);
+            canvas.style.cursor = foundDevice ? 'pointer' : 'default';
+        });
+    }, [detectDeviceAt, layerData]);
+
+    // 点击处理
     const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -175,69 +231,54 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
 
-        const osCtx = offscreenCanvasRef.current?.getContext('2d');
-        if (!osCtx || loadedImages.size === 0) return;
+        const foundId = detectDeviceAt(x, y);
 
-        // 按照 zIndex 从高到低检测
-        const sortedConfigs = [...configs]
-            .filter(c => !['sceneBackground', 'decorative'].includes(c.id))
-            .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
-
-        for (const config of sortedConfigs) {
-            const img = loadedImages.get(config.id);
-            if (!img) continue;
-
-            osCtx.clearRect(0, 0, width, height);
-            osCtx.drawImage(img, 0, 0, width, height);
-
-            const pixel = osCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            const alpha = pixel[3];
-
-            if (alpha > 10) {
-                // 点击已激活的设备则取消激活
-                if (activeDevice === config.id) {
+        if (foundId) {
+            const config = configs.find(c => c.id === foundId);
+            if (config) {
+                if (activeDevice === foundId) {
                     setActiveDevice(null);
                 } else {
-                    setActiveDevice(config.id);
+                    setActiveDevice(foundId);
                 }
 
-                // 调用回调
                 if (onDeviceClick && config.linkedDevice) {
                     onDeviceClick(config.linkedDevice);
                 }
-                return;
             }
+        } else {
+            setActiveDevice(null);
         }
+    }, [detectDeviceAt, configs, activeDevice, onDeviceClick]);
 
-        // 点击空白处取消激活
-        setActiveDevice(null);
-    }, [loadedImages, configs, activeDevice, onDeviceClick, width, height]);
+    // 鼠标离开处理
+    const handleMouseLeave = useCallback(() => {
+        setHoveredDevice(null);
+        const canvas = canvasRef.current;
+        if (canvas) canvas.style.cursor = 'default';
+        lastMousePosRef.current = { x: -1, y: -1 };
+    }, []);
 
-    // 获取激活设备的信息
+    // 清理 RAF
+    useEffect(() => {
+        return () => {
+            if (rafIdRef.current !== undefined) {
+                cancelAnimationFrame(rafIdRef.current);
+            }
+        };
+    }, []);
+
     const activeConfig = configs.find(c => c.id === activeDevice);
     const hoveredConfig = configs.find(c => c.id === hoveredDevice);
 
     return (
         <div className="relative w-full h-full">
-            {/* 离屏 Canvas 用于像素检测 */}
-            <canvas
-                ref={offscreenCanvasRef}
-                width={width}
-                height={height}
-                style={{ display: 'none' }}
-            />
-
-            {/* 主 Canvas 显示 */}
             <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full"
                 onMouseMove={handleMouseMove}
                 onClick={handleClick}
-                onMouseLeave={() => {
-                    setHoveredDevice(null);
-                    const canvas = canvasRef.current;
-                    if (canvas) canvas.style.cursor = 'default';
-                }}
+                onMouseLeave={handleMouseLeave}
             />
 
             {/* 悬停提示 */}

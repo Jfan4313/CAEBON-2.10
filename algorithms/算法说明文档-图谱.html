@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>算法说明文档 - 图谱视图</title>
+    <style>
+        :root {
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #252525;
+            --bg-tertiary: #2d2d2d;
+            --text-primary: #dcddde;
+            --text-secondary: #a8a8a8;
+            --accent: #7b6cd1;
+            --border: #444444;
+
+            /* 节点颜色 */
+            --node-algo: #7b6cd1;
+            --node-param: #4ade80;
+            --node-data: #ff6b6b;
+            --node-core: #ffd93d;
+            --node-advanced: #ff9ff3;
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f4f6;
+            --bg-tertiary: #e5e7eb;
+            --text-primary: #1f1f1f;
+            --text-secondary: #6b6b6b;
+            --accent: #5c6bc0;
+            --border: #e0e0e0;
+
+            --node-algo: #5c6bc0;
+            --node-param: #22c55e;
+            --node-data: #ef4444;
+            --node-core: #f59e0b;
+            --node-advanced: #8b5cf6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-title {
+            font-size: 1.3em;
+            color: var(--accent);
+            margin-bottom: 5px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .node-info-panel {
+            padding: 15px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .node-info-title {
+            font-size: 1.1em;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .node-info-connections {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+
+        .connection-item {
+            display: flex;
+            align-items: center;
+            padding: 5px 0;
+            gap: 8px;
+        }
+
+        .connection-type {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .type-forward {
+            background: rgba(123, 108, 209, 0.2);
+            color: var(--node-algo);
+        }
+
+        .type-backward {
+            background: rgba(255, 107, 107, 0.2);
+            color: var(--node-data);
+        }
+
+        .sidebar-footer {
+            padding: 15px;
+            border-top: 1px solid var(--border);
+            font-size: 0.8em;
+            color: var(--text-secondary);
+        }
+
+        /* 图谱容器 */
+        .graph-container {
+            position: fixed;
+            left: 280px;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            cursor: grab;
+        }
+
+        .graph-container:active {
+            cursor: grabbing;
+        }
+
+        /* 图谱画布 */
+        #graphCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 控制面板 */
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: var(--accent);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        /* 图例 */
+        .legend {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 1000;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .legend-title {
+            font-size: 0.9em;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: 5px 0;
+            gap: 8px;
+            font-size: 0.85em;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        .legend-label {
+            color: var(--text-secondary);
+        }
+
+        /* 搜索框 */
+        .search-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            margin-top: 220px;
+            z-index: 1000;
+        }
+
+        .search-input {
+            padding: 10px 15px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            width: 200px;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(123, 108, 209, 0.3);
+        }
+
+        /* 节点提示框 */
+        .tooltip {
+            position: fixed;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            pointer-events: none;
+            z-index: 2000;
+            max-width: 300px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-title {
+            font-size: 1em;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .tooltip-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .tooltip-desc {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .tooltip-connections {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+        }
+
+        .tooltip-conn {
+            font-size: 0.8em;
+            padding: 3px 0;
+            color: var(--text-secondary);
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .graph-container {
+                left: 0;
+            }
+            .legend, .search-panel {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">📊 算法图谱</div>
+            <div class="sidebar-subtitle">可视化双链关系</div>
+        </div>
+
+        <div class="sidebar-content">
+            <div id="nodeInfo" class="node-info-panel" style="display: none;">
+                <div class="node-info-title">
+                    <span class="node-indicator">●</span>
+                    <span id="selectedNodeName">选择一个节点</span>
+                </div>
+                <div class="node-info-connections" id="nodeConnections">
+                    点击图谱中的节点查看详情
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <p>🖱️ 拖拽画布移动</p>
+            <p>🔍 滚轮缩放视图</p>
+            <p>🖱️ 拖拽节点重新布局</p>
+        </div>
+    </aside>
+
+    <!-- 图谱容器 -->
+    <div class="graph-container" id="graphContainer">
+        <canvas id="graphCanvas"></canvas>
+    </div>
+
+    <!-- 控制按钮 -->
+    <div class="controls">
+        <button class="control-btn" onclick="resetView()" title="重置视图">⟲</button>
+        <button class="control-btn" onclick="togglePhysics()" id="physicsBtn" title="切换物理模拟">⚡</button>
+        <button class="control-btn" onclick="fitToScreen()" title="适配屏幕">⛶</button>
+        <button class="control-btn" onclick="toggleLayout()" id="layoutBtn" title="切换布局">🔀</button>
+    </div>
+
+    <!-- 图例 -->
+    <div class="legend">
+        <div class="legend-title">节点类型</div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--node-algo);"></div>
+            <span class="legend-label">算法功能</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--node-param);"></div>
+            <span class="legend-label">参数配置</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--node-data);"></div>
+            <span class="legend-label">基础数据</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--node-core);"></div>
+            <span class="legend-label">核心算法</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--node-advanced);"></div>
+            <span class="legend-label">高级功能</span>
+        </div>
+    </div>
+
+    <!-- 搜索框 -->
+    <div class="search-panel">
+        <input type="text" class="search-input" id="searchInput" placeholder="搜索节点...">
+    </div>
+
+    <!-- 提示框 -->
+    <div class="tooltip" id="tooltip">
+        <div class="tooltip-title" id="tooltipTitle"></div>
+        <div class="tooltip-type" id="tooltipType"></div>
+        <div class="tooltip-desc" id="tooltipDesc"></div>
+        <div class="tooltip-connections" id="tooltipConnections"></div>
+    </div>
+
+    <script>
+        // 节点数据
+        const nodes = [
+            // 核心节点
+            { id: 'overview', label: '概述', type: 'core', x: 0, y: 0, connections: ['lighting', 'hvac', 'solar', 'integrated', 'pmv', 'v2g', 'battery', 'digital-twin'], description: '算法库整体介绍' },
+            { id: 'integrated', label: '综合优化', type: 'algo', x: 0, y: 0, connections: ['lighting', 'hvac', 'solar', 'rl'], description: '多系统协同优化' },
+
+            // 照明系统
+            { id: 'lighting', label: '照明系统', type: 'algo', x: 0, y: 0, connections: ['baseline', 'savings'], description: '照明基准和节能计算' },
+            { id: 'baseline', label: '基准计算', type: 'algo', x: 0, y: 0, connections: [], description: 'calculateLightingBaseline' },
+            { id: 'savings', label: '节能潜力', type: 'algo', x: 0, y: 0, connections: ['led', 'smart'], description: 'calculateLightingSavings' },
+            { id: 'led', label: 'LED升级', type: 'param', x: 0, y: 0, connections: [], description: '从白炽灯到LED' },
+            { id: 'smart', label: '智能控制', type: 'param', x: 0, y: 0, connections: ['light-sensor'], description: '光感+调光系统' },
+            { id: 'light-sensor', label: '光照传感器', type: 'param', x: 0, y: 0, connections: [], description: '传感器安装密度' },
+
+            // 暖通空调
+            { id: 'hvac', label: '暖通空调', type: 'algo', x: 0, y: 0, connections: ['hvac-baseline', 'hvac-savings', 'thermal-coef'], description: '空调基准和节能计算' },
+            { id: 'hvac-baseline', label: '空调基准', type: 'algo', x: 0, y: 0, connections: [], description: 'calculateHVACBaseline' },
+            { id: 'hvac-savings', label: '空调节能', type: 'algo', x: 0, y: 0, connections: ['cop', 'fresh-air'], description: 'calculateHVACSavings' },
+            { id: 'cop', label: 'COP提升', type: 'param', x: 0, y: 0, connections: [], description: '能效系数提升' },
+            { id: 'fresh-air', label: '新风系统', type: 'param', x: 0, y: 0, connections: [], description: '新风系统效率' },
+            { id: 'thermal-coef', label: '热导系数', type: 'data', x: 0, y: 0, connections: [], description: '建筑热导系数常量' },
+
+            // 光储系统
+            { id: 'solar', label: '光储系统', type: 'algo', x: 0, y: 0, connections: ['pv', 'storage-opt', 'battery-degrad'], description: '光伏和储能优化' },
+            { id: 'pv', label: '光伏发电', type: 'algo', x: 0, y: 0, connections: ['sunshine', 'weather'], description: 'calculateSolarGeneration' },
+            { id: 'storage-opt', label: '储能优化', type: 'algo', x: 0, y: 0, connections: ['price-curve', 'arbitrage'], description: 'calculateStorageOptimization' },
+            { id: 'sunshine', label: '日照数据', type: 'data', x: 0, y: 0, connections: ['cities'], description: '城市年日照时数' },
+            { id: 'weather', label: '天气因素', type: 'param', x: 0, y: 0, connections: [], description: '云量、温度、辐射' },
+            { id: 'cities', label: '城市数据', type: 'data', x: 0, y: 0, connections: [], description: '20+城市日照数据' },
+            { id: 'price-curve', label: '电价曲线', type: 'param', x: 0, y: 0, connections: [], description: '峰谷平电价' },
+            { id: 'arbitrage', label: '峰谷套利', type: 'param', x: 0, y: 0, connections: [], description: '谷充峰放策略' },
+            { id: 'battery-degrad', label: '电池衰减', type: 'algo', x: 0, y: 0, connections: ['battery-type', 'cycle-count'], description: 'calculateBatteryDegradation' },
+            { id: 'battery-type', label: '电池类型', type: 'param', x: 0, y: 0, connections: [], description: 'LFP/NCM/铅酸' },
+            { id: 'cycle-count', label: '循环次数', type: 'param', x: 0, y: 0, connections: [], description: '累计充放电循环' },
+
+            // 舒适度计算
+            { id: 'pmv', label: '舒适度计算', type: 'advanced', x: 0, y: 0, connections: ['pmv-fn', 'ppd-fn', 'comfort-metrics'], description: 'PMV/PPD舒适度评估' },
+            { id: 'pmv-fn', label: 'PMV函数', type: 'algo', x: 0, y: 0, connections: ['fanger'], description: '预测平均投票值' },
+            { id: 'ppd-fn', label: 'PPD函数', type: 'algo', x: 0, y: 0, connections: ['fanger'], description: '预测不满意百分比' },
+            { id: 'comfort-metrics', label: '综合指标', type: 'algo', x: 0, y: 0, connections: [], description: '舒适度指标综合' },
+            { id: 'fanger', label: 'Fanger方程', type: 'data', x: 0, y: 0, connections: [], description: '热舒适度计算模型' },
+
+            // V2G
+            { id: 'v2g', label: 'V2G交互', type: 'advanced', x: 0, y: 0, connections: ['v2g-opt', 'ev-device'], description: '车辆到电网交互优化' },
+            { id: 'v2g-opt', label: 'V2G调度', type: 'algo', x: 0, y: 0, connections: ['soc', 'priority'], description: 'calculateV2GOptimization' },
+            { id: 'ev-device', label: 'EV设备', type: 'param', x: 0, y: 0, connections: [], description: '容量、功率、SOC' },
+            { id: 'soc', label: 'SOC状态', type: 'param', x: 0, y: 0, connections: [], description: '电池荷电状态' },
+            { id: 'priority', label: '用户优先级', type: 'param', x: 0, y: 0, connections: [], description: 'low/medium/high' },
+
+            // 数字孪生
+            { id: 'digital-twin', label: '数字孪生', type: 'advanced', x: 0, y: 0, connections: ['thermal-model', 'hvac-response'], description: '建筑热状态模拟' },
+            { id: 'thermal-model', label: '热模型', type: 'param', x: 0, y: 0, connections: ['inertia', 'capacity'], description: '建筑热参数' },
+            { id: 'inertia', label: '热惯性', type: 'param', x: 0, y: 0, connections: [], description: '小时单位' },
+            { id: 'capacity', label: '热容量', type: 'param', x: 0, y: 0, connections: [], description: 'kJ/K单位' },
+            { id: 'hvac-response', label: 'HVAC响应', type: 'param', x: 0, y: 0, connections: [], description: '响应时间和死区' },
+
+            // 强化学习
+            { id: 'rl', label: '强化学习', type: 'advanced', x: 0, y: 0, connections: ['dqn', 'state-space', 'action-space'], description: 'DQN优化策略' },
+            { id: 'dqn', label: 'DQN算法', type: 'algo', x: 0, y: 0, connections: ['q-learning', 'neural-net'], description: '深度Q网络' },
+            { id: 'state-space', label: '状态空间', type: 'param', x: 0, y: 0, connections: [], description: '负荷×电价×温度' },
+            { id: 'action-space', label: '动作空间', type: 'param', x: 0, y: 0, connections: [], description: '[-10%, 0%, +10%]' },
+            { id: 'q-learning', label: 'Q-Learning', type: 'data', x: 0, y: 0, connections: [], description: '强化学习基础算法' },
+            { id: 'neural-net', label: '神经网络', type: 'data', x: 0, y: 0, connections: [], description: '深度学习网络' },
+
+            // 电池（独立节点，与V2G共享）
+            { id: 'battery', label: '电池衰减', type: 'algo', x: 0, y: 0, connections: ['degrad-rate', 'health-score'], description: '电池健康状态评估' },
+            { id: 'degrad-rate', label: '衰减率', type: 'param', x: 0, y: 0, connections: [], description: '%/1000次循环' },
+            { id: 'health-score', label: '健康度', type: 'param', x: 0, y: 0, connections: [], description: '0-100%范围' },
+        ];
+
+        // 获取节点颜色
+        function getNodeColor(type) {
+            const colors = {
+                'algo': getComputedStyle(document.documentElement).getPropertyValue('--node-algo').trim(),
+                'param': getComputedStyle(document.documentElement).getPropertyValue('--node-param').trim(),
+                'data': getComputedStyle(document.documentElement).getPropertyValue('--node-data').trim(),
+                'core': getComputedStyle(document.documentElement).getPropertyValue('--node-core').trim(),
+                'advanced': getComputedStyle(document.documentElement).getPropertyValue('--node-advanced').trim()
+            };
+            return colors[type] || colors['algo'];
+        }
+
+        // Canvas设置
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let draggingNode = null;
+        let draggingCanvas = false;
+        let lastMouseX, lastMouseY;
+        let physicsEnabled = true;
+        let currentLayout = 'force';
+
+        // 初始化节点位置（圆形布局）
+        function initPositions() {
+            const centerX = 0;
+            const centerY = 0;
+            const radius = Math.min(canvas.width, canvas.height) * 0.35;
+
+            nodes.forEach((node, i) => {
+                const angle = (2 * Math.PI * i) / nodes.length;
+                node.x = centerX + radius * Math.cos(angle);
+                node.y = centerY + radius * Math.sin(angle);
+                node.vx = 0;
+                node.vy = 0;
+            });
+
+            // 将概述放在中心
+            const overview = nodes.find(n => n.id === 'overview');
+            if (overview) {
+                overview.x = centerX;
+                overview.y = centerY;
+            }
+        }
+
+        // 物理模拟
+        function simulatePhysics() {
+            const repulsionStrength = 50000;
+            const attractionStrength = 0.01;
+            const damping = 0.9;
+            const minDist = 100;
+
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+
+                // 斥力（节点之间）
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const other = nodes[j];
+                    const dx = node.x - other.x;
+                    const dy = node.y - other.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    if (dist < minDist) {
+                        const force = repulsionStrength / (dist * dist);
+                        const fx = force * dx / dist;
+                        const fy = force * dy / dist;
+
+                        node.vx += fx;
+                        node.vy += fy;
+                        other.vx -= fx;
+                        other.vy -= fy;
+                    }
+                }
+
+                // 引力（连接的节点之间）
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode) {
+                        const dx = connNode.x - node.x;
+                        const dy = connNode.y - node.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        const fx = dx * attractionStrength;
+                        const fy = dy * attractionStrength;
+
+                        node.vx += fx;
+                        node.vy += fy;
+                        connNode.vx -= fx;
+                        connNode.vy -= fy;
+                    }
+                });
+
+                // 中心引力
+                node.vx -= node.x * 0.001;
+                node.vy -= node.y * 0.001;
+
+                // 阻尼
+                node.vx *= damping;
+                node.vy *= damping;
+
+                // 更新位置
+                if (node.id !== 'overview') {
+                    node.x += node.vx;
+                    node.y += node.vy;
+                }
+            }
+        }
+
+        // 绘制图谱
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(canvas.width / 2 + offsetX, canvas.height / 2 + offsetY);
+            ctx.scale(scale, scale);
+
+            // 绘制连接线
+            nodes.forEach(node => {
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode) {
+                        ctx.beginPath();
+                        ctx.moveTo(node.x, node.y);
+                        ctx.lineTo(connNode.x, connNode.y);
+                        ctx.strokeStyle = 'rgba(123, 108, 209, 0.3)';
+                        ctx.lineWidth = 1.5 / scale;
+                        ctx.stroke();
+
+                        // 绘制箭头
+                        const angle = Math.atan2(connNode.y - node.y, connNode.x - node.x);
+                        const arrowLength = 10;
+                        ctx.beginPath();
+                        ctx.moveTo(connNode.x, connNode.y);
+                        ctx.lineTo(
+                            connNode.x - arrowLength * Math.cos(angle - Math.PI / 6),
+                            connNode.y - arrowLength * Math.sin(angle - Math.PI / 6)
+                        );
+                        ctx.lineTo(
+                            connNode.x - arrowLength * Math.cos(angle + Math.PI / 6),
+                            connNode.y - arrowLength * Math.sin(angle + Math.PI / 6)
+                        );
+                        ctx.strokeStyle = 'rgba(123, 108, 209, 0.5)';
+                        ctx.stroke();
+                    }
+                });
+            });
+
+            // 绘制节点
+            nodes.forEach(node => {
+                const color = getNodeColor(node.type);
+                const baseRadius = node.id === 'overview' ? 35 : 25;
+
+                // 节点阴影
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 15;
+
+                // 绘制节点背景
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, baseRadius, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+
+                // 绘制节点边框
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 绘制节点标签
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `${node.id === 'overview' ? '14' : '11'}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                const maxWidth = baseRadius * 1.6;
+                let label = node.label;
+                if (ctx.measureText(label).width > maxWidth) {
+                    while (ctx.measureText(label + '...').width > maxWidth && label.length > 2) {
+                        label = label.slice(0, -1);
+                    }
+                    label += '...';
+                }
+                ctx.fillText(label, node.x, node.y);
+            });
+
+            ctx.restore();
+        }
+
+        // 动画循环
+        function animate() {
+            if (physicsEnabled) {
+                simulatePhysics();
+            }
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        // 调整画布大小
+        function resizeCanvas() {
+            const container = document.getElementById('graphContainer');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            initPositions();
+        }
+
+        // 鼠标事件处理
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left - canvas.width / 2 - offsetX) / scale,
+                y: (e.clientY - rect.top - canvas.height / 2 - offsetY) / scale
+            };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(e);
+            let clickedNode = null;
+
+            for (const node of nodes) {
+                const dx = pos.x - node.x;
+                const dy = pos.y - node.y;
+                const radius = node.id === 'overview' ? 35 : 25;
+                if (Math.sqrt(dx * dx + dy * dy) < radius) {
+                    clickedNode = node;
+                    break;
+                }
+            }
+
+            if (clickedNode) {
+                draggingNode = clickedNode;
+                showNodeInfo(clickedNode);
+            } else {
+                draggingCanvas = true;
+            }
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const pos = getMousePos(e);
+
+            // 更新提示框
+            let hoveredNode = null;
+            for (const node of nodes) {
+                const dx = pos.x - node.x;
+                const dy = pos.y - node.y;
+                const radius = node.id === 'overview' ? 35 : 25;
+                if (Math.sqrt(dx * dx + dy * dy) < radius) {
+                    hoveredNode = node;
+                    canvas.style.cursor = 'pointer';
+                    break;
+                }
+            }
+
+            if (hoveredNode) {
+                showTooltip(e.clientX, e.clientY, hoveredNode);
+            } else {
+                hideTooltip();
+                canvas.style.cursor = draggingCanvas ? 'grabbing' : (draggingNode ? 'grabbing' : 'grab');
+            }
+
+            if (draggingNode) {
+                draggingNode.x = pos.x;
+                draggingNode.y = pos.y;
+                draggingNode.vx = 0;
+                draggingNode.vy = 0;
+            } else if (draggingCanvas) {
+                offsetX += e.clientX - lastMouseX;
+                offsetY += e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            draggingNode = null;
+            draggingCanvas = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            draggingNode = null;
+            draggingCanvas = false;
+            hideTooltip();
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            scale *= zoomFactor;
+            scale = Math.max(0.2, Math.min(3, scale));
+        });
+
+        // 显示节点信息
+        function showNodeInfo(node) {
+            const infoPanel = document.getElementById('nodeInfo');
+            const nodeName = document.getElementById('selectedNodeName');
+            const connections = document.getElementById('nodeConnections');
+
+            infoPanel.style.display = 'block';
+            nodeName.textContent = node.label;
+
+            const typeLabels = {
+                'algo': '算法功能',
+                'param': '参数配置',
+                'data': '基础数据',
+                'core': '核心算法',
+                'advanced': '高级功能'
+            };
+
+            let connectionsHtml = `
+                <div class="connection-item">
+                    <span class="connection-type type-forward">类型</span>
+                    <span>${typeLabels[node.type]}</span>
+                </div>
+            `;
+
+            if (node.connections && node.connections.length > 0) {
+                connectionsHtml += '<div style="margin-top: 10px; color: var(--text-secondary); font-size: 0.9em;">连接到:</div>';
+                node.connections.forEach(connId => {
+                    const connNode = nodes.find(n => n.id === connId);
+                    if (connNode) {
+                        connectionsHtml += `
+                            <div class="connection-item">
+                                <span class="connection-type type-forward">→</span>
+                                <span>${connNode.label}</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            if (node.connections && node.connections.length === 0) {
+                connectionsHtml += '<div style="margin-top: 10px; color: var(--text-secondary); font-size: 0.85em;">无连接（叶子节点）</div>';
+            }
+
+            connections.innerHTML = connectionsHtml;
+        }
+
+        // 显示提示框
+        function showTooltip(x, y, node) {
+            const tooltip = document.getElementById('tooltip');
+            const title = document.getElementById('tooltipTitle');
+            const type = document.getElementById('tooltipType');
+            const desc = document.getElementById('tooltipDesc');
+            const conns = document.getElementById('tooltipConnections');
+
+            const typeLabels = {
+                'algo': { text: '算法功能', color: 'var(--node-algo)' },
+                'param': { text: '参数配置', color: 'var(--node-param)' },
+                'data': { text: '基础数据', color: 'var(--node-data)' },
+                'core': { text: '核心算法', color: 'var(--node-core)' },
+                'advanced': { text: '高级功能', color: 'var(--node-advanced)' }
+            };
+
+            title.textContent = node.label;
+            type.textContent = typeLabels[node.type].text;
+            type.style.background = typeLabels[node.type].color;
+            desc.textContent = node.description;
+
+            if (node.connections && node.connections.length > 0) {
+                const connNames = node.connections.slice(0, 5).map(id => {
+                    const n = nodes.find(node => node.id === id);
+                    return n ? n.label : id;
+                }).join(', ');
+                conns.innerHTML = `<div class="tooltip-conn">连接: ${connNames}${node.connections.length > 5 ? '...' : ''}</div>`;
+            } else {
+                conns.innerHTML = '';
+            }
+
+            tooltip.style.left = (x + 15) + 'px';
+            tooltip.style.top = (y + 15) + 'px';
+            tooltip.classList.add('visible');
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').classList.remove('visible');
+        }
+
+        // 控制函数
+        function resetView() {
+            scale = 1;
+            offsetX = 0;
+            offsetY = 0;
+            initPositions();
+        }
+
+        function togglePhysics() {
+            physicsEnabled = !physicsEnabled;
+            document.getElementById('physicsBtn').style.background = physicsEnabled ? 'var(--accent)' : 'var(--bg-tertiary)';
+            document.getElementById('physicsBtn').style.color = physicsEnabled ? 'white' : 'var(--text-primary)';
+        }
+
+        function fitToScreen() {
+            const margin = 100;
+            const maxX = Math.max(...nodes.map(n => n.x));
+            const minX = Math.min(...nodes.map(n => n.x));
+            const maxY = Math.max(...nodes.map(n => n.y));
+            const minY = Math.min(...nodes.map(n => n.y));
+
+            const width = maxX - minX + margin * 2;
+            const height = maxY - minY + margin * 2;
+
+            scale = Math.min(canvas.width / width, canvas.height / height);
+            scale = Math.min(scale, 1.5);
+
+            offsetX = -(minX + maxX) / 2;
+            offsetY = -(minY + maxY) / 2;
+        }
+
+        function toggleLayout() {
+            currentLayout = currentLayout === 'force' ? 'circular' : 'force';
+            if (currentLayout === 'circular') {
+                initCircularLayout();
+            }
+        }
+
+        function initCircularLayout() {
+            const centerX = 0;
+            const centerY = 0;
+            const radius = Math.min(canvas.width, canvas.height) * 0.35;
+
+            nodes.forEach((node, i) => {
+                const angle = (2 * Math.PI * i) / nodes.length;
+                node.x = centerX + radius * Math.cos(angle);
+                node.y = centerY + radius * Math.sin(angle);
+                node.vx = 0;
+                node.vy = 0;
+            });
+
+            const overview = nodes.find(n => n.id === 'overview');
+            if (overview) {
+                overview.x = centerX;
+                overview.y = centerY;
+            }
+        }
+
+        // 搜索功能
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+
+            nodes.forEach(node => {
+                const match = node.label.toLowerCase().includes(query) ||
+                             node.description.toLowerCase().includes(query);
+                node.highlighted = match;
+            });
+        });
+
+        // 初始化
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        animate();
+
+        // 默认关闭物理模拟以保持圆形布局
+        setTimeout(() => {
+            physicsEnabled = false;
+            document.getElementById('physicsBtn').style.background = 'var(--bg-tertiary)';
+            document.getElementById('physicsBtn').style.color = 'var(--text-primary)';
+        }, 1000);
+    </script>
+</body>
+</html>
