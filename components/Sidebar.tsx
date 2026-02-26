@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View } from '../types';
 
 interface SidebarProps {
@@ -9,29 +9,32 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
   const [isRetrofitOpen, setIsRetrofitOpen] = useState(true);
 
-  const navItemClass = (isActive: boolean) =>
+  // Memoize CSS class functions to prevent recreation on each render
+  const navItemClass = useCallback((isActive: boolean) =>
     `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer group ${
       isActive
         ? 'bg-primary text-white shadow-lg shadow-primary/30'
         : 'text-slate-500 hover:bg-slate-100 hover:text-primary'
-    }`;
+    }`,
+  []);
 
-  const iconClass = (isActive: boolean) =>
-    `material-symbols-outlined text-[20px] transition-transform ${isActive ? '' : 'group-hover:scale-110'}`;
+  const iconClass = useCallback((isActive: boolean) =>
+    `material-symbols-outlined text-[20px] transition-transform ${isActive ? '' : 'group-hover:scale-110'}`,
+  []);
 
-  // Reordered: Simple -> Complex -> System -> Abstract
-  const retrofitItems: { id: View; label: string; icon: string }[] = [
-    { id: 'retrofit-lighting', label: '智能照明', icon: 'lightbulb' },
-    { id: 'retrofit-water', label: '热水系统', icon: 'water_drop' },
-    { id: 'retrofit-hvac', label: '暖通空调', icon: 'ac_unit' },
-    { id: 'retrofit-solar', label: '分布式光伏', icon: 'solar_power' },
-    { id: 'retrofit-storage', label: '储能系统', icon: 'battery_charging_full' },
-    { id: 'retrofit-ev', label: '充电桩设施', icon: 'ev_station' },
-    { id: 'retrofit-microgrid', label: '微电网', icon: 'grid_4x4' },
-    { id: 'retrofit-vpp', label: '虚拟电厂', icon: 'hub' },
-    { id: 'retrofit-ai', label: 'AI 管理平台', icon: 'psychology' },
-    { id: 'retrofit-carbon', label: '碳资产管理', icon: 'co2' },
-  ];
+  // Memoize retrofit items to prevent recreation
+  const retrofitItems = useMemo(() => [
+    { id: 'retrofit-lighting' as View, label: '智能照明', icon: 'lightbulb' },
+    { id: 'retrofit-water' as View, label: '热水系统', icon: 'water_drop' },
+    { id: 'retrofit-hvac' as View, label: '暖通空调', icon: 'ac_unit' },
+    { id: 'retrofit-solar' as View, label: '分布式光伏', icon: 'solar_power' },
+    { id: 'retrofit-storage' as View, label: '储能系统', icon: 'battery_charging_full' },
+    { id: 'retrofit-ev' as View, label: '充电桩设施', icon: 'ev_station' },
+    { id: 'retrofit-microgrid' as View, label: '微电网', icon: 'grid_4x4' },
+    { id: 'retrofit-vpp' as View, label: '虚拟电厂', icon: 'hub' },
+    { id: 'retrofit-ai' as View, label: 'AI 管理平台', icon: 'psychology' },
+    { id: 'retrofit-carbon' as View, label: '碳资产管理', icon: 'co2' },
+  ], []);
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-full shrink-0 z-30">
@@ -130,14 +133,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
         >
           <span className={iconClass(currentView === 'formula-admin')}>settings</span>
           <span className="font-medium text-sm">算法管理</span>
-        </div>
-
-        <div
-          className={navItemClass(currentView === 'visual-analysis')}
-          onClick={() => onChangeView('visual-analysis')}
-        >
-          <span className={iconClass(currentView === 'visual-analysis')}>visibility</span>
-          <span className="font-medium text-sm">动态分析</span>
         </div>
       </nav>
 
