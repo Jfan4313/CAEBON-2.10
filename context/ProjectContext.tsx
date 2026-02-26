@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { calculationService, CalculationResult, SolarParams, StorageParams, HVACParams, LightingParams, EVParams } from '../services/api';
 import { memoryService, MemoryData } from '../services/memory';
+import { storage, isDesktopApp } from '../services/storage-adapter';
+import { projectStorageService } from '../services/projectStorage';
+import { ProjectFullData } from '../types/projectStorage';
 
 // Define the shape of data for each module
 export interface ModuleData {
@@ -192,7 +195,7 @@ interface ProjectContextType {
   setPriceConfig: (config: PriceConfigState) => void;
   projectBaseInfo: ProjectBaseInfo;
   setProjectBaseInfo: (info: ProjectBaseInfo) => void;
-  saveProject: () => void;
+  saveProject: () => Promise<void>;
   notification: Notification | null;
   // 新增: API计算方法
   calculateSolar: (params: SolarParams) => Promise<CalculationResult>;
@@ -205,6 +208,10 @@ interface ProjectContextType {
   loadMemory: () => Promise<void>;
   isCalculating: boolean;
   apiAvailable: boolean;
+  // 新增: 项目导入导出
+  importProjectConfig: (data: ProjectFullData) => void;
+  exportProjectConfig: (filename?: string) => void;
+  quickSaveProject: (name?: string, description?: string) => Promise<void>;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -220,21 +227,24 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [apiAvailable, setApiAvailable] = useState(true);
   const [memory, setMemory] = useState<MemoryData | null>(null);
 
-  // Load from LocalStorage
+  // Load from Storage (with cleanup) - supports both localStorage (Web) and Electron storage
   useEffect(() => {
-      const savedData = localStorage.getItem('ZERO_CARBON_PROJECT_DATA');
-      if (savedData) {
-          try {
-              const parsed = JSON.parse(savedData);
-              if (parsed.modules) setModules(parsed.modules);
-              if (parsed.transformers) setTransformers(parsed.transformers);
-              if (parsed.bills) setBills(parsed.bills);
-              if (parsed.priceConfig) setPriceConfig(parsed.priceConfig);
-              if (parsed.projectBaseInfo) setProjectBaseInfo(parsed.projectBaseInfo);
-          } catch (e) {
-              console.error("Failed to load project data", e);
+      const loadFromStorage = async () => {
+          const savedData = await storage.getItem('ZERO_CARBON_PROJECT_DATA');
+          if (savedData) {
+              try {
+                  const parsed = JSON.parse(savedData);
+                  if (parsed.modules) setModules(parsed.modules);
+                  if (parsed.transformers) setTransformers(parsed.transformers);
+                  if (parsed.bills) setBills(parsed.bills);
+                  if (parsed.priceConfig) setPriceConfig(parsed.priceConfig);
+                  if (parsed.projectBaseInfo) setProjectBaseInfo(parsed.projectBaseInfo);
+              } catch (e) {
+                  console.error("Failed to load project data", e);
+              }
           }
-      }
+      };
+      loadFromStorage();
   }, []);
 
   // 初始化记忆服务
@@ -251,21 +261,50 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       initMemory();
   }, []);
 
-  // 检查API可用性
+  // 检查API可用性 (with caching to avoid repeated checks)
   useEffect(() => {
+      const apiCheckCacheKey = 'ZERO_CARBON_API_CACHE';
+      const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
       const checkAPI = async () => {
-          const available = await calculationService.checkHealth();
-          setApiAvailable(available);
-          if (!available) {
-              console.warn('Backend API is not available, using offline mode');
-              setNotification({
-                  message: '后端 API 不可用，已切换到离线模式。部分功能可能受限。',
-                  type: 'error'
-              });
-              // 3秒后自动清除通知
-              setTimeout(() => {
-                  setNotification(null);
-              }, 3000);
+          try {
+              // Check cache first
+              const cachedData = await storage.getItem(apiCheckCacheKey);
+              if (cachedData) {
+                  const { available, timestamp } = JSON.parse(cachedData);
+                  if (Date.now() - timestamp < CACHE_DURATION) {
+                      setApiAvailable(available);
+                      if (!available) {
+                          console.warn('Using cached API status: unavailable');
+                      }
+                      return;
+                  }
+              }
+
+              // Perform actual check
+              const available = await calculationService.checkHealth();
+              setApiAvailable(available);
+
+              // Cache the result
+              await storage.setItem(apiCheckCacheKey, JSON.stringify({
+                  available,
+                  timestamp: Date.now()
+              }));
+
+              if (!available) {
+                  console.warn('Backend API is not available, using offline mode');
+                  setNotification({
+                      message: '后端 API 不可用，已切换到离线模式。部分功能可能受限。',
+                      type: 'error'
+                  });
+                  // 3秒后自动清除通知
+                  setTimeout(() => {
+                      setNotification(null);
+                  }, 3000);
+              }
+          } catch (e) {
+              console.error('API check failed:', e);
+              setApiAvailable(false);
           }
       };
       checkAPI();
@@ -301,8 +340,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return { totalInvestment, totalSaving, roi };
   }, [modules]);
 
-  const saveProject = useCallback(() => {
-      const dataToSave = {
+  // Memoize data to save to optimize saveProject
+  const dataToSave = useMemo(() => {
+      return {
           modules,
           transformers,
           bills,
@@ -310,14 +350,17 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
           projectBaseInfo,
           lastSaved: new Date().toISOString()
       };
+  }, [modules, transformers, bills, priceConfig, projectBaseInfo]);
+
+  const saveProject = useCallback(async () => {
       try {
-          localStorage.setItem('ZERO_CARBON_PROJECT_DATA', JSON.stringify(dataToSave));
+          await storage.setItem('ZERO_CARBON_PROJECT_DATA', JSON.stringify(dataToSave));
           setNotification({ message: '项目配置已成功保存', type: 'success' });
           setTimeout(() => setNotification(null), 3000);
       } catch (e) {
-          setNotification({ message: '保存失败，请检查浏览器存储设置', type: 'error' });
+          setNotification({ message: '保存失败，请检查存储设置', type: 'error' });
       }
-  }, [modules, transformers, bills, priceConfig, projectBaseInfo]);
+  }, [dataToSave]);
 
   // ========== API计算方法 ==========
 
@@ -451,6 +494,62 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
   }, []);
 
+  // ========== 项目导入导出方法 ==========
+
+  const importProjectConfig = useCallback((data: ProjectFullData) => {
+      // 恢复所有状态
+      if (data.projectBaseInfo) {
+          setProjectBaseInfo(data.projectBaseInfo);
+      }
+      if (data.modules) {
+          setModules(data.modules);
+      }
+      if (data.transformers) {
+          setTransformers(data.transformers);
+      }
+      if (data.bills) {
+          setBills(data.bills);
+      }
+      if (data.priceConfig) {
+          setPriceConfig(data.priceConfig);
+      }
+      setNotification({ message: '项目配置已成功导入', type: 'success' });
+      setTimeout(() => setNotification(null), 3000);
+  }, []);
+
+  const exportProjectConfig = useCallback((filename?: string) => {
+      const data: ProjectFullData = {
+          projectBaseInfo,
+          modules,
+          transformers,
+          bills,
+          priceConfig,
+          version: '1.0.0'
+      };
+      projectStorageService.exportProjectConfig(data, { filename });
+      setNotification({ message: '项目配置已成功导出', type: 'success' });
+      setTimeout(() => setNotification(null), 3000);
+  }, [projectBaseInfo, modules, transformers, bills, priceConfig]);
+
+  const quickSaveProject = useCallback(async (name?: string, description?: string) => {
+      try {
+          const data: ProjectFullData = {
+              projectBaseInfo,
+              modules,
+              transformers,
+              bills,
+              priceConfig,
+              version: '1.0.0'
+          };
+          await projectStorageService.quickSaveProject(data, name, description);
+          setNotification({ message: '项目已成功保存到本地列表', type: 'success' });
+          setTimeout(() => setNotification(null), 3000);
+      } catch (error) {
+          setNotification({ message: '保存失败，请重试', type: 'error' });
+          setTimeout(() => setNotification(null), 3000);
+      }
+  }, [projectBaseInfo, modules, transformers, bills, priceConfig]);
+
   return (
     <ProjectContext.Provider value={{
         modules, updateModule, toggleModule, getSummary,
@@ -461,7 +560,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         saveProject, notification,
         calculateSolar, calculateStorage, calculateHVAC, calculateLighting, calculateEV,
         memory, loadMemory,
-        isCalculating, apiAvailable
+        isCalculating, apiAvailable,
+        importProjectConfig, exportProjectConfig, quickSaveProject
     }}>
       {children}
     </ProjectContext.Provider>

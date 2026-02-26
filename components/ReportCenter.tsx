@@ -1,6 +1,133 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
+import { useProject } from '../context/ProjectContext';
+import { exportProjectReport, exportSimplifiedReport, FinancialSummaryData } from '../utils/excelExport';
+import { exportToWord, generateAndPrintReport } from '../utils/reportExport';
 
 const ReportCenter: React.FC = () => {
+  const { modules, projectBaseInfo, priceConfig, bills, transformers, exportProjectConfig } = useProject();
+  const [isExporting, setIsExporting] = useState(false);
+
+  // 报告配置状态
+  const [reportLanguage, setReportLanguage] = useState<'zh' | 'en'>('zh');
+  const [reportDetail, setReportDetail] = useState<'simple' | 'full'>('simple');
+  const [exportFormat, setExportFormat] = useState<'excel' | 'pdf' | 'ppt' | 'json'>('excel');
+  const [selectedSections, setSelectedSections] = useState({
+    baseInfo: true,
+    priceConfig: true,
+    modules: true,
+    financial: true,
+    charts: true,
+  });
+
+  // 导出处理函数
+  const handleExportReport = useCallback(() => {
+    const activeModules = Object.values(modules).filter(m => m.isActive);
+
+    // 边界条件检查
+    if (activeModules.length === 0) {
+      alert('请先启用至少一个改造模块');
+      return;
+    }
+
+    setIsExporting(true);
+
+    // 特殊处理：JSON 导出（直接导出完整配置）
+    if (exportFormat === 'json') {
+      try {
+        exportProjectConfig(`${projectBaseInfo.name}_config`);
+      } catch (error) {
+        console.error('JSON 导出失败:', error);
+        alert('JSON 导出失败，请重试');
+      } finally {
+        setTimeout(() => setIsExporting(false), 100);
+      }
+      return;
+    }
+
+    // 构建模块数据
+    const moduleExportData = activeModules.map(m => ({
+      name: m.name,
+      isActive: m.isActive,
+      strategy: m.strategy,
+      investment: m.investment,
+      yearlySaving: m.yearlySaving,
+      roi: (m.yearlySaving / m.investment) * 100,
+      irr: 15,
+      payback: m.investment / m.yearlySaving,
+      npv: 0,
+      kpiPrimary: `${m.kpiPrimary.label}: ${m.kpiPrimary.value}`,
+      kpiSecondary: `${m.kpiSecondary.label}: ${m.kpiSecondary.value}`,
+    }));
+
+    // 构建财务汇总数据
+    const totalInvestment = activeModules.reduce((sum, m) => sum + m.investment, 0);
+    const totalFirstYearSaving = activeModules.reduce((sum, m) => sum + m.yearlySaving, 0);
+
+    const financialData: FinancialSummaryData = {
+      projectName: projectBaseInfo.name,
+      projectType: projectBaseInfo.type,
+      totalInvestment,
+      totalFirstYearSaving,
+      npv: totalFirstYearSaving * 10 - totalInvestment, // 简化计算
+      irr: 15,
+      payback: totalInvestment / totalFirstYearSaving,
+      period: 20,
+      discountRate: 5,
+      modules: moduleExportData,
+      annualData: [],
+    };
+
+    // 根据导出格式执行不同操作
+    try {
+      switch (exportFormat) {
+        case 'excel':
+          if (reportDetail === 'simple') {
+            exportSimplifiedReport(projectBaseInfo.name, moduleExportData, totalInvestment, totalFirstYearSaving);
+          } else {
+            exportProjectReport(projectBaseInfo, financialData, selectedSections);
+          }
+          break;
+
+        case 'pdf':
+          generateAndPrintReport({
+            projectInfo: projectBaseInfo,
+            modules: moduleExportData,
+            financial: {
+              totalInvestment: financialData.totalInvestment,
+              npv: financialData.npv,
+              irr: financialData.irr,
+              payback: financialData.payback,
+            }
+          });
+          break;
+
+        case 'word':
+          exportToWord({
+            projectInfo: projectBaseInfo,
+            modules: moduleExportData,
+            financial: {
+              totalInvestment: financialData.totalInvestment,
+              npv: financialData.npv,
+              irr: financialData.irr,
+              payback: financialData.payback,
+            }
+          });
+          break;
+      }
+    } catch (error) {
+      console.error('导出失败:', error);
+      alert('导出失败，请重试');
+    } finally {
+      // 对于同步的导出操作，立即重置状态
+      // 对于PDF（打印），需要在用户关闭对话框后重置
+      if (exportFormat !== 'pdf') {
+        setTimeout(() => setIsExporting(false), 100);
+      } else {
+        // PDF打印需要等待用户操作
+        setTimeout(() => setIsExporting(false), 2000);
+      }
+    }
+  }, [modules, projectBaseInfo, reportDetail, selectedSections, exportFormat, exportProjectConfig]);
   return (
     <div className="flex h-full">
         <div className="flex-1 p-8 overflow-y-auto bg-slate-50">
@@ -18,21 +145,31 @@ const ReportCenter: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-3">报告语言</label>
                                 <div className="flex p-1 bg-slate-100 rounded-lg w-full max-w-xs">
-                                    <button className="flex-1 px-4 py-2 rounded-md bg-white text-primary shadow-sm text-sm font-medium">中文 (Chinese)</button>
-                                    <button className="flex-1 px-4 py-2 rounded-md text-slate-500 hover:text-slate-700 text-sm font-medium">英文 (English)</button>
+                                    <button
+                                        onClick={() => setReportLanguage('zh')}
+                                        className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${reportLanguage === 'zh' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        中文 (Chinese)
+                                    </button>
+                                    <button
+                                        onClick={() => setReportLanguage('en')}
+                                        className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${reportLanguage === 'en' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        英文 (English)
+                                    </button>
                                 </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-3">报告详略</label>
                                 <div className="flex gap-4">
                                     <label className="relative flex cursor-pointer">
-                                        <input type="radio" name="detail" className="peer sr-only" defaultChecked />
+                                        <input type="radio" name="detail" className="peer sr-only" checked={reportDetail === 'simple'} onChange={() => setReportDetail('simple')} />
                                         <div className="px-4 py-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary transition-all flex flex-col w-32">
                                             <span className="text-sm font-bold mb-1">精简版</span><span className="text-xs text-slate-400">核心指标概览</span>
                                         </div>
                                     </label>
                                     <label className="relative flex cursor-pointer">
-                                        <input type="radio" name="detail" className="peer sr-only" />
+                                        <input type="radio" name="detail" className="peer sr-only" checked={reportDetail === 'full'} onChange={() => setReportDetail('full')} />
                                         <div className="px-4 py-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary transition-all flex flex-col w-32">
                                             <span className="text-sm font-bold mb-1">完整版</span><span className="text-xs text-slate-400">全量数据分析</span>
                                         </div>
@@ -46,16 +183,23 @@ const ReportCenter: React.FC = () => {
                     <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><span className="material-icons-round text-base">checklist</span> 导出内容勾选</h2>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {['建筑基本信息', '基准能耗分析', '电价模型参数', '光伏发电系统', '储能系统配置', 'AI 智能控制'].map((label, i) => (
+                            {[
+                                { key: 'baseInfo', label: '建筑基本信息' },
+                                { key: 'priceConfig', label: '基准能耗分析' },
+                                { key: 'modules', label: '电价模型参数' },
+                                { key: 'financial', label: '光伏发电系统' },
+                                { key: 'charts', label: '储能系统配置' },
+                            ].map((item, i) => (
                                 <label key={i} className="flex items-center p-3 rounded-lg border border-slate-200 bg-white cursor-pointer hover:border-primary/50 transition-colors">
-                                    <input type="checkbox" defaultChecked className="form-checkbox h-5 w-5 text-primary rounded border-slate-300 focus:ring-primary/20" />
-                                    <span className="ml-3 text-sm text-slate-700">{label}</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedSections[item.key as keyof typeof selectedSections]}
+                                        onChange={(e) => setSelectedSections(prev => ({ ...prev, [item.key]: e.target.checked }))}
+                                        className="form-checkbox h-5 w-5 text-primary rounded border-slate-300 focus:ring-primary/20"
+                                    />
+                                    <span className="ml-3 text-sm text-slate-700">{item.label}</span>
                                 </label>
                             ))}
-                            <label className="flex items-center p-3 rounded-lg border border-slate-200 bg-white cursor-pointer hover:border-primary/50 transition-colors col-span-2">
-                                <input type="checkbox" defaultChecked className="form-checkbox h-5 w-5 text-primary rounded border-slate-300 focus:ring-primary/20" />
-                                <span className="ml-3 text-sm text-slate-700 font-medium">全周期财务收益分析 (ROI/IRR)</span>
-                            </label>
                         </div>
                     </div>
 
@@ -64,19 +208,44 @@ const ReportCenter: React.FC = () => {
                         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><span className="material-icons-round text-base">save_alt</span> 导出格式</h2>
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                             <div className="flex gap-4">
-                                {['table_view', 'picture_as_pdf', 'slideshow'].map((icon, i) => (
+                                {[
+                                    { value: 'excel', icon: 'table_view', label: 'Excel', color: 'green' },
+                                    { value: 'pdf', icon: 'picture_as_pdf', label: 'PDF', color: 'red' },
+                                    { value: 'word', icon: 'description', label: 'Word', color: 'blue' },
+                                    { value: 'json', icon: 'data_object', label: 'JSON', color: 'orange' },
+                                ].map((format, i) => (
                                     <label key={i} className="cursor-pointer group">
-                                        <input type="radio" name="format" className="peer sr-only" defaultChecked={i===0} />
-                                        <div className={`w-16 h-16 rounded-lg border-2 border-slate-200 flex flex-col items-center justify-center gap-1 text-slate-500 peer-checked:border-${i===0?'green':i===1?'red':'orange'}-500 peer-checked:bg-${i===0?'green':i===1?'red':'orange'}-50 peer-checked:text-${i===0?'green':i===1?'red':'orange'}-600 transition-all hover:border-slate-300`}>
-                                            <span className="material-icons-round text-2xl">{icon}</span>
-                                            <span className="text-[10px] font-bold">{i===0?'Excel':i===1?'PDF':'PPT'}</span>
+                                        <input type="radio" name="format" className="peer sr-only" checked={exportFormat === format.value} onChange={() => setExportFormat(format.value as any)} />
+                                        <div className={`w-16 h-16 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all hover:border-slate-300
+                                            ${exportFormat === format.value
+                                                ? `border-${format.color}-500 bg-${format.color}-50 text-${format.color}-600`
+                                                : 'border-slate-200 text-slate-500'}`}>
+                                            <span className="material-icons-round text-2xl">{format.icon}</span>
+                                            <span className="text-[10px] font-bold">{format.label}</span>
                                         </div>
                                     </label>
                                 ))}
                             </div>
-                            <button className="px-8 py-4 bg-primary hover:bg-primary-700 text-white rounded-lg shadow-lg shadow-primary/30 flex items-center justify-center gap-3 transition-all transform hover:-translate-y-0.5">
-                                <span className="material-icons-round text-xl">auto_fix_high</span>
-                                <span className="font-bold text-lg">生成并下载报告</span>
+                            <button
+                                onClick={handleExportReport}
+                                disabled={isExporting}
+                                className={`px-8 py-4 rounded-lg shadow-lg flex items-center justify-center gap-3 transition-all transform hover:-translate-y-0.5 ${
+                                    isExporting
+                                        ? 'bg-slate-400 cursor-not-allowed'
+                                        : 'bg-primary hover:bg-primary-700 text-white shadow-primary/30'
+                                }`}
+                            >
+                                <span className="material-icons-round text-xl">
+                                    {isExporting ? 'hourglass_empty' : 'auto_fix_high'}
+                                </span>
+                                <span className="font-bold text-lg">
+                                    {isExporting
+                                        ? '正在生成...'
+                                        : exportFormat === 'json'
+                                            ? '导出项目配置'
+                                            : `生成${exportFormat === 'excel' ? '并下载' : exportFormat === 'pdf' ? '并打印' : '并下载'}${exportFormat.toUpperCase()}报告`
+                                    }
+                                </span>
                             </button>
                         </div>
                     </div>
