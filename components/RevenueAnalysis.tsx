@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { 
-    ComposedChart, Line, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import {
+    ComposedChart, Line, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
     CartesianGrid, Legend, ReferenceLine, Area, AreaChart, PieChart, Pie, Cell,
     ScatterChart, Scatter, ZAxis, ReferenceArea, Label
 } from 'recharts';
 import { View } from '../types';
 import { useProject, ModuleData } from '../context/ProjectContext';
+import { exportFinancialSheet, FinancialSummaryData, AnnualCashFlowData } from '../utils/excelExport';
 
 interface RevenueAnalysisProps {
   onChangeView?: (view: View) => void;
@@ -76,7 +77,8 @@ const calculateSingleDCF = (investment: number, yearlySaving: number, params: an
 };
 
 export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) {
-  const { modules } = useProject();
+  const { modules, projectBaseInfo } = useProject();
+  const [isExporting, setIsExporting] = useState(false);
 
   // --- 2. Sensitivity Parameters State ---
   const [params, setParams] = useState({
@@ -88,6 +90,17 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
       opexRate: 1.5, // % of CAPEX per year
       degradation: 0.8 // % System degradation per year
   });
+
+  // 使用 useRef 访问最新的值，避免不必要的函数重建
+  const paramsRef = useRef(params);
+  const simulationRef = useRef<any>(null);
+  const modulesRef = useRef(modules);
+  const projectBaseInfoRef = useRef(projectBaseInfo);
+
+  // 更新 ref 值
+  useEffect(() => { paramsRef.current = params; }, [params]);
+  useEffect(() => { modulesRef.current = modules; }, [modules]);
+  useEffect(() => { projectBaseInfoRef.current = projectBaseInfo; }, [projectBaseInfo]);
 
   // --- 1. Centralized Data Aggregation & Module Analysis ---
   const analysisData = useMemo(() => {
@@ -213,6 +226,121 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
       return { npv, irr, payback, annualData };
   }, [analysisData, params]);
 
+  // 更新 simulation ref
+  useEffect(() => { simulationRef.current = simulation; }, [simulation]);
+
+  // Memoize parameter update handlers to prevent callback recreation
+  const handleDiscountRateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setParams(prev => ({ ...prev, discountRate: parseFloat(e.target.value) }));
+  }, []);
+
+  const handleElecInflationChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setParams(prev => ({ ...prev, elecInflation: parseFloat(e.target.value) }));
+  }, []);
+
+  const handleDegradationChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setParams(prev => ({ ...prev, degradation: parseFloat(e.target.value) }));
+  }, []);
+
+  const handlePeriodChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setParams(prev => ({ ...prev, period: parseInt(e.target.value) }));
+  }, []);
+
+  // Excel导出处理函数（使用 ref 避免不必要的重建）
+  const handleExportExcel = useCallback(async () => {
+    const currentModules = modulesRef.current;
+    const currentParams = paramsRef.current;
+    const currentSimulation = simulationRef.current;
+    const currentProjectInfo = projectBaseInfoRef.current;
+
+    const activeModules = (Object.values(currentModules) as ModuleData[]).filter(m => m.isActive);
+
+    // 边界条件检查
+    if (activeModules.length === 0) {
+      alert('请先启用至少一个改造模块');
+      return;
+    }
+
+    const totalInvestment = activeModules.reduce((sum, m) => sum + m.investment, 0);
+    const totalFirstYearSaving = activeModules.reduce((sum, m) => sum + m.yearlySaving, 0);
+
+    // 检查投资和收益是否有效
+    if (totalInvestment <= 0 || totalFirstYearSaving <= 0) {
+      alert('投资额或年收益数据无效，请检查模块配置');
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      // 构建模块数据
+      const moduleExportData = activeModules.map(m => {
+        const metrics = calculateSingleDCF(m.investment, m.yearlySaving, currentParams);
+        return {
+          name: m.name,
+          isActive: m.isActive,
+          strategy: m.strategy,
+          investment: m.investment,
+          yearlySaving: m.yearlySaving,
+          roi: metrics.roi,
+          irr: metrics.irr,
+          payback: metrics.payback,
+          npv: metrics.npv,
+          kpiPrimary: `${m.kpiPrimary.label}: ${m.kpiPrimary.value}`,
+          kpiSecondary: `${m.kpiSecondary.label}: ${m.kpiSecondary.value}`,
+        };
+      });
+
+      // 构建年度现金流数据
+      const cashFlows: AnnualCashFlowData[] = [];
+      let cumulative = -totalInvestment;
+
+      cashFlows.push({ year: 0, net: -totalInvestment, cumulative });
+
+      for (let year = 1; year <= currentParams.period; year++) {
+        const degradationFactor = Math.pow(1 - currentParams.degradation / 100, year - 1);
+        const elecPriceFactor = Math.pow(1 + currentParams.elecInflation / 100, year - 1);
+
+        const revenue = totalFirstYearSaving * degradationFactor * elecPriceFactor;
+        const opex = totalInvestment * (currentParams.opexRate / 100) * Math.pow(1.02, year - 1);
+        const net = revenue - opex;
+        cumulative += net;
+
+        cashFlows.push({
+          year,
+          net: parseFloat(net.toFixed(2)),
+          cumulative: parseFloat(cumulative.toFixed(2))
+        });
+      }
+
+      // 构建财务汇总数据
+      const financialData: FinancialSummaryData = {
+        projectName: currentProjectInfo.name || '零碳项目',
+        projectType: currentProjectInfo.type || '综合改造',
+        totalInvestment,
+        totalFirstYearSaving,
+        npv: currentSimulation.npv,
+        irr: currentSimulation.irr,
+        payback: currentSimulation.payback,
+        period: currentParams.period,
+        discountRate: currentParams.discountRate,
+        modules: moduleExportData,
+        annualData: cashFlows,
+      };
+
+      // 导出Excel（使用 setTimeout 让 UI 先更新）
+      setTimeout(() => {
+        exportFinancialSheet(financialData, '财务测算表');
+        setIsExporting(false);
+      }, 100);
+
+    } catch (error) {
+      console.error('导出失败:', error);
+      alert('导出失败，请重试');
+      setIsExporting(false);
+    }
+  }, []); // 空依赖数组，使用 ref 访问最新值
+
   return (
     <div className="flex h-full bg-slate-50 relative">
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
@@ -231,8 +359,19 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                         </span>
                     </div>
                 </div>
-                <button className="flex items-center gap-2 text-sm text-primary font-medium hover:underline bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10 transition-colors">
-                    <span className="material-icons text-sm">download</span> 导出财务测算表 (.xlsx)
+                <button
+                    onClick={handleExportExcel}
+                    disabled={isExporting}
+                    className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                        isExporting
+                            ? 'text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed'
+                            : 'text-primary hover:underline bg-primary/5 border-primary/10 hover:bg-primary/10'
+                    }`}
+                >
+                    <span className="material-icons text-sm">
+                        {isExporting ? 'hourglass_empty' : 'download'}
+                    </span>
+                    {isExporting ? '正在导出...' : '导出财务测算表 (.xlsx)'}
                 </button>
             </header>
 
@@ -298,7 +437,7 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                                         <span>基准贴现率 (Discount Rate)</span>
                                         <span className="text-indigo-600">{params.discountRate}%</span>
                                     </div>
-                                    <input type="range" min="2" max="10" step="0.5" value={params.discountRate} onChange={(e)=>setParams({...params, discountRate: parseFloat(e.target.value)})} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                                    <input type="range" min="2" max="10" step="0.5" value={params.discountRate} onChange={handleDiscountRateChange} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                                     <p className="text-[10px] text-slate-400 mt-1">影响 NPV 估值，反映资金时间价值</p>
                                 </div>
 
@@ -307,7 +446,7 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                                         <span>能源价格年涨幅 (Energy Inflation)</span>
                                         <span className="text-emerald-600">{params.elecInflation}%</span>
                                     </div>
-                                    <input type="range" min="0" max="8" step="0.5" value={params.elecInflation} onChange={(e)=>setParams({...params, elecInflation: parseFloat(e.target.value)})} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-emerald-600" />
+                                    <input type="range" min="0" max="8" step="0.5" value={params.elecInflation} onChange={handleElecInflationChange} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-emerald-600" />
                                     <p className="text-[10px] text-slate-400 mt-1">影响年度收益增长率</p>
                                 </div>
 
@@ -316,16 +455,16 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                                         <span>系统年衰减率 (Degradation)</span>
                                         <span className="text-orange-500">{params.degradation}%</span>
                                     </div>
-                                    <input type="range" min="0.5" max="3" step="0.1" value={params.degradation} onChange={(e)=>setParams({...params, degradation: parseFloat(e.target.value)})} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-orange-500" />
+                                    <input type="range" min="0.5" max="3" step="0.1" value={params.degradation} onChange={handleDegradationChange} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-orange-500" />
                                     <p className="text-[10px] text-slate-400 mt-1">反映设备老化导致的收益下降</p>
                                 </div>
 
                                 <div className="pt-4 border-t border-slate-100">
                                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                                         <span className="text-xs text-slate-500">测算周期</span>
-                                        <select 
+                                        <select
                                             value={params.period}
-                                            onChange={(e) => setParams({...params, period: parseInt(e.target.value)})}
+                                            onChange={handlePeriodChange}
                                             className="text-xs font-bold bg-transparent border-none outline-none text-slate-800 text-right pr-1 cursor-pointer"
                                         >
                                             <option value={15}>15 年</option>
