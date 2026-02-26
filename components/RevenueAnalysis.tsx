@@ -229,23 +229,6 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
   // 更新 simulation ref
   useEffect(() => { simulationRef.current = simulation; }, [simulation]);
 
-  // Memoize parameter update handlers to prevent callback recreation
-  const handleDiscountRateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setParams(prev => ({ ...prev, discountRate: parseFloat(e.target.value) }));
-  }, []);
-
-  const handleElecInflationChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setParams(prev => ({ ...prev, elecInflation: parseFloat(e.target.value) }));
-  }, []);
-
-  const handleDegradationChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setParams(prev => ({ ...prev, degradation: parseFloat(e.target.value) }));
-  }, []);
-
-  const handlePeriodChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setParams(prev => ({ ...prev, period: parseInt(e.target.value) }));
-  }, []);
-
   // Excel导出处理函数（使用 ref 避免不必要的重建）
   const handleExportExcel = useCallback(async () => {
     const currentModules = modulesRef.current;
@@ -421,93 +404,6 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                             <div className="text-3xl font-bold text-orange-600 relative z-10">{simulation.payback > params.period ? `>${params.period}` : simulation.payback.toFixed(1)} <span className="text-sm font-normal text-slate-500">年</span></div>
                             <div className="mt-2 text-xs text-slate-400">现金流转正节点</div>
                         </div>
-                    </div>
-
-                    {/* 2. Global Analysis (Sensitivity + Cash Flow) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
-                            <div className="flex items-center gap-2 mb-6">
-                                <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600"><span className="material-icons text-lg">tune</span></div>
-                                <h3 className="font-bold text-slate-800">敏感性分析沙盘</h3>
-                            </div>
-                            
-                            <div className="space-y-6 flex-1">
-                                <div>
-                                    <div className="flex justify-between text-xs font-bold text-slate-600 mb-2">
-                                        <span>基准贴现率 (Discount Rate)</span>
-                                        <span className="text-indigo-600">{params.discountRate}%</span>
-                                    </div>
-                                    <input type="range" min="2" max="10" step="0.5" value={params.discountRate} onChange={handleDiscountRateChange} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                                    <p className="text-[10px] text-slate-400 mt-1">影响 NPV 估值，反映资金时间价值</p>
-                                </div>
-
-                                <div>
-                                    <div className="flex justify-between text-xs font-bold text-slate-600 mb-2">
-                                        <span>能源价格年涨幅 (Energy Inflation)</span>
-                                        <span className="text-emerald-600">{params.elecInflation}%</span>
-                                    </div>
-                                    <input type="range" min="0" max="8" step="0.5" value={params.elecInflation} onChange={handleElecInflationChange} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-emerald-600" />
-                                    <p className="text-[10px] text-slate-400 mt-1">影响年度收益增长率</p>
-                                </div>
-
-                                <div>
-                                    <div className="flex justify-between text-xs font-bold text-slate-600 mb-2">
-                                        <span>系统年衰减率 (Degradation)</span>
-                                        <span className="text-orange-500">{params.degradation}%</span>
-                                    </div>
-                                    <input type="range" min="0.5" max="3" step="0.1" value={params.degradation} onChange={handleDegradationChange} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-orange-500" />
-                                    <p className="text-[10px] text-slate-400 mt-1">反映设备老化导致的收益下降</p>
-                                </div>
-
-                                <div className="pt-4 border-t border-slate-100">
-                                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                        <span className="text-xs text-slate-500">测算周期</span>
-                                        <select
-                                            value={params.period}
-                                            onChange={handlePeriodChange}
-                                            className="text-xs font-bold bg-transparent border-none outline-none text-slate-800 text-right pr-1 cursor-pointer"
-                                        >
-                                            <option value={15}>15 年</option>
-                                            <option value={20}>20 年</option>
-                                            <option value={25}>25 年</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        <section className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-[450px]">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                    <span className="material-icons text-blue-500 text-lg">waterfall_chart</span> 
-                                    全生命周期累计现金流
-                                </h3>
-                                <div className="flex gap-4 text-xs text-slate-500">
-                                    <div className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-400 rounded-sm"></span> 年度净收益</div>
-                                    <div className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-600 rounded-full"></span> 累计收益 (回收曲线)</div>
-                                </div>
-                            </div>
-                            
-                            <div className="flex-1 w-full min-h-0">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart data={simulation.annualData} margin={{top: 10, right: 30, left: 0, bottom: 0}}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                        <XAxis dataKey="year" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                                        <YAxis yAxisId="left" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} label={{ value: '年度 (万元)', angle: -90, position: 'insideLeft', style: {fontSize: 10, fill: '#94a3b8'} }}/>
-                                        <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} label={{ value: '累计 (万元)', angle: 90, position: 'insideRight', style: {fontSize: 10, fill: '#94a3b8'} }}/>
-                                        <Tooltip 
-                                            contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', padding: '12px', fontSize: '12px'}}
-                                            formatter={(val: number) => `¥ ${val.toLocaleString()} 万`}
-                                            labelFormatter={(l) => `第 ${l} 年`}
-                                        />
-                                        <ReferenceLine yAxisId="right" y={0} stroke="#ef4444" strokeDasharray="3 3" label={{position:'insideTopLeft', value:'回本线', fill:'#ef4444', fontSize:10}} />
-                                        <Bar yAxisId="left" dataKey="net" name="年度净现金流" fill="#34d399" barSize={12} radius={[4,4,0,0]} />
-                                        <Line yAxisId="right" type="monotone" dataKey="cumulative" name="累计现金流" stroke="#2563eb" strokeWidth={3} dot={false} />
-                                        <Area yAxisId="right" type="monotone" dataKey="cumulative" fill="#3b82f6" fillOpacity={0.1} stroke="none" />
-                                    </ComposedChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </section>
                     </div>
 
                     {/* 3. NEW SECTION: Module Ranking & Detail Analysis */}
