@@ -62,9 +62,11 @@ export interface SidebarItemProps {
 export interface FormulaParam {
   key: string;
   label: string;
-  defaultValue: number;
+  defaultValue: number | string;
   unit: string;
   editable: boolean;
+  type?: 'number' | 'select';
+  options?: Record<string, string>;
 }
 
 export interface FormulaItem {

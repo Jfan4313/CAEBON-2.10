@@ -1,0 +1,57 @@
+{
+  "appId": "com.zerocarbon.valuation",
+  "productName": "ZeroCarbon Valuation",
+  "copyright": "Copyright © 2025",
+  "directories": {
+    "output": "dist-electron",
+    "buildResources": "assets"
+  },
+  "files": [
+    "electron/**/*",
+    "dist/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "version": "${version}",
+    "buildVersion": "${version}"
+  },
+  "mac": {
+    "target": [
+      "dmg",
+      "zip"
+    ],
+    "category": "public.app-category.productivity",
+    "icon": "assets/icon.icns",
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false,
+    "extendInfo": {
+      "NSCameraUsageDescription": "需要访问相机来上传项目截图",
+      "NSDocumentsFolderUsageDescription": "需要访问文档来保存项目数据",
+      "NSDownloadsFolderUsageDescription": "需要访问下载文件夹来导出报告"
+    }
+  },
+  "dmg": {
+    "contents": [
+      {
+        "x": 130,
+        "y": 220
+      },
+      {
+        "x": 410,
+        "y": 220,
+        "type": "link",
+        "path": "/Applications"
+      }
+    ],
+    "window": {
+      "width": 540,
+      "height": 380
+    }
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  }
+}

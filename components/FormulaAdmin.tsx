@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ModuleFormula, FormulaParam } from '../types';
 
 // 各模块计算公式配置
@@ -237,20 +237,72 @@ const FORMULAS: Record<string, ModuleFormula> = {
       { key: 'service_fee', label: '服务费', defaultValue: 0.5, unit: '元/kWh', editable: true },
       { key: 'investment_per_charger', label: '单桩投资', defaultValue: 3000, unit: '元', editable: true }
     ]
+  },
+  'campus_solar': {
+    id: 'campus_solar',
+    name: '校园光伏消纳率',
+    formulas: [
+      {
+        formula: '储容比 = 储能容量 / 光伏容量',
+        description: '计算储能与光伏容量的比例'
+      },
+      {
+        formula: '基础消纳率 = 学校类型基准消纳率',
+        description: '根据学校类型确定基础消纳率'
+      },
+      {
+        formula: '储能修正 = 储容比 × 0.12（最高25%）',
+        description: '储能配置对消纳率的提升效果'
+      },
+      {
+        formula: '空调修正 = 有空调 ? 0.10 : 0',
+        description: '空调系统对夏季消纳率的提升'
+      },
+      {
+        formula: '季节加权平均 = 春×0.25 + 夏×0.35 + 秋×0.25 + 冬×0.15',
+        description: '考虑季节权重后的综合消纳率'
+      },
+      {
+        formula: '周末修正后 = 季节平均 × 0.85（工作日） + 周末消纳率 × 0.15',
+        description: '考虑周末负荷降低的影响'
+      },
+      {
+        formula: '寒暑假修正后 = 周末修正后 × (365-假期天数) / 365 + 假期消纳率 × 假期天数 / 365',
+        description: '考虑寒暑假期间负荷降低的影响'
+      },
+      {
+        formula: '最终推荐 = MIN(曲线验证值, 寒暑假修正后)',
+        description: '通过典型日负荷曲线验证并确定最终推荐值'
+      }
+    ],
+    params: [
+      { key: 'school_type', label: '学校类型', defaultValue: 'university', unit: '', editable: true, type: 'select', options: { primary_middle: '小学 / 初中', high_school: '高中', university: '大学 / 学院', vocational: '职业院校', training: '培训机构' } },
+      { key: 'pv_capacity', label: '光伏容量', defaultValue: 400, unit: 'kW', editable: true },
+      { key: 'storage_capacity', label: '储能容量', defaultValue: 100, unit: 'kWh', editable: true },
+      { key: 'has_ac', label: '有空调系统', defaultValue: '1', unit: '', editable: true, type: 'select', options: { '0': '无', '1': '有' } },
+      { key: 'region', label: '地区', defaultValue: 'central', unit: '', editable: true, type: 'select', options: { south: '南方地区（寒暑假较短）', central: '中部地区', north: '北方地区（寒假较长）' } },
+      { key: 'spring_rate', label: '春季消纳率', defaultValue: 0.65, unit: '%', editable: false },
+      { key: 'summer_rate', label: '夏季消纳率', defaultValue: 0.75, unit: '%', editable: false },
+      { key: 'autumn_rate', label: '秋季消纳率', defaultValue: 0.70, unit: '%', editable: false },
+      { key: 'winter_rate', label: '冬季消纳率', defaultValue: 0.55, unit: '%', editable: false },
+      { key: 'weekend_rate', label: '周末修正后', defaultValue: 0.60, unit: '%', editable: false },
+      { key: 'vacation_rate', label: '寒暑假修正后', defaultValue: 0.52, unit: '%', editable: false },
+      { key: 'final_rate', label: '最终推荐消纳率', defaultValue: 0.50, unit: '%', editable: false }
+    ]
   }
 };
 
 const FormulaAdmin: React.FC = () => {
   const [selectedModule, setSelectedModule] = useState<string>('solar');
-  const [params, setParams] = useState<Record<string, number>>({});
+  const [params, setParams] = useState<Record<string, number | string>>({});
   const [testResult, setTestResult] = useState<ModuleFormula['testResult']>(undefined);
   const [isTesting, setIsTesting] = useState(false);
 
   const currentFormula = FORMULAS[selectedModule];
 
   // 初始化参数值
-  useState(() => {
-    const initialParams: Record<string, number> = {};
+  useEffect(() => {
+    const initialParams: Record<string, number | string> = {};
     currentFormula.params.forEach(p => {
       initialParams[p.key] = p.defaultValue;
     });
@@ -258,7 +310,7 @@ const FormulaAdmin: React.FC = () => {
   }, [currentFormula]);
 
   // 更新参数
-  const handleParamChange = (key: string, value: number) => {
+  const handleParamChange = (key: string, value: number | string) => {
     setParams(prev => ({ ...prev, [key]: value }));
   };
 
@@ -280,7 +332,7 @@ const FormulaAdmin: React.FC = () => {
   };
 
   // 简单的计算函数（仅用于演示）
-  const calculate = (moduleId: string, paramValues: Record<string, number>): ModuleFormula['testResult'] => {
+  const calculate = (moduleId: string, paramValues: Record<string, number | string>): ModuleFormula['testResult'] => {
     const p = paramValues;
 
     switch (moduleId) {
@@ -425,6 +477,98 @@ const FormulaAdmin: React.FC = () => {
         };
       }
 
+      case 'campus_solar': {
+        // 校园光伏消纳率计算
+        const schoolType = String(p.school_type || 'university');
+        const pvCapacity = Number(p.pv_capacity || 400);
+        const storageCapacity = Number(p.storage_capacity || 100);
+        const hasAC = String(p.has_ac) === '1';
+        const region = String(p.region || 'central');
+
+        // 学校类型基础消纳率
+        const baseRates: Record<string, number> = {
+          'primary_middle': 0.68,
+          'high_school': 0.64,
+          'university': 0.55,
+          'vocational': 0.60,
+          'training': 0.72
+        };
+        const baseRate = baseRates[schoolType] || 0.55;
+
+        // 储容比修正
+        const storageToPvRatio = storageCapacity / pvCapacity;
+        const storageBonus = Math.min(0.25, storageToPvRatio * 0.12);
+        let rate = baseRate + storageBonus;
+
+        // 空调修正
+        const acBonus = hasAC ? 0.10 : 0;
+        rate += acBonus;
+
+        // 季节加权平均
+        const seasonalFactors = {
+          spring: 1.0,
+          summer: 1.15,
+          autumn: 1.08,
+          winter: 0.85
+        };
+
+        const seasonalRates = {
+          spring: rate * seasonalFactors.spring,
+          summer: rate * seasonalFactors.summer,
+          autumn: rate * seasonalFactors.autumn,
+          winter: rate * seasonalFactors.winter
+        };
+
+        const seasonWeights = { spring: 0.25, summer: 0.35, autumn: 0.25, winter: 0.15 };
+        const weightedSeasonalRate =
+          seasonalRates.spring * seasonWeights.spring +
+          seasonalRates.summer * seasonWeights.summer +
+          seasonalRates.autumn * seasonWeights.autumn +
+          seasonalRates.winter * seasonWeights.winter;
+
+        // 周末修正
+        const weekendLoadFactors: Record<string, number> = {
+          'primary_middle': 0.25,
+          'high_school': 0.30,
+          'university': 0.50,
+          'vocational': 0.35,
+          'training': 0.60
+        };
+        const weekendRate = weightedSeasonalRate * weekendLoadFactors[schoolType] * 0.15;
+        const workingDayRate = weightedSeasonalRate * 0.85;
+        const weekendAdjustedRate = (workingDayRate * 261 + weekendRate * 104) / 365;
+
+        // 寒暑假天数
+        const vacationDays: Record<string, Record<string, number>> = {
+          'primary_middle': { south: 60, central: 65, north: 70 },
+          'high_school': { south: 60, central: 65, north: 70 },
+          'university': { south: 80, central: 85, north: 90 },
+          'vocational': { south: 65, central: 70, north: 75 },
+          'training': { south: 35, central: 38, north: 40 }
+        };
+        const vacDays = vacationDays[schoolType]?.[region] || 70;
+
+        // 假期消纳率（仅基础负荷）
+        const vacationRate = 0.25;
+
+        // 寒暑假修正后
+        const workingDaysAfterVacation = 365 - vacDays - 11; // 减去法定节假日
+        const vacationAdjustedRate =
+          (weekendAdjustedRate * workingDaysAfterVacation + vacationRate * vacDays) / 365;
+
+        // 返回计算结果
+        return {
+          final_rate: Math.round(vacationAdjustedRate * 10000) / 100,
+          spring_rate: Math.round(seasonalRates.spring * 10000) / 100,
+          summer_rate: Math.round(seasonalRates.summer * 10000) / 100,
+          autumn_rate: Math.round(seasonalRates.autumn * 10000) / 100,
+          winter_rate: Math.round(seasonalRates.winter * 10000) / 100,
+          weekend_rate: Math.round(weekendAdjustedRate * 10000) / 100,
+          vacation_rate: Math.round(vacationAdjustedRate * 10000) / 100,
+          storage_ratio: parseFloat(storageToPvRatio.toFixed(2))
+        };
+      }
+
       default:
         return undefined;
     }
@@ -493,19 +637,40 @@ const FormulaAdmin: React.FC = () => {
                       {param.editable && <span className="text-red-500 ml-1">* 可编辑</span>}
                     </label>
                     <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        disabled={!param.editable}
-                        value={params[param.key] ?? param.defaultValue}
-                        onChange={(e) => handleParamChange(param.key, parseFloat(e.target.value))}
-                        className={`flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm transition-colors ${
-                          param.editable
-                            ? 'focus:border-primary focus:ring-2 focus:ring-primary/20 bg-white'
-                            : 'bg-slate-50 text-slate-500 cursor-not-allowed'
-                        }`}
-                      />
-                      <span className="text-sm text-slate-500 w-12">{param.unit}</span>
+                      {param.options ? (
+                        <select
+                          disabled={!param.editable}
+                          value={params[param.key] ?? param.defaultValue}
+                          onChange={(e) => handleParamChange(param.key, e.target.value)}
+                          className={`flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm transition-colors ${
+                            param.editable
+                              ? 'focus:border-primary focus:ring-2 focus:ring-primary/20 bg-white'
+                              : 'bg-slate-50 text-slate-500 cursor-not-allowed'
+                          }`}
+                        >
+                          {Object.entries(param.options).map(([key, label]) => (
+                            <option key={key} value={key}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <>
+                        <input
+                          type="number"
+                          step="0.01"
+                          disabled={!param.editable}
+                          value={params[param.key] ?? param.defaultValue}
+                          onChange={(e) => handleParamChange(param.key, parseFloat(e.target.value))}
+                          className={`flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm transition-colors ${
+                            param.editable
+                              ? 'focus:border-primary focus:ring-2 focus:ring-primary/20 bg-white'
+                              : 'bg-slate-50 text-slate-500 cursor-not-allowed'
+                          }`}
+                        />
+                        {param.unit && <span className="text-sm text-slate-500 w-12">{param.unit}</span>}
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -537,6 +702,57 @@ const FormulaAdmin: React.FC = () => {
                     计算结果
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
+                    {/* 校园光伏消纳率结果 */}
+                    {testResult.final_rate !== undefined && (
+                      <>
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3">
+                          <div className="text-xs text-blue-600 font-bold mb-1">最终推荐消纳率</div>
+                          <div className="text-lg font-bold text-slate-900">{testResult.final_rate}%</div>
+                        </div>
+                        {testResult.spring_rate !== undefined && (
+                          <div className="bg-slate-50 rounded-lg p-3">
+                            <div className="text-xs text-slate-500 mb-1">春季消纳率</div>
+                            <div className="text-lg font-bold text-green-600">{testResult.spring_rate}%</div>
+                          </div>
+                        )}
+                        {testResult.summer_rate !== undefined && (
+                          <div className="bg-slate-50 rounded-lg p-3">
+                            <div className="text-xs text-slate-500 mb-1">夏季消纳率</div>
+                            <div className="text-lg font-bold text-red-600">{testResult.summer_rate}%</div>
+                          </div>
+                        )}
+                        {testResult.autumn_rate !== undefined && (
+                          <div className="bg-slate-50 rounded-lg p-3">
+                            <div className="text-xs text-slate-500 mb-1">秋季消纳率</div>
+                            <div className="text-lg font-bold text-amber-600">{testResult.autumn_rate}%</div>
+                          </div>
+                        )}
+                        {testResult.winter_rate !== undefined && (
+                          <div className="bg-slate-50 rounded-lg p-3">
+                            <div className="text-xs text-slate-500 mb-1">冬季消纳率</div>
+                            <div className="text-lg font-bold text-blue-600">{testResult.winter_rate}%</div>
+                          </div>
+                        )}
+                        {testResult.weekend_rate !== undefined && (
+                          <div className="bg-slate-50 rounded-lg p-3">
+                            <div className="text-xs text-slate-500 mb-1">考虑周末后</div>
+                            <div className="text-lg font-bold text-slate-900">{testResult.weekend_rate}%</div>
+                          </div>
+                        )}
+                        {testResult.vacation_rate !== undefined && (
+                          <div className="bg-slate-50 rounded-lg p-3">
+                            <div className="text-xs text-slate-500 mb-1">考虑寒暑假后</div>
+                            <div className="text-lg font-bold text-slate-900">{testResult.vacation_rate}%</div>
+                          </div>
+                        )}
+                        {testResult.storage_ratio !== undefined && (
+                          <div className="bg-slate-50 rounded-lg p-3">
+                            <div className="text-xs text-slate-500 mb-1">储容比</div>
+                            <div className="text-lg font-bold text-slate-900">{testResult.storage_ratio}</div>
+                          </div>
+                        )}
+                      </>
+                    )}
                     {testResult.investment !== undefined && (
                       <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-xs text-slate-500 mb-1">投资</div>

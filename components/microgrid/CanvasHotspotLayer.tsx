@@ -9,6 +9,12 @@ interface CanvasHotspotLayerProps {
     height?: number;
 }
 
+/**
+ * Canvas 热点图层组件
+ *
+ * 使用 Canvas 像素检测实现精准的悬停和点击交互
+ * 使用固定尺寸 1920x1080
+ */
 const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
     configs,
     onDeviceClick,
@@ -36,40 +42,37 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         return configs.filter(c => c.visible && c.linkedDevice);
     }, [configs]);
 
+    const visibleConfigs = useMemo(() => {
+        return configs.filter(c => c.visible);
+    }, [configs]);
+
     useEffect(() => {
-        if (clickableConfigs.length === 0) return;
+        if (visibleConfigs.length === 0) return;
 
         const layerMap = new Map<string, { img: HTMLImageElement; alphaMap: Uint8Array }>();
         let loadedCount = 0;
-        const totalImages = clickableConfigs.length;
-        let targetWidth = 0;
-        let targetHeight = 0;
+        const totalImages = visibleConfigs.length;
 
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
         if (!tempCtx) return;
 
-        clickableConfigs.forEach((config, index) => {
+        visibleConfigs.forEach((config, index) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
             img.src = config.imageSrc;
 
             img.onload = () => {
-                if (index === 0) {
-                    targetWidth = img.naturalWidth || width;
-                    targetHeight = img.naturalHeight || height;
-                }
+                tempCanvas.width = width;
+                tempCanvas.height = height;
 
-                tempCanvas.width = targetWidth;
-                tempCanvas.height = targetHeight;
+                tempCtx.clearRect(0, 0, width, height);
+                tempCtx.drawImage(img, 0, 0, width, height);
 
-                tempCtx.clearRect(0, 0, targetWidth, targetHeight);
-                tempCtx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                const imageData = tempCtx.getImageData(0, 0, width, height);
+                const alphaMap = new Uint8Array(width * height);
 
-                const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
-                const alphaMap = new Uint8Array(targetWidth * targetHeight);
-
-                for (let i = 0; i < targetWidth * targetHeight; i++) {
+                for (let i = 0; i < width * height; i++) {
                     alphaMap[i] = imageData.data[i * 4 + 3];
                 }
 
@@ -93,8 +96,9 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         return () => {
             layerMap.clear();
         };
-    }, [clickableConfigs, width, height]);
+    }, [visibleConfigs, width, height]);
 
+    // 当数据准备好后绘制 Canvas
     useEffect(() => {
         if (!canvasRef.current || layerData.size === 0) return;
 
@@ -102,16 +106,15 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const firstImage = layerData.values().next();
-        canvas.width = firstImage?.img.naturalWidth || width;
-        canvas.height = firstImage?.img.naturalHeight || height;
+        canvas.width = width;
+        canvas.height = height;
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, width, height);
 
-        const sortedConfigs = [...configs].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+        const sortedConfigs = [...configs].sort((a, b) => (a.zIndex || 0) - (a.zIndex || 0));
 
         sortedConfigs.forEach(config => {
             if (!config.visible) return;
@@ -122,36 +125,35 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
             const isBaseLayer = ['sceneBackground', 'decorative'].includes(config.id);
             const isActive = config.id === activeDevice;
             const isHovered = config.id === hoveredDevice;
+            const isClickable = clickableConfigs.some(c => c.id === config.id);
 
-            if (isBaseLayer) {
-                ctx.globalAlpha = 1.0;
-                ctx.drawImage(data.img, 0, 0, canvas.width, canvas.height);
-            } else {
-                const isClickable = clickableConfigs.some(c => c.id === config.id);
-                if (isClickable) {
-                    const sourceCanvas = document.createElement('canvas');
-                    sourceCanvas.width = canvas.width;
-                    sourceCanvas.height = canvas.height;
-                    const sourceCtx = sourceCanvas.getContext('2d');
-                    sourceCtx.putImageData(data.img, 0, 0, targetWidth, targetHeight);
+            // 重置全局透明度
+            ctx.globalAlpha = 1.0;
 
-                    ctx.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
-                } else {
-                    ctx.globalAlpha = config.id === activeDevice ? 1.0 : (config.id === hoveredDevice ? 0.8 : 0.0);
-                    ctx.drawImage(data.img, 0, 0, canvas.width, canvas.height);
-                }
-            }
+            // 绘制图片
+            ctx.drawImage(data.img, 0, 0, width, height);
 
-            if (config.id === activeDevice) {
+            // 如果是活动设备，添加高亮效果
+            if (config.id === activeDevice && isClickable) {
                 ctx.save();
                 ctx.globalAlpha = 0.3;
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = 'rgba(0, 255, 255, 0.3)';
-                ctx.drawImage(data.img, 0, 0, canvas.width, canvas.height);
+                ctx.drawImage(data.img, 0, 0, width, height);
+                ctx.restore();
+            }
+
+            // 如果是悬停的可点击设备，添加轻微高亮
+            if (config.id === hoveredDevice && isClickable && config.id !== activeDevice) {
+                ctx.save();
+                ctx.globalAlpha = 0.2;
+                ctx.shadowBlur = 4;
+                ctx.shadowColor = 'rgba(0, 255, 255, 0.2)';
+                ctx.drawImage(data.img, 0, 0, width, height);
                 ctx.restore();
             }
         });
-    }, [layerData, activeDevice, hoveredDevice, configs]);
+    }, [layerData, activeDevice, hoveredDevice, configs, clickableConfigs, width, height]);
 
     const detectDeviceAt = useCallback((x: number, y: number): string | null => {
         if (layerData.size === 0) return null;
@@ -159,9 +161,9 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         const px = Math.floor(x);
         const py = Math.floor(y);
 
-        if (px < 0 || px >= canvas.width || py < 0 || py >= canvas.height) return null;
+        if (px < 0 || px >= width || py < 0 || py >= height) return null;
 
-        const index = py * canvas.width + px;
+        const index = py * width + px;
 
         for (const config of sortedConfigs) {
             if (['sceneBackground', 'decorative'].includes(config.id)) continue;
@@ -180,15 +182,15 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         }
 
         return null;
-    }, [layerData, sortedConfigs, canvas.width, height]);
+    }, [layerData, sortedConfigs, clickableConfigs, width, height]);
 
     const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (!canvas || layerData.size === 0) return;
 
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
+        const scaleX = width / rect.width;
+        const scaleY = height / rect.height;
 
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
@@ -214,15 +216,15 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
             setHoveredDevice(foundDevice);
             canvas.style.cursor = foundDevice ? 'pointer' : 'default';
         });
-    }, [detectDeviceAt, layerData]);
+    }, [detectDeviceAt, layerData, width, height]);
 
     const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
+        const scaleX = width / rect.width;
+        const scaleY = height / rect.height;
 
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
@@ -245,7 +247,7 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         } else {
             setActiveDevice(null);
         }
-    }, [detectDeviceAt, configs, activeDevice, onDeviceClick]);
+    }, [detectDeviceAt, configs, activeDevice, onDeviceClick, width, height]);
 
     const handleMouseLeave = useCallback(() => {
         setHoveredDevice(null);
@@ -267,6 +269,7 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
 
     return (
         <div className="relative w-full h-full">
+            {/* Canvas层用于渲染和点击检测 */}
             <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full"
@@ -314,9 +317,7 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
                 </button>
             )}
 
-            <div style={{ opacity: 0, pointerEvents: 'none' }}>
-                {children}
-            </div>
+            {children}
         </div>
     );
 };

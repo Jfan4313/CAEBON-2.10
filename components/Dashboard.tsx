@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend
 import { useProject } from '../context/ProjectContext';
 import { projectStorageService } from '../services/projectStorage';
 import { ProjectFullData } from '../types/projectStorage';
+import ProjectManager from './ProjectManager';
 
 const data = [
   { name: '1月', base: 60, current: 40 },
@@ -23,6 +24,7 @@ const Dashboard: React.FC = () => {
   const { projectBaseInfo, importProjectConfig, exportProjectConfig, quickSaveProject, notification } = useProject();
   const [visibleSeries, setVisibleSeries] = useState<Record<string, boolean>>({ base: true, current: true });
   const [showQuickSaveDialog, setShowQuickSaveDialog] = useState(false);
+  const [showProjectManager, setShowProjectManager] = useState(false);
   const [projectNameInput, setProjectNameInput] = useState('');
   const [projectDescriptionInput, setProjectDescriptionInput] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -136,6 +138,14 @@ const Dashboard: React.FC = () => {
           <h2 className="text-lg font-bold text-slate-800">仪表盘</h2>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowProjectManager(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors text-sm font-medium"
+            title="管理已保存的项目"
+          >
+            <span className="material-symbols-outlined text-[18px]">folder</span>
+            项目管理
+          </button>
           <button
             onClick={handleQuickSave}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium"
@@ -339,6 +349,11 @@ const Dashboard: React.FC = () => {
              </table>
          </div>
       </div>
+
+      {/* 项目管理对话框 */}
+      {showProjectManager && (
+        <ProjectManager onClose={() => setShowProjectManager(false)} />
+      )}
     </div>
   );
 };

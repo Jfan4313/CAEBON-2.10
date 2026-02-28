@@ -58,8 +58,10 @@ const DeviceImage: React.FC<{
                 bottom: config.position.bottom !== undefined ? `${config.position.bottom}%` : undefined,
                 left: config.position.left !== undefined ? `${config.position.left}%` : undefined,
                 right: config.position.right !== undefined ? `${config.position.right}%` : undefined,
-                width: typeof config.size.width === 'number' ? `${config.size.width}%` : config.size.width !== undefined ? config.size.width : undefined,
-                height: typeof config.size.height === 'number' ? `${config.size.height}%` : config.size.height || 'auto',
+                width: typeof config.size.width === 'number' ? `${config.size.width}%` : (config.size.width || '100%'),
+                height: typeof config.size.height === 'number' ? `${config.size.height}%` : (config.size.height || 'auto'),
+                maxWidth: typeof config.size.width === 'number' ? `${config.size.width}%` : (config.size.width || '100%'),
+                maxHeight: typeof config.size.height === 'number' ? `${config.size.height}%` : (config.size.height || 'auto'),
                 zIndex: config.zIndex,
                 display: config.visible ? 'block' : 'none',
             }}

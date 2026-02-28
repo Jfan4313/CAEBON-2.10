@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ComposedChart, Line, Area, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
 import { useProject } from '../context/ProjectContext';
 
@@ -256,12 +256,12 @@ export default function RetrofitMicrogrid() {
   const simData = useMemo(() => generateSimData(isIslandSimulating, keepRatio, demandLimitVal), [isIslandSimulating, keepRatio, demandLimitVal]);
 
   // Handle Updates
-  const handleUpdate = (newParamsPart: any) => {
+  const handleUpdate = useCallback((newParamsPart: any) => {
       const newParams = { ...params, ...newParamsPart };
       updateModule('retrofit-microgrid', {
           params: newParams
       });
-  };
+  }, [params, updateModule]);
 
   // Sync Financials to Context (Guarded)
   useEffect(() => {
@@ -281,16 +281,16 @@ export default function RetrofitMicrogrid() {
 
 
   // --- Handlers ---
-  const handleLoadChange = (type: 'l1'|'l2'|'l3', val: number) => {
+  const handleLoadChange = useCallback((type: 'l1'|'l2'|'l3', val: number) => {
       handleUpdate({
           preciseState: {
               ...params.preciseState,
               loads: { ...params.preciseState.loads, [type]: val }
           }
       });
-  };
+  }, [handleUpdate, params.preciseState]);
 
-  const handlePreciseUpdate = (section: keyof typeof params.preciseState, field: string, value: any) => {
+  const handlePreciseUpdate = useCallback((section: keyof typeof params.preciseState, field: string, value: any) => {
       handleUpdate({
           preciseState: {
               ...params.preciseState,
@@ -300,7 +300,7 @@ export default function RetrofitMicrogrid() {
               }
           }
       });
-  };
+  }, [handleUpdate, params.preciseState]);
 
   if (!currentModule) return null;
 
@@ -584,58 +584,11 @@ export default function RetrofitMicrogrid() {
                     </div>
                 )}
 
-                {/* --- VISUALIZATION (Common) --- */}
-                <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-fade-in relative overflow-hidden">
-                    <div className="flex items-center justify-between mb-6 relative z-10">
-                        <div>
-                            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                                <span className="material-icons text-teal-500">schema</span> 能量流向与动态仿真
-                            </h3>
-                            <p className="text-xs text-slate-500 mt-1">
-                                {isIslandSimulating ? '⚠ 离网模式中：电网断开，储能支撑一级/二级负荷' : '并网模式中：实时进行需量管理与削峰填谷'}
-                            </p>
-                        </div>
-                        <button 
-                            onClick={() => setIsIslandSimulating(!isIslandSimulating)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-md ${isIslandSimulating ? 'bg-red-500 text-white hover:bg-red-600 ring-2 ring-red-200' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                        >
-                            <span className="material-icons text-sm">{isIslandSimulating ? 'power_off' : 'power'}</span>
-                            {isIslandSimulating ? '恢复并网' : '模拟离网 (Island Mode)'}
-                        </button>
-                    </div>
-
-                    <div className="h-72 w-full relative z-10">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={simData} margin={{top: 20, right: 20, bottom: 20, left: 0}}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="hour" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                                <YAxis label={{ value: '功率 (kW)', angle: -90, position: 'insideLeft', style: {fontSize: 10, fill: '#94a3b8'} }} tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                                <Tooltip 
-                                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', padding: '12px'}}
-                                    labelStyle={{color: '#64748b', marginBottom: '5px', fontWeight: 'bold'}}
-                                />
-                                <Legend wrapperStyle={{fontSize: '12px', paddingTop: '10px'}}/>
-                                
-                                <Area type="monotone" dataKey="load" name="实际负荷" fill="#e2e8f0" stroke="none" fillOpacity={0.5} />
-                                {isIslandSimulating && <Area type="monotone" dataKey="shedded" name="切除负荷" fill="#fca5a5" stroke="none" fillOpacity={0.6} />}
-                                
-                                <Line type="basis" dataKey="solar" name="光伏出力" stroke="#facc15" strokeWidth={2} dot={false} />
-                                <Bar dataKey="grid" name="电网取电" fill={isIslandSimulating ? '#cbd5e1' : '#3b82f6'} barSize={8} radius={[2,2,0,0]} />
-                                <Bar dataKey="storage" name="储能放电" fill="#8b5cf6" barSize={8} radius={[2,2,0,0]} stackId="a" />
-                                
-                                {!isIslandSimulating && (
-                                    <ReferenceLine y={simData[0]?.demandLimit} stroke="red" strokeDasharray="3 3" label={{value: "需量红线 (Demand Limit)", fill: "red", fontSize: 10, position: 'insideTopLeft'}} />
-                                )}
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    </div>
-                </section>
-
             </div>
         </div>
 
         {/* Sticky Footer */}
-        <div className="fixed bottom-0 left-64 right-[340px] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="fixed bottom-0 left-64 right-[400px] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 text-slate-400">
                     <span className="material-icons text-[18px]">history</span>
@@ -657,14 +610,68 @@ export default function RetrofitMicrogrid() {
       </div>
         
       {/* Right Sidebar - Analytics */}
-      <aside className={`w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 h-screen overflow-y-auto shadow-xl mb-16 transition-all duration-300 ${currentModule.isActive ? '' : 'opacity-60 grayscale'}`}>
-          <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <span className="material-icons text-primary">analytics</span> 实时预估收益
-              </h3>
-              {!currentModule.isActive && <span className="text-xs font-bold text-red-500 border border-red-200 bg-red-50 px-2 py-0.5 rounded">未计入</span>}
+      <aside className={`w-[400px] bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 h-screen overflow-y-auto shadow-xl mb-16 transition-all duration-300 ${currentModule.isActive ? '' : 'opacity-60 grayscale'}`}>
+          {/* Running Control Panel */}
+          <div className="p-5 border-b border-slate-200 bg-white sticky top-0 z-10">
+              <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                      <span className="material-icons text-teal-500">settings_suggest</span> 运行控制
+                  </h3>
+                  {!currentModule.isActive && <span className="text-xs font-bold text-red-500 border border-red-200 bg-red-50 px-2 py-0.5 rounded">未启用</span>}
+              </div>
+              <button
+                  onClick={() => setIsIslandSimulating(!isIslandSimulating)}
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-md ${isIslandSimulating ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                  <span className="material-icons">{isIslandSimulating ? 'power_off' : 'power'}</span>
+                  {isIslandSimulating ? '恢复并网模式' : '切换至离网模式'}
+              </button>
+              <p className={`text-xs mt-3 text-center ${isIslandSimulating ? 'text-red-600' : 'text-slate-500'}`}>
+                  {isIslandSimulating ? '离网模式中：电网断开，储能支撑负荷' : '并网模式中：实时需量管理与削峰填谷'}
+              </p>
           </div>
+
+          {/* 24-Hour Chart */}
+          <div className="p-5 border-b border-slate-200 bg-slate-50/50">
+              <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                  <span className="material-icons text-teal-500">show_chart</span> 24小时运行曲线
+              </h3>
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3" style={{ height: '280px', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height={280}>
+                      <ComposedChart data={simData} margin={{top: 10, right: 10, bottom: 30, left: -10}}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="hour" tick={{fontSize: 9, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                          <YAxis tick={{fontSize: 9, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                          <Tooltip
+                              contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', padding: '8px'}}
+                              labelStyle={{color: '#64748b', marginBottom: '3px', fontWeight: 'bold', fontSize: '10px'}}
+                              itemStyle={{fontSize: '10px'}}
+                          />
+                          <Legend wrapperStyle={{fontSize: '10px', paddingTop: '5px'}}/>
+
+                          {/* Area layers */}
+                          <Area type="monotone" dataKey="load" name="实际负荷" fill="#e2e8f0" stroke="none" fillOpacity={0.5} />
+                          {isIslandSimulating && <Area type="monotone" dataKey="shedded" name="切除负荷" fill="#fca5a5" stroke="none" fillOpacity={0.6} />}
+
+                          {/* Line and Bar layers */}
+                          <Line type="basis" dataKey="solar" name="光伏" stroke="#facc15" strokeWidth={1.5} dot={false} />
+                          <Bar dataKey="grid" name="电网" fill={isIslandSimulating ? '#cbd5e1' : '#3b82f6'} barSize={6} radius={[2,2,0,0]} />
+                          <Bar dataKey="storage" name="储能" fill="#8b5cf6" barSize={6} radius={[2,2,0,0]} stackId="a" />
+
+                          {!isIslandSimulating && (
+                              <ReferenceLine y={simData[0]?.demandLimit} stroke="red" strokeDasharray="3 3" label={{value: "需量红线", fill: "red", fontSize: 9, position: 'insideTopLeft'}} />
+                          )}
+                      </ComposedChart>
+                  </ResponsiveContainer>
+              </div>
+          </div>
+
+          {/* Financial Analysis */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
+              <div className="flex items-center gap-2 mb-2">
+                  <span className="material-icons text-primary">analytics</span>
+                  <span className="font-bold text-slate-800">实时预估收益</span>
+              </div>
                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                       <div className="p-1.5 bg-yellow-100 rounded text-yellow-600"><span className="material-icons text-sm">monetization_on</span></div>

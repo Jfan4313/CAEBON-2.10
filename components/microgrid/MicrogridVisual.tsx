@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMicrogridState } from './hooks/useMicrogridState';
 import { useDeviceConfigs } from './hooks/useDeviceConfigs';
 import { DeviceImageConfig } from '../../types';
@@ -43,13 +43,13 @@ const MicrogridVisual: React.FC = () => {
     // 选中的设备配置
     const [selectedDeviceConfig, setSelectedDeviceConfig] = useState<DeviceImageConfig | null>(null);
 
-    // 加载保存的配置
-    useEffect(() => {
-        const loaded = loadConfigs();
-        if (loaded && loaded.length > 0) {
-            setPanelState(prev => ({ ...prev, configs: loaded }));
-        }
-    }, [loadConfigs]);
+    // 存储底图的实际尺寸
+    const [bgImageSize, setBgImageSize] = useState({ width: 1920, height: 1080 });
+
+    // 处理底图加载，获取实际尺寸
+    const handleImageLoad = useCallback((width: number, height: number) => {
+        setBgImageSize({ width, height });
+    }, []);
 
     // 处理设备点击，显示对应的配置信息
     const handleDeviceClick = (deviceId: string) => {
@@ -60,11 +60,19 @@ const MicrogridVisual: React.FC = () => {
         setSelectedDeviceConfig(config || null);
     };
 
+    // 计算容器样式 - 使用明确的 16:9 宽高比
+    const containerStyle = {
+        position: 'relative',
+        width: '100%',
+        height: '0',
+        paddingBottom: '56.25%' // 16:9 的宽高比 (1080/1920 = 0.5625)
+    };
+
     return (
-        <div className="relative w-full h-[720px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm flex">
-            {/* 左侧：可视化画布区域 */}
-            <div className="flex-1 relative">
-                <SceneBackground timeOfDay={timeOfDay} />
+        <div className="relative w-full bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm flex">
+            {/* 左侧：可视化画布区域（使用实际底图尺寸） */}
+            <div className="flex-1 relative" style={containerStyle}>
+                <SceneBackground timeOfDay={timeOfDay} onImageLoad={handleImageLoad} />
                 <DeviceLayer
                     configs={panelState.configs}
                     devices={devices}

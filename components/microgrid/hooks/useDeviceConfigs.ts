@@ -21,13 +21,13 @@ export const useDeviceConfigs = () => {
         isDirty: false
     });
 
-    // 加载保存的配置
+    // 加载保存的配置（仅在挂载时执行一次）
     useEffect(() => {
         const loaded = loadFromStorage();
         if (loaded && loaded.length > 0) {
             setPanelState(prev => ({ ...prev, configs: loaded }));
         }
-    }, [loadFromStorage]);
+    }, []);
 
     /**
      * 添加新配置
