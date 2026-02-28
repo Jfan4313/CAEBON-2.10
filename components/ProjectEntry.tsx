@@ -613,130 +613,149 @@ const ProjectEntry: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Global Financial Parameters */}
-                        <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8 mt-4 pt-6 border-t border-slate-100">
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-slate-700 ml-1 flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-[16px] text-orange-500">build_circle</span>
-                                    全局运维费率 (O&M Rate)
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={projectBaseInfo.omRate ?? 1.5}
-                                        onChange={(e) => setProjectBaseInfo({ ...projectBaseInfo, omRate: parseFloat(e.target.value) || 0 })}
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary transition-all"
-                                        placeholder="1.5"
-                                    />
-                                    <span className="absolute right-4 top-3 text-sm text-slate-400 font-medium">%</span>
-                                    <p className="text-[10px] text-slate-400 mt-1 absolute -bottom-5 left-1">占初始投资(CAPEX)的百分比，每年扣除</p>
+                        {/* Collapsible Advanced Parameters */}
+                        <details className="mt-8 group border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
+                            <summary className="cursor-pointer px-6 py-4 bg-slate-50 flex items-center justify-between outline-none">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                                        <span className="material-symbols-outlined text-[18px]">tune</span>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-800">高级配置 / 进阶测算假设</h4>
+                                        <p className="text-[10px] text-slate-500">包含运维费率、税率、SPV 带有杠杆的财务与股权核算配置</p>
+                                    </div>
+                                </div>
+                                <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform">expand_more</span>
+                            </summary>
+
+                            <div className="p-6 border-t border-slate-100 animate-fade-in bg-white space-y-8">
+                                {/* Global Financial Parameters */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-700 ml-1 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[16px] text-orange-500">build_circle</span>
+                                            全局运维费率 (O&M Rate)
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={projectBaseInfo.omRate ?? 1.5}
+                                                onChange={(e) => setProjectBaseInfo({ ...projectBaseInfo, omRate: parseFloat(e.target.value) || 0 })}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary transition-all"
+                                                placeholder="1.5"
+                                            />
+                                            <span className="absolute right-4 top-3 text-sm text-slate-400 font-medium">%</span>
+                                            <p className="text-[10px] text-slate-400 mt-1 absolute -bottom-5 left-1">占初始投资(CAPEX)的百分比，每年扣除</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-700 ml-1 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[16px] text-green-500">account_balance</span>
+                                            企业所得税率 (Tax Rate)
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={projectBaseInfo.taxRate ?? 25.0}
+                                                onChange={(e) => setProjectBaseInfo({ ...projectBaseInfo, taxRate: parseFloat(e.target.value) || 0 })}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary transition-all"
+                                                placeholder="25.0"
+                                            />
+                                            <span className="absolute right-4 top-3 text-sm text-slate-400 font-medium">%</span>
+                                            <p className="text-[10px] text-slate-400 mt-1 absolute -bottom-5 left-1">高新企业可选15%，一般企业25%</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SPV Financial & Equity Structuring */}
+                                <div className="mt-8 pt-6 border-t border-slate-100">
+                                    <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-[18px] text-indigo-500">pie_chart</span>
+                                        SPV 财务核算与股权架构配置
+                                    </h4>
+                                    <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {/* Leverage (Debt Ratio) */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-medium text-slate-600">外部贷款比例 (Leverage)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number" step="1"
+                                                    value={projectBaseInfo.spvConfig?.debtRatio ?? 70}
+                                                    onChange={(e) => setProjectBaseInfo({
+                                                        ...projectBaseInfo,
+                                                        spvConfig: { ...(projectBaseInfo.spvConfig || { loanInterest: 4.5, loanTerm: 10, shareholderARate: 51 }), debtRatio: parseFloat(e.target.value) || 0 }
+                                                    })}
+                                                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:border-indigo-400 outline-none"
+                                                />
+                                                <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400">剩余部分为项目资本金(Equity)</p>
+                                        </div>
+
+                                        {/* Loan Interest Rate */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-medium text-slate-600">贷款年利率</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number" step="0.1"
+                                                    value={projectBaseInfo.spvConfig?.loanInterest ?? 4.5}
+                                                    onChange={(e) => setProjectBaseInfo({
+                                                        ...projectBaseInfo,
+                                                        spvConfig: { ...(projectBaseInfo.spvConfig || { debtRatio: 70, loanTerm: 10, shareholderARate: 51 }), loanInterest: parseFloat(e.target.value) || 0 }
+                                                    })}
+                                                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:border-indigo-400 outline-none"
+                                                />
+                                                <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400">主要影响当期利息支出摊销</p>
+                                        </div>
+
+                                        {/* Loan Term */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-medium text-slate-600">贷款期限</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number" step="1"
+                                                    value={projectBaseInfo.spvConfig?.loanTerm ?? 10}
+                                                    onChange={(e) => setProjectBaseInfo({
+                                                        ...projectBaseInfo,
+                                                        spvConfig: { ...(projectBaseInfo.spvConfig || { debtRatio: 70, loanInterest: 4.5, shareholderARate: 51 }), loanTerm: parseInt(e.target.value) || 0 }
+                                                    })}
+                                                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:border-indigo-400 outline-none"
+                                                />
+                                                <span className="absolute right-3 top-2 text-xs text-slate-400">年</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400">按等额本息/本金计算还款</p>
+                                        </div>
+
+                                        {/* Equity Distribution */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-medium text-slate-600">资方A 股权比例</label>
+                                            <div className="relative flex items-center">
+                                                <input
+                                                    type="number" step="1" max="100" min="0"
+                                                    value={projectBaseInfo.spvConfig?.shareholderARate ?? 51}
+                                                    onChange={(e) => setProjectBaseInfo({
+                                                        ...projectBaseInfo,
+                                                        spvConfig: { ...(projectBaseInfo.spvConfig || { debtRatio: 70, loanInterest: 4.5, loanTerm: 10 }), shareholderARate: parseFloat(e.target.value) || 0 }
+                                                    })}
+                                                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:border-indigo-400 outline-none"
+                                                />
+                                                <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400">
+                                                资方B (跟投/业主) 持股: <span className="font-bold">{100 - (projectBaseInfo.spvConfig?.shareholderARate ?? 51)}%</span>
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                        </details>
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-slate-700 ml-1 flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-[16px] text-green-500">account_balance</span>
-                                    企业所得税率 (Tax Rate)
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={projectBaseInfo.taxRate ?? 25.0}
-                                        onChange={(e) => setProjectBaseInfo({ ...projectBaseInfo, taxRate: parseFloat(e.target.value) || 0 })}
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary transition-all"
-                                        placeholder="25.0"
-                                    />
-                                    <span className="absolute right-4 top-3 text-sm text-slate-400 font-medium">%</span>
-                                    <p className="text-[10px] text-slate-400 mt-1 absolute -bottom-5 left-1">高新企业可选15%，一般企业25%</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* SPV Financial & Equity Structuring */}
-                        <div className="mt-8 pt-6 border-t border-slate-100">
-                            <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-[18px] text-indigo-500">pie_chart</span>
-                                SPV 财务核算与股权架构配置
-                            </h4>
-                            <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {/* Leverage (Debt Ratio) */}
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-medium text-slate-600">外部贷款比例 (Leverage)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number" step="1"
-                                            value={projectBaseInfo.spvConfig?.debtRatio ?? 70}
-                                            onChange={(e) => setProjectBaseInfo({
-                                                ...projectBaseInfo,
-                                                spvConfig: { ...(projectBaseInfo.spvConfig || { loanInterest: 4.5, loanTerm: 10, shareholderARate: 51 }), debtRatio: parseFloat(e.target.value) || 0 }
-                                            })}
-                                            className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:border-indigo-400 outline-none"
-                                        />
-                                        <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400">剩余部分为项目资本金(Equity)</p>
-                                </div>
-
-                                {/* Loan Interest Rate */}
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-medium text-slate-600">贷款年利率</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number" step="0.1"
-                                            value={projectBaseInfo.spvConfig?.loanInterest ?? 4.5}
-                                            onChange={(e) => setProjectBaseInfo({
-                                                ...projectBaseInfo,
-                                                spvConfig: { ...(projectBaseInfo.spvConfig || { debtRatio: 70, loanTerm: 10, shareholderARate: 51 }), loanInterest: parseFloat(e.target.value) || 0 }
-                                            })}
-                                            className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:border-indigo-400 outline-none"
-                                        />
-                                        <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400">主要影响当期利息支出摊销</p>
-                                </div>
-
-                                {/* Loan Term */}
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-medium text-slate-600">贷款期限</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number" step="1"
-                                            value={projectBaseInfo.spvConfig?.loanTerm ?? 10}
-                                            onChange={(e) => setProjectBaseInfo({
-                                                ...projectBaseInfo,
-                                                spvConfig: { ...(projectBaseInfo.spvConfig || { debtRatio: 70, loanInterest: 4.5, shareholderARate: 51 }), loanTerm: parseInt(e.target.value) || 0 }
-                                            })}
-                                            className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:border-indigo-400 outline-none"
-                                        />
-                                        <span className="absolute right-3 top-2 text-xs text-slate-400">年</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400">按等额本息/本金计算还款</p>
-                                </div>
-
-                                {/* Equity Distribution */}
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-medium text-slate-600">资方A 股权比例</label>
-                                    <div className="relative flex items-center">
-                                        <input
-                                            type="number" step="1" max="100" min="0"
-                                            value={projectBaseInfo.spvConfig?.shareholderARate ?? 51}
-                                            onChange={(e) => setProjectBaseInfo({
-                                                ...projectBaseInfo,
-                                                spvConfig: { ...(projectBaseInfo.spvConfig || { debtRatio: 70, loanInterest: 4.5, loanTerm: 10 }), shareholderARate: parseFloat(e.target.value) || 0 }
-                                            })}
-                                            className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:border-indigo-400 outline-none"
-                                        />
-                                        <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400">
-                                        资方B (跟投/业主) 持股: <span className="font-bold">{100 - (projectBaseInfo.spvConfig?.shareholderARate ?? 51)}%</span>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
+                        <div className="mt-8 border-t border-slate-100 pt-8" />
                         <BuildingList
                             buildings={buildings}
                             handleBuildingChange={handleBuildingChange}

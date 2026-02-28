@@ -7,6 +7,7 @@ import {
 import { View } from '../types';
 import { useProject, ModuleData } from '../context/ProjectContext';
 import { exportFinancialSheet, FinancialSummaryData, AnnualCashFlowData } from '../utils/excelExport';
+import { AnimatedNumber } from './ui/AnimatedNumber';
 
 interface RevenueAnalysisProps {
     onChangeView?: (view: View) => void;
@@ -368,7 +369,7 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                                     <span className="text-xs font-bold text-slate-500 uppercase">初始总投资 (CAPEX)</span>
                                     <span className="material-icons text-blue-500 text-lg">account_balance</span>
                                 </div>
-                                <div className="text-3xl font-bold text-slate-900 relative z-10">¥ {analysisData.totalInvestment.toFixed(1)} <span className="text-sm font-normal text-slate-500">万</span></div>
+                                <div className="text-3xl font-bold text-slate-900 relative z-10">¥ <AnimatedNumber value={analysisData.totalInvestment} decimals={1} /> <span className="text-sm font-normal text-slate-500">万</span></div>
                                 <div className="mt-2 text-xs text-slate-400">含设备、施工及设计费</div>
                             </div>
 
@@ -379,7 +380,7 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                                     <span className="material-icons text-emerald-500 text-lg">monetization_on</span>
                                 </div>
                                 <div className={`text-3xl font-bold relative z-10 ${simulation.npv > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                    ¥ {simulation.npv.toFixed(1)} <span className="text-sm font-normal text-slate-500">万</span>
+                                    ¥ <AnimatedNumber value={simulation.npv} decimals={1} /> <span className="text-sm font-normal text-slate-500">万</span>
                                 </div>
                                 <div className="mt-2 text-xs text-slate-400">折现率 {params.discountRate}%</div>
                             </div>
@@ -390,7 +391,7 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                                     <span className="text-xs font-bold text-slate-500 uppercase">内部收益率 (IRR)</span>
                                     <span className="material-icons text-purple-500 text-lg">trending_up</span>
                                 </div>
-                                <div className="text-3xl font-bold text-purple-600 relative z-10">{simulation.irr.toFixed(2)} %</div>
+                                <div className="text-3xl font-bold text-purple-600 relative z-10"><AnimatedNumber value={simulation.irr} decimals={2} /> %</div>
                                 <div className="mt-2 text-xs text-slate-400">{params.period}年全周期</div>
                             </div>
 
@@ -400,7 +401,9 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
                                     <span className="text-xs font-bold text-slate-500 uppercase">静态回本周期</span>
                                     <span className="material-icons text-orange-500 text-lg">timelapse</span>
                                 </div>
-                                <div className="text-3xl font-bold text-orange-600 relative z-10">{simulation.payback > params.period ? `>${params.period}` : simulation.payback.toFixed(1)} <span className="text-sm font-normal text-slate-500">年</span></div>
+                                <div className="text-3xl font-bold text-orange-600 relative z-10">
+                                    {simulation.payback > params.period ? `>${params.period}` : <AnimatedNumber value={simulation.payback} decimals={1} />} <span className="text-sm font-normal text-slate-500">年</span>
+                                </div>
                                 <div className="mt-2 text-xs text-slate-400">现金流转正节点</div>
                             </div>
                         </div>
