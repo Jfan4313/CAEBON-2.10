@@ -536,10 +536,8 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div className="space-y-1.5 lg:col-span-4">
                         <label className="text-xs font-semibold text-slate-500">商业/投资模式</label>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-1 bg-slate-100 rounded-xl shadow-inner">
+                        <div className="grid grid-cols-2 md:grid-cols-2 gap-3 p-1 bg-slate-100 rounded-xl shadow-inner">
                             {[
-                                { id: 'self', label: '自用及全额自投', icon: 'account_balance_wallet' },
-                                { id: 'loan', label: '银行贷款/融资', icon: 'account_balance' },
                                 { id: 'emc', label: 'EMC 节能分成', icon: 'handshake' },
                                 { id: 'epc', label: 'EPC 工程总包', icon: 'construction' }
                             ].map((mode) => (

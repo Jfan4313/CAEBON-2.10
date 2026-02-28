@@ -12,6 +12,29 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
         window.print();
     };
 
+    // Calculate module financial indicators
+    const calculateModuleMetrics = (investment: number, yearlySaving: number, period = 20) => {
+        let cashFlows = [-investment];
+        let npv = -investment;
+        const discountRate = 5.0; // 5% default
+        for (let year = 1; year <= period; year++) {
+            const net = yearlySaving * Math.pow(0.99, year - 1) - (investment * 0.015);
+            cashFlows.push(net);
+            npv += net / Math.pow(1 + discountRate / 100, year);
+        }
+
+        let guess = 0.1;
+        for (let i = 0; i < 40; i++) {
+            let tmpNpv = 0;
+            for (let j = 0; j < cashFlows.length; j++) tmpNpv += cashFlows[j] / Math.pow(1 + guess, j);
+            if (Math.abs(tmpNpv) < 0.1) break;
+            guess += tmpNpv > 0 ? 0.01 : -0.01;
+        }
+        const irr = guess * 100;
+
+        return { npv: parseFloat(npv.toFixed(2)), irr: parseFloat(irr.toFixed(1)) };
+    };
+
     const activeModules = (Object.values(modules) as any[]).filter(m => m.isActive);
     const totalInvestment = activeModules.reduce((sum, m) => sum + (Number(m.investment) || 0), 0);
     const totalSaving = activeModules.reduce((sum, m) => sum + (Number(m.yearlySaving) || 0), 0);
@@ -146,7 +169,7 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
                         </div>
 
                         {/* Executive Summary stats */}
-                        <div className="grid grid-cols-5 gap-4 mb-8">
+                        <div className="grid grid-cols-5 gap-4 mb-6">
                             <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
                                 <div className="text-xs text-slate-500 mb-1">总投资 (CAPEX)</div>
                                 <div className="text-xl font-bold text-slate-800">¥ {totalInvestment.toFixed(2)} <span className="text-xs font-normal text-slate-500">万</span></div>
@@ -170,9 +193,9 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
                         </div>
 
                         {/* Financial Chart */}
-                        <div className="mb-8 flex-1">
-                            <h3 className="text-lg font-bold text-slate-800 mb-4 border-l-4 border-primary pl-3">前 15 年现金流预测 (简图)</h3>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 h-[300px]">
+                        <div className="mb-6 flex-1">
+                            <h3 className="text-lg font-bold text-slate-800 mb-3 border-l-4 border-primary pl-3">前 15 年现金流预测 (简图)</h3>
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 h-[240px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
@@ -334,6 +357,8 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
                                     ];
                                 }
 
+                                const metrics = calculateModuleMetrics(Number(m.investment) || 0, Number(m.yearlySaving) || 0);
+
                                 return (
                                     <div key={i} className="bg-white border border-slate-200 rounded-xl overflow-hidden page-break-inside-avoid shadow-sm mb-6">
                                         <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
@@ -360,7 +385,15 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
                                                     </div>
                                                     <div className="flex justify-between items-end">
                                                         <span className="text-sm text-slate-500">单体静态回收期</span>
-                                                        <span className="text-base font-bold text-blue-600">{((Number(m.investment) || 0) / (Number(m.yearlySaving) || 1)).toFixed(2)} <span className="text-xs font-normal text-blue-600/70">年</span></span>
+                                                        <span className="text-base font-bold text-blue-600">{Number(m.yearlySaving) > 0 ? ((Number(m.investment) || 0) / (Number(m.yearlySaving))).toFixed(2) : '-'} <span className="text-xs font-normal text-blue-600/70">年</span></span>
+                                                    </div>
+                                                    <div className="flex justify-between items-end border-t border-slate-100 pt-2">
+                                                        <span className="text-sm text-slate-500">20年 净现值 (NPV)</span>
+                                                        <span className={`text-base font-bold ${metrics.npv > 0 ? 'text-emerald-600' : 'text-red-500'}`}>¥{metrics.npv} <span className="text-xs font-normal opacity-70">万</span></span>
+                                                    </div>
+                                                    <div className="flex justify-between items-end">
+                                                        <span className="text-sm text-slate-500">单模块 IRR</span>
+                                                        <span className="text-base font-bold text-purple-600">{metrics.irr}%</span>
                                                     </div>
                                                 </div>
                                             </div>

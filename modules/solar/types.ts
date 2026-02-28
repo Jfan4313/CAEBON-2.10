@@ -1,4 +1,4 @@
-export type InvestmentMode = 'self' | 'loan' | 'epc' | 'emc';
+export type InvestmentMode = 'epc' | 'emc';
 
 /** EMC 细分结算模式：收益分成 vs 折扣电价（二选一） */
 export type EmcSubMode = 'sharing' | 'discount';
@@ -47,7 +47,7 @@ export const DEFAULTS: SolarParamsState = {
         area: 5000,
         capacity: 400,
         epcPrice: 3.5,
-        investmentMode: 'self',
+        investmentMode: 'epc',
         emcSubMode: 'sharing'
     },
     advParams: {
