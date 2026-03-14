@@ -154,9 +154,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (error.message.includes('Invalid login credentials')) {
           return { success: false, error: '邮箱或密码错误' };
         }
-        if (error.message.includes('Email not confirmed')) {
-          return { success: false, error: '邮箱未验证，请先验证邮箱' };
-        }
         return { success: false, error: error.message };
       }
 
@@ -196,6 +193,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           data: {
             full_name: fullName || '',
           },
+          emailConfirm: true, // 自动验证邮箱，用户注册后可直接登录
         },
       });
 
