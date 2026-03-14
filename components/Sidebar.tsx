@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View } from '../types';
 import { useStorage } from '../context/StorageContext';
+import { useAuth } from '../context/AuthContext';
+import AuthModal from './AuthModal';
 
 interface SidebarProps {
   currentView: View;
@@ -12,7 +14,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const { mode, isCloudEnabled, toggleMode } = useStorage();
+  const { currentUser, isAuthenticated, logout } = useAuth();
 
   // 管理员默认密码
   const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
@@ -22,6 +26,25 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
     const authenticated = sessionStorage.getItem('admin_authenticated') === 'true';
     setIsAdminAuthenticated(authenticated);
   }, []);
+
+  const handleLogout = async () => {
+    if (confirm('确定要退出登录吗？')) {
+      await logout();
+      // 如果当前是云端模式，切换回本地模式
+      if (mode === 'cloud') {
+        toggleMode();
+      }
+    }
+  };
+
+  const handleToggleMode = () => {
+    // 如果尝试切换到云端模式但未登录，显示登录提示
+    if (mode === 'local' && !isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+    toggleMode();
+  };
 
   const handleAdminClick = () => {
     if (isAdminAuthenticated) {
@@ -177,8 +200,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => mode === 'cloud' && toggleMode()}
-                disabled={!isCloudEnabled && mode === 'cloud'}
+                onClick={handleToggleMode}
+                disabled={mode === 'cloud' && !isAuthenticated}
                 className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
                   mode === 'local'
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
@@ -188,8 +211,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
                 本地存储
               </button>
               <button
-                onClick={() => mode === 'local' && toggleMode()}
-                disabled={!isCloudEnabled && mode === 'local'}
+                onClick={handleToggleMode}
+                disabled={!isCloudEnabled || (mode === 'local' && !isAuthenticated)}
                 className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
                   mode === 'cloud'
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
@@ -204,6 +227,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
             {!isCloudEnabled && mode === 'local' && (
               <p className="text-[10px] text-slate-400 mt-2">
                 云存储未配置，请参考 SUPABASE_SETUP.md
+              </p>
+            )}
+            {isCloudEnabled && mode === 'local' && !isAuthenticated && (
+              <p className="text-[10px] text-slate-400 mt-2">
+                云端存储需要先登录
               </p>
             )}
           </div>
@@ -263,18 +291,47 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
       )}
 
       <div className="p-4 border-t border-slate-100">
-        <div className="bg-slate-50 rounded-2xl p-4 flex items-center gap-3">
-          <img
-            src="https://picsum.photos/40/40"
-            alt="User"
-            className="w-8 h-8 rounded-full"
-          />
-          <div>
-            <p className="text-xs font-bold text-slate-800">王工程师</p>
-            <p className="text-[10px] text-slate-500">项目经理</p>
+        {isAuthenticated && currentUser ? (
+          // Logged in user
+          <div className="bg-slate-50 rounded-2xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-purple-500 flex items-center justify-center text-white shadow-md">
+                <span className="text-xs font-bold">
+                  {currentUser.email?.charAt(0).toUpperCase() || 'U'}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-800 truncate">
+                  {currentUser.userMetadata?.full_name || '用户'}
+                </p>
+                <p className="text-[10px] text-slate-500 truncate">{currentUser.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full py-2 px-3 rounded-lg text-xs font-medium text-slate-600 hover:bg-white hover:text-red-500 transition-all flex items-center justify-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[14px]">logout</span>
+              退出登录
+            </button>
           </div>
-        </div>
+        ) : (
+          // Not logged in
+          <button
+            onClick={() => setShowAuthModal(true)}
+            className="w-full bg-gradient-to-r from-primary to-primary-light rounded-2xl p-4 flex items-center justify-center gap-2 text-white hover:shadow-lg hover:shadow-primary/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[20px]">person_add</span>
+            <span className="text-sm font-semibold">登录 / 注册</span>
+          </button>
+        )}
       </div>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
     </aside>
   );
 };

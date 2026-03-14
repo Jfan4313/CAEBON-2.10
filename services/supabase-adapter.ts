@@ -258,6 +258,37 @@ class SupabaseStorageAdapter implements StorageAdapter {
   getUserId(): string | null {
     return this.userId;
   }
+
+  /**
+   * 从 Supabase Auth 会话获取用户 ID
+   * 如果手动设置的用户 ID 为空，尝试从 auth session 获取
+   */
+  async getUserIdFromAuth(): Promise<string | null> {
+    if (this.userId) {
+      return this.userId;
+    }
+
+    if (!this.client) {
+      return null;
+    }
+
+    try {
+      const { data: { session }, error } = await this.client.auth.getSession();
+      if (error) {
+        console.error('Error getting auth session:', error);
+        return null;
+      }
+
+      if (session?.user?.id) {
+        this.userId = session.user.id;
+        return this.userId;
+      }
+    } catch (error) {
+      console.error('Error getting user ID from auth:', error);
+    }
+
+    return null;
+  }
 }
 
 // 创建 Supabase 适配器实例
