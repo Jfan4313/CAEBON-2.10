@@ -1,7 +1,7 @@
 {
   "name": "zero-carbon-valuation",
   "private": true,
-  "version": "2.10.0",
+  "version": "2.11.0",
   "description": "零碳园区/校园项目收益估值系统",
   "productName": "ZeroCarbon Valuation",
   "type": "module",

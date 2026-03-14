@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View } from '../types';
+import { useStorage } from '../context/StorageContext';
 
 interface SidebarProps {
   currentView: View;
@@ -8,6 +9,41 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
   const [isRetrofitOpen, setIsRetrofitOpen] = useState(true);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const { mode, isCloudEnabled, toggleMode } = useStorage();
+
+  // 管理员默认密码
+  const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
+
+  useEffect(() => {
+    // 检查会话中是否已验证
+    const authenticated = sessionStorage.getItem('admin_authenticated') === 'true';
+    setIsAdminAuthenticated(authenticated);
+  }, []);
+
+  const handleAdminClick = () => {
+    if (isAdminAuthenticated) {
+      // 已验证，直接进入
+      onChangeView('formula-admin');
+    } else {
+      // 显示密码输入对话框
+      setShowAdminPassword(true);
+    }
+  };
+
+  const verifyPassword = () => {
+    if (adminPassword === ADMIN_PASSWORD) {
+      setIsAdminAuthenticated(true);
+      sessionStorage.setItem('admin_authenticated', 'true');
+      setShowAdminPassword(false);
+      onChangeView('formula-admin');
+      setAdminPassword('');
+    } else {
+      alert('密码错误，请重试');
+    }
+  };
 
   // Memoize CSS class functions to prevent recreation on each render
   const navItemClass = useCallback((isActive: boolean) =>
@@ -125,16 +161,106 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
           <span className="font-medium text-sm">报告中心</span>
         </div>
 
+        {/* Cloud Storage Toggle */}
+        <div className="px-4 py-3">
+          <div className="bg-slate-50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-slate-600">cloud_sync</span>
+                <span className="text-xs font-semibold text-slate-700">云存储</span>
+              </div>
+              {mode === 'cloud' && (
+                <span className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
+                  已启用
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => mode === 'cloud' && toggleMode()}
+                disabled={!isCloudEnabled && mode === 'cloud'}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+                  mode === 'local'
+                    ? 'bg-primary text-white shadow-md shadow-primary/20'
+                    : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                本地存储
+              </button>
+              <button
+                onClick={() => mode === 'local' && toggleMode()}
+                disabled={!isCloudEnabled && mode === 'local'}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+                  mode === 'cloud'
+                    ? 'bg-primary text-white shadow-md shadow-primary/20'
+                    : isCloudEnabled
+                      ? 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'
+                      : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-transparent'
+                }`}
+              >
+                云端存储
+              </button>
+            </div>
+            {!isCloudEnabled && mode === 'local' && (
+              <p className="text-[10px] text-slate-400 mt-2">
+                云存储未配置，请参考 SUPABASE_SETUP.md
+              </p>
+            )}
+          </div>
+        </div>
+
         <div className="border-t border-slate-200 my-2"></div>
 
         <div
           className={navItemClass(currentView === 'formula-admin')}
-          onClick={() => onChangeView('formula-admin')}
+          onClick={handleAdminClick}
         >
           <span className={iconClass(currentView === 'formula-admin')}>settings</span>
           <span className="font-medium text-sm">算法管理</span>
+          {isAdminAuthenticated && (
+            <span className="material-symbols-outlined text-[12px] text-emerald-500 ml-auto">check_circle</span>
+          )}
         </div>
       </nav>
+
+      {/* Admin Password Dialog */}
+      {showAdminPassword && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-80 shadow-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-[24px] text-primary">lock</span>
+              <h3 className="text-lg font-bold text-slate-800">管理员验证</h3>
+            </div>
+            <p className="text-sm text-slate-600 mb-4">请输入管理员密码以访问算法管理</p>
+            <input
+              type="password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && verifyPassword()}
+              placeholder="请输入密码"
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary mb-4"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowAdminPassword(false);
+                  setAdminPassword('');
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={verifyPassword}
+                className="flex-1 py-2.5 px-4 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+              >
+                确认
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="p-4 border-t border-slate-100">
         <div className="bg-slate-50 rounded-2xl p-4 flex items-center gap-3">

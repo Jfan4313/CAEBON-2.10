@@ -94,3 +94,18 @@ export class IndexedDBAdapter {
 
 // 导出环境检测
 export const isDesktopApp = isElectron();
+
+// 导出 getStorage 和 getIndexedDB 函数供外部使用
+export function getStorage(mode: 'local' | 'cloud'): StorageAdapter {
+    if (mode === 'cloud') {
+        // 云端模式使用 Supabase 适配器
+        const { getSupabaseAdapter } = require('./supabase-adapter');
+        return getSupabaseAdapter();
+    }
+    // 本地模式使用现有适配器
+    return storage;
+}
+
+export function getIndexedDB(): IndexedDBAdapter {
+    return new IndexedDBAdapter('ZeroCarbonDB');
+}
