@@ -1,21 +1,31 @@
 import React, { useState } from 'react';
-import { useSolarRetrofit, useSolarMetrics } from './hooks';
+import { useSolarRetrofit, useSolarMetrics, calculateSolarMetrics } from './hooks';
+import { SolarParamsState } from './types';
 import { SolarForm } from './components/SolarForm';
 import { SolarCharts } from './components/SolarCharts';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import SolarReport from './components/SolarReport';
+import { SolutionComparison } from './components/SolutionComparison';
+import { SolarFinancialDetails } from './components/SolarFinancialDetails';
 
 const RetrofitSolar: React.FC = () => {
     const {
         currentModule, params, handleUpdate, buildings, setBuildings,
         selfUseMode, setSelfUseMode, calculatedSelfConsumption, setCalculatedSelfConsumption,
         consumptionResult, toggleModule, saveProject, transformers, bills, projectBaseInfo,
-        priceConfig, storageModule
+        priceConfig, storageModule,
+        // 新增：方案和品牌状态
+        solutions, selectedSolutionId, currentSolution,
+        handleSelectSolution, handleAddSolution, handleUpdateSolution, handleDeleteSolution
     } = useSolarRetrofit();
 
     const { chartData, longTermMetrics } = useSolarMetrics(params, calculatedSelfConsumption);
 
     const [isChartExpanded, setIsChartExpanded] = useState(false);
     const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
+    const [isSolarPresentationMode, setIsSolarPresentationMode] = useState(false);
+    const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
+    const [selectedSolutionForDetails, setSelectedSolutionForDetails] = useState<string | null>(null);
 
     if (!currentModule) return null;
 
@@ -61,6 +71,14 @@ const RetrofitSolar: React.FC = () => {
                         setCalculatedSelfConsumption={setCalculatedSelfConsumption}
                         consumptionResult={consumptionResult}
                         storageModule={storageModule}
+                        // 新增：方案和品牌相关
+                        solutions={solutions}
+                        selectedSolutionId={selectedSolutionId}
+                        currentSolution={currentSolution}
+                        handleSelectSolution={handleSelectSolution}
+                        handleAddSolution={handleAddSolution}
+                        handleUpdateSolution={handleUpdateSolution}
+                        handleDeleteSolution={handleDeleteSolution}
                     />
                 </div>
 
@@ -85,10 +103,10 @@ const RetrofitSolar: React.FC = () => {
                         </button>
                     </div>
                 </div>
+
             </div>
 
-            {/* Right Sidebar - Analytics */}
-            <aside className={`w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 h-screen overflow-y-auto shadow-xl mb-16 transition-all duration-300 ${currentModule.isActive ? '' : 'opacity-60 grayscale'}`}>
+            <aside className={`w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 overflow-y-auto shadow-xl mb-16 transition-all duration-300 ${currentModule.isActive ? '' : 'opacity-60 grayscale'}`}>
                 <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2">
                         <span className="material-icons text-primary">analytics</span> 实时预估收益
@@ -155,7 +173,7 @@ const RetrofitSolar: React.FC = () => {
                     {/* Financial Detail Trigger */}
                     <div
                         onClick={() => setIsFinancialModalOpen(true)}
-                        className="mt-4 p-4 bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl shadow-lg cursor-pointer hover:shadow-xl transition-all group relative overflow-hidden"
+                        className="p-4 bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl shadow-lg cursor-pointer hover:shadow-xl transition-all group relative overflow-hidden"
                     >
                         <div className="absolute right-0 top-0 w-16 h-16 bg-white/10 rounded-full -mr-4 -mt-4 blur-xl group-hover:bg-white/20 transition-all"></div>
                         <div className="flex justify-between items-center relative z-10">
@@ -164,6 +182,46 @@ const RetrofitSolar: React.FC = () => {
                                     <span className="material-icons text-sm text-yellow-400">monetization_on</span> 收益详细分析
                                 </h4>
                                 <p className="text-[10px] text-slate-300 mt-1">查看 25 年现金流、IRR、回收期</p>
+                            </div>
+                            <span className="material-icons text-white/50 group-hover:text-white transition-colors">chevron_right</span>
+                        </div>
+                    </div>
+
+                    {/* Solar Report Trigger */}
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsSolarPresentationMode(true);
+                        }}
+                        className="p-4 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg cursor-pointer hover:shadow-xl transition-all group relative overflow-hidden"
+                    >
+                        <div className="absolute right-0 top-0 w-16 h-16 bg-white/10 rounded-full -mr-4 -mt-4 blur-xl group-hover:bg-white/20 transition-all"></div>
+                        <div className="flex justify-between items-center relative z-10">
+                            <div>
+                                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                                    <span className="material-icons text-sm text-yellow-400">slideshow</span> 光伏PPT演示
+                                </h4>
+                                <p className="text-[10px] text-blue-100 mt-1">点击查看项目收益评估PPT演示</p>
+                            </div>
+                            <span className="material-icons text-white/50 group-hover:text-white transition-colors">chevron_right</span>
+                        </div>
+                    </div>
+
+                    {/* 方案对比触发按钮 */}
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsComparisonModalOpen(true);
+                        }}
+                        className="p-4 bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl shadow-lg cursor-pointer hover:shadow-xl transition-all group relative overflow-hidden"
+                    >
+                        <div className="absolute right-0 top-0 w-16 h-16 bg-white/10 rounded-full -mr-4 -mt-4 blur-xl group-hover:bg-white/20 transition-all"></div>
+                        <div className="flex justify-between items-center relative z-10">
+                            <div>
+                                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                                    <span className="material-icons text-sm text-yellow-400">compare</span> 方案对比分析
+                                </h4>
+                                <p className="text-[10px] text-purple-100">对比所有方案的财务指标</p>
                             </div>
                             <span className="material-icons text-white/50 group-hover:text-white transition-colors">chevron_right</span>
                         </div>
@@ -182,6 +240,57 @@ const RetrofitSolar: React.FC = () => {
                 investment={currentModule.investment}
                 handleUpdate={handleUpdate}
             />
+
+            {/* Solar Report - Direct Presentation Mode */}
+            {isSolarPresentationMode && (
+                <SolarReport onClose={() => setIsSolarPresentationMode(false)} defaultToPresentationMode={true} />
+            )}
+
+            {/* 方案对比模态框 */}
+            {isComparisonModalOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-in"
+                    onClick={() => {
+                        setIsComparisonModalOpen(false);
+                        setSelectedSolutionForDetails(null);
+                    }}
+                >
+                    <div
+                        className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center px-8 py-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                                    <span className="material-icons text-white text-xl">compare_arrows</span>
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-900">方案对比分析</h2>
+                                    <p className="text-sm text-slate-500">对比所有方案的技术参数和财务指标</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setIsComparisonModalOpen(false);
+                                    setSelectedSolutionForDetails(null);
+                                }}
+                                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200 transition-all text-slate-500"
+                                title="关闭"
+                            >
+                                <span className="material-icons text-lg">close</span>
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-8 bg-slate-50/30">
+                            <SolutionComparison
+                                solutions={solutions}
+                                params={params}
+                                selfConsumptionRate={calculatedSelfConsumption}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
