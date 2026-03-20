@@ -33,9 +33,22 @@ export function useHvacLogic() {
     const [schedule, setSchedule] = useState<HvacSchedule>(savedParams.schedule || { start: 8, end: 18 });
 
     const [hvacBuildings, setHvacBuildings] = useState<HvacBuilding[]>(savedParams.hvacBuildings || [
-        { id: 1, name: '1号生产车间', desc: '中央空调系统', load: 1200, area: 5000, active: true, strategy: 'cchp', runHours: 2500, costMode: 'power', customUnitCost: 0, customTotalInvest: 0, customCOP: 0 },
+        { id: 1, name: '1号生产车间', desc: '中央空调系统', load: 1200, area: 5000, active: true, strategy: 'cchp', runHours: 2500, costMode: 'power', customUnitCost: 8000, customTotalInvest: 0, customCOP: 0 },
         { id: 2, name: '研发中心大楼', desc: '多联机VRV', load: 450, area: 2000, active: true, strategy: 'basic', runHours: 2000, costMode: 'power', customUnitCost: 0, customTotalInvest: 0, customCOP: 0 }
     ]);
+
+    // Clean up invalid strategies from saved data
+    useEffect(() => {
+        const validStrategies = Object.keys(STRATEGIES);
+        const needsCleanup = hvacBuildings.some(b => !validStrategies.includes(b.strategy));
+        if (needsCleanup) {
+            const cleanedBuildings = hvacBuildings.map(b => ({
+                ...b,
+                strategy: validStrategies.includes(b.strategy) ? b.strategy : 'basic'
+            }));
+            setHvacBuildings(cleanedBuildings);
+        }
+    }, []); // Run only on mount
 
     const [isChartExpanded, setIsChartExpanded] = useState(false);
     const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
@@ -50,6 +63,12 @@ export function useHvacLogic() {
         hvacBuildings.forEach((b) => {
             if (!b.active) return;
             const strat = STRATEGIES[b.strategy as keyof typeof STRATEGIES];
+
+            // Skip if strategy is invalid
+            if (!strat) {
+                console.warn(`Invalid strategy "${b.strategy}" for building "${b.name}", skipping.`);
+                return;
+            }
 
             let invest = 0;
             if (mode === 'simple') {
@@ -182,7 +201,7 @@ export function useHvacLogic() {
                 yearlySaving: financials.investorRevenue,
                 ownerBenefit: financials.ownerBenefit,
                 kpiPrimary: { label: '年节电费用', value: `${financials.totalYearlySaving.toFixed(1)} 万元` },
-                kpiSecondary: { label: '综合能效COP', value: `提升至 ${(hvacBuildings.reduce((sum, b) => sum + (b.active ? STRATEGIES[b.strategy as keyof typeof STRATEGIES].targetCOP : 0), 0) / hvacBuildings.filter(b => b.active).length || 0).toFixed(1)}` },
+                kpiSecondary: { label: '综合能效COP', value: `提升至 ${(hvacBuildings.reduce((sum, b) => sum + (b.active ? (STRATEGIES[b.strategy as keyof typeof STRATEGIES]?.targetCOP || 0) : 0), 0) / hvacBuildings.filter(b => b.active).length || 0).toFixed(1)}` },
                 strategy: mode === 'simple' ? '快速测算' : '精确估值',
                 params: newParams
             });

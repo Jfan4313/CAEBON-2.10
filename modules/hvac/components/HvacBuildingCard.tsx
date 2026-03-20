@@ -21,7 +21,7 @@ export const HvacBuildingCard: React.FC<HvacBuildingCardProps> = ({
     updateBuildingStrategy,
     updateBuildingSimpleField
 }) => {
-    const strat = STRATEGIES[b.strategy as keyof typeof STRATEGIES];
+    const strat = STRATEGIES[b.strategy as keyof typeof STRATEGIES] || STRATEGIES.basic; // Fallback to basic strategy
     // Determine effective values (override or default)
     const effCOP = (mode === 'advanced' && b.customCOP > 0) ? b.customCOP : strat.targetCOP;
 
@@ -145,7 +145,7 @@ export const HvacBuildingCard: React.FC<HvacBuildingCardProps> = ({
                                 <input
                                     type="number" step="0.1"
                                     value={b.customCOP || ''}
-                                    placeholder={STRATEGIES[b.strategy as keyof typeof STRATEGIES].targetCOP.toString()}
+                                    placeholder={(STRATEGIES[b.strategy as keyof typeof STRATEGIES] || STRATEGIES.basic).targetCOP.toString()}
                                     onChange={(e) => updateBuildingSimpleField(b.id, 'customCOP', parseFloat(e.target.value))}
                                     className="flex-1 px-2 py-1 text-sm border border-slate-200 rounded focus:border-primary outline-none bg-white font-bold text-slate-700"
                                 />
@@ -190,7 +190,7 @@ export const HvacBuildingCard: React.FC<HvacBuildingCardProps> = ({
                                                 <input
                                                     type="number" step="10"
                                                     value={b.customUnitCost || ''}
-                                                    placeholder={STRATEGIES[b.strategy as keyof typeof STRATEGIES].unitCost.toString()}
+                                                    placeholder={(STRATEGIES[b.strategy as keyof typeof STRATEGIES] || STRATEGIES.basic).unitCost.toString()}
                                                     onChange={(e) => updateBuildingSimpleField(b.id, 'customUnitCost', parseFloat(e.target.value))}
                                                     className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:border-primary outline-none bg-white font-medium"
                                                 />
