@@ -48,63 +48,87 @@ export function generatePrintableHTML(content: {
   <meta charset="utf-8">
   <title>${projectInfo.name} - 项目估值报告</title>
   <style>
+    @page {
+      size: A4 portrait;
+      margin: 1.5cm;
+    }
+
     @media print {
-      @page { margin: 2cm; }
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .page-break { page-break-after: always; }
-      .no-break { page-break-inside: avoid; }
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      @page {
+        margin: 1.5cm;
+        size: A4 portrait;
+      }
+      /* 允许内容在需要时自动分页 */
+      * {
+        page-break-inside: auto !important;
+        page-break-after: auto !important;
+        page-break-before: auto !important;
+      }
+      /* 表格行在需要时可以跨页 */
+      tr, td, th {
+        page-break-inside: auto !important;
+      }
     }
 
     body {
       font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
-      line-height: 1.6;
+      line-height: 1.4;
       color: #333;
       max-width: 210mm;
       margin: 0 auto;
-      padding: 20px;
+      padding: 0;
     }
 
     .header {
       text-align: center;
-      margin-bottom: 40px;
-      border-bottom: 3px solid #4f46e5;
-      padding-bottom: 20px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #4f46e5;
+      padding-bottom: 10px;
     }
 
     .header h1 {
-      font-size: 28px;
-      margin: 0 0 10px 0;
+      font-size: 22px;
+      margin: 0 0 6px 0;
       color: #4f46e5;
     }
 
     .header p {
-      margin: 5px 0;
+      margin: 3px 0;
       color: #666;
+      font-size: 12px;
     }
 
     .section {
-      margin-bottom: 30px;
+      margin-top: 30px;
+      margin-bottom: 20px;
+      padding-top: 15px;
     }
 
     .section h2 {
-      font-size: 20px;
+      font-size: 16px;
       color: #1e293b;
-      border-left: 4px solid #4f46e5;
-      padding-left: 12px;
-      margin-bottom: 15px;
+      border-left: 3px solid #4f46e5;
+      padding-left: 10px;
+      margin-bottom: 10px;
+      margin-top: 0;
     }
 
     .info-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
 
     .info-table th,
     .info-table td {
       border: 1px solid #e2e8f0;
-      padding: 10px 12px;
+      padding: 6px 8px;
       text-align: left;
+      font-size: 12px;
     }
 
     .info-table th {
@@ -116,21 +140,22 @@ export function generatePrintableHTML(content: {
     .data-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
 
     .data-table th,
     .data-table td {
       border: 1px solid #e2e8f0;
-      padding: 8px 10px;
+      padding: 5px 6px;
       text-align: center;
-      font-size: 13px;
+      font-size: 11px;
     }
 
     .data-table th {
       background-color: #4f46e5;
       color: white;
       font-weight: 600;
+      font-size: 11px;
     }
 
     .data-table tr:nth-child(even) {
@@ -144,26 +169,27 @@ export function generatePrintableHTML(content: {
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 15px;
-      margin-bottom: 20px;
+      gap: 8px;
+      margin-bottom: 12px;
     }
 
     .kpi-card {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 20px;
-      border-radius: 8px;
+      padding: 12px;
+      border-radius: 6px;
       text-align: center;
+      min-height: 80px;
     }
 
     .kpi-card .label {
-      font-size: 12px;
+      font-size: 10px;
       opacity: 0.9;
-      margin-bottom: 8px;
+      margin-bottom: 5px;
     }
 
     .kpi-card .value {
-      font-size: 24px;
+      font-size: 18px;
       font-weight: bold;
     }
 
@@ -171,18 +197,18 @@ export function generatePrintableHTML(content: {
       background: #f8fafc;
       border: 2px dashed #cbd5e1;
       border-radius: 8px;
-      padding: 40px;
+      padding: 30px;
       text-align: center;
       color: #64748b;
     }
 
     .footer {
       text-align: center;
-      margin-top: 40px;
-      padding-top: 20px;
+      margin-top: 25px;
+      padding-top: 12px;
       border-top: 1px solid #e2e8f0;
       color: #64748b;
-      font-size: 12px;
+      font-size: 10px;
     }
   </style>
 </head>
@@ -195,11 +221,8 @@ export function generatePrintableHTML(content: {
     <p><strong>生成时间：</strong>${new Date().toLocaleString('zh-CN')}</p>
   </div>
 
-  <!-- 页面分隔符 -->
-  <div class="page-break"></div>
-
   <!-- 项目基本信息 -->
-  <div class="section no-break">
+  <div class="section">
     <h2>一、项目基本信息</h2>
     <table class="info-table">
       <tr><th>项目名称</th><td>${projectInfo.name}</td></tr>
@@ -210,7 +233,7 @@ export function generatePrintableHTML(content: {
   </div>
 
   <!-- 改造方案概览 -->
-  <div class="section no-break page-break">
+  <div class="section">
     <h2>二、改造方案概览</h2>
     <table class="data-table">
       <thead>
@@ -247,7 +270,7 @@ export function generatePrintableHTML(content: {
   </div>
 
   <!-- 财务分析 -->
-  <div class="section no-break page-break">
+  <div class="section">
     <h2>三、财务综合分析</h2>
     <div class="kpi-grid">
       <div class="kpi-card">

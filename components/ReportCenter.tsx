@@ -135,9 +135,9 @@ const ReportCenter: React.FC = () => {
   }, [modules, projectBaseInfo, reportDetail, selectedSections, exportFormat, exportProjectConfig]);
 
   return (
-    <div className="flex h-full">
-      <div className="flex-1 p-8 overflow-y-auto bg-slate-50">
-        <div className="max-w-4xl mx-auto space-y-6">
+    <div className="flex h-full print:h-auto print:block">
+      <div className="flex-1 p-8 overflow-y-auto print:overflow-visible print:h-auto print:p-0 bg-slate-50 print:bg-white">
+        <div className="max-w-4xl mx-auto space-y-6 print:hidden">
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-slate-800 mb-2">报告导出中心</h1>
             <p className="text-slate-500">根据当前测算结果生成专业的项目评估报告，支持多种格式。</p>
@@ -268,7 +268,7 @@ const ReportCenter: React.FC = () => {
       </div>
 
       {/* Recent Reports Sidebar */}
-      <div className="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0">
+      <div className="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0 print:hidden">
         <div className="p-5 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-slate-800">历史导出记录</h2>
           <button className="text-xs text-primary font-medium">查看全部</button>

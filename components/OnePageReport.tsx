@@ -88,7 +88,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
     })).filter(d => d.value > 0);
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col">
+        <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col print:static print:bg-white print:block print:overflow-visible print:h-auto">
             {/* Action Bar (Not printed) */}
             <div className="h-16 bg-slate-800 flex items-center justify-between px-6 shrink-0 print:hidden text-white shadow-md">
                 <div className="flex items-center gap-3">
@@ -109,10 +109,10 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* A4 Canvas Area */}
-            <div className="flex-1 overflow-y-auto p-8 flex justify-center print:p-0 print:overflow-visible bg-slate-200 print:bg-white custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-8 flex justify-center print:p-0 print:overflow-visible print:block print:h-auto bg-slate-200 print:bg-white custom-scrollbar">
                 <div
                     ref={printRef}
-                    className="bg-white shadow-2xl print:shadow-none mx-auto print:mx-0 print:w-full overflow-hidden relative"
+                    className="bg-white shadow-2xl print:shadow-none mx-auto print:mx-0 print:w-full relative flex flex-col"
                     style={{
                         width: '210mm',
                         minHeight: '297mm',
@@ -259,7 +259,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                     </div>
 
                     {/* Footer Warning */}
-                    <div className="absolute bottom-[10mm] left-[15mm] right-[15mm] text-[9px] text-slate-400 text-center border-t border-slate-100 pt-2 flex justify-between items-center">
+                    <div className="mt-auto pt-4 text-[9px] text-slate-400 text-center border-t border-slate-100 flex justify-between items-center bg-white print:break-inside-avoid">
                         <div>本页报告由 <span className="font-bold text-slate-500">零碳项目收益评估系统</span> 自动生成，预测指标不构成最终商务承诺。</div>
                         <div className="uppercase tracking-widest font-bold">Internal Confidential</div>
                     </div>
@@ -272,7 +272,9 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                 __html: `
                 @media print {
                     @page { size: A4 portrait; margin: 0; }
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    *, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                    html, body { height: auto !important; overflow: visible !important; background-color: white !important; }
+                    .custom-scrollbar { background-color: white !important; }
                 }
             `}} />
         </div>

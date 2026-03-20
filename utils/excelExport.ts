@@ -58,7 +58,7 @@ export function exportFinancialSheet(data: FinancialSummaryData, filename: strin
   const wb = XLSX.utils.book_new();
 
   // 工作表1: 项目概览
-  const overviewData = [
+  const overviewData: any[][] = [
     ['项目概览'],
     ['项目名称', data.projectName],
     ['项目类型', data.projectType],
@@ -76,7 +76,7 @@ export function exportFinancialSheet(data: FinancialSummaryData, filename: strin
   XLSX.utils.book_append_sheet(wb, wsOverview, '项目概览');
 
   // 工作表2: 分项投资明细
-  const modulesData = [
+  const modulesData: any[][] = [
     ['分项投资明细'],
     ['序号', '模块名称', '状态', '测算模式', '投资额(万元)', '年收益(万元)', '收益率(%)', 'IRR(%)', '回本周期(年)', '主要指标'],
   ];
@@ -86,13 +86,13 @@ export function exportFinancialSheet(data: FinancialSummaryData, filename: strin
       index + 1,
       mod.name,
       mod.isActive ? '启用' : '禁用',
-      mod.strategy,
+      mod.strategy || '',
       mod.investment.toFixed(3),
       mod.yearlySaving.toFixed(3),
       mod.roi.toFixed(3),
       mod.irr.toFixed(3),
       mod.payback.toFixed(3),
-      `${mod.kpiPrimary}: ${mod.kpiSecondary}`,
+      `${mod.kpiPrimary || ''}: ${mod.kpiSecondary || ''}`,
     ]);
   });
 
@@ -100,7 +100,7 @@ export function exportFinancialSheet(data: FinancialSummaryData, filename: strin
   XLSX.utils.book_append_sheet(wb, wsModules, '分项投资明细');
 
   // 工作表3: 全生命周期现金流
-  const cashflowData = [
+  const cashflowData: any[][] = [
     ['全生命周期现金流分析'],
     ['年份', '年度净现金流(万元)', '累计现金流(万元)'],
   ];
@@ -146,11 +146,11 @@ export function exportProjectReport(
   };
 
   // 1. 封面
-  const coverData = [
+  const coverData: any[][] = [
     ['零碳项目收益估值报告'],
     [''],
-    ['项目名称', projectData.name],
-    ['项目所在地', projectData.province + ' ' + projectData.city],
+    ['项目名称', projectData.name || ''],
+    ['项目所在地', (projectData.province || '') + ' ' + (projectData.city || '')],
     ['项目类型', projectData.type === 'school' ? '校园/教育' : '工业/商业'],
     ['生成时间', new Date().toLocaleString('zh-CN')],
     ['报告状态', '正式测算结果'],
@@ -162,17 +162,18 @@ export function exportProjectReport(
 
   // 2. 基础配置信息
   if (opts.includeBaseInfo) {
-    const baseInfoData = [['项目基础概况']];
+    const baseInfoData: any[][] = [['项目基础概况']];
     baseInfoData.push(['项目基本项', '数值/内容']);
-    baseInfoData.push(['项目名称', projectData.name]);
-    baseInfoData.push(['变压器总容量', projectData.transformers?.reduce((s: any, t: any) => s + t.kva, 0) + ' kVA']);
+    baseInfoData.push(['项目名称', projectData.name || '']);
+    baseInfoData.push(['变压器总容量', (projectData.transformers || []).reduce((s: number, t: any) => s + (t.kva || 0), 0) + ' kVA']);
     baseInfoData.push(['年用电量规模', financialData.annualData.length > 0 ? '详细见测算页' : '未关联']);
 
-    if (projectData.buildings) {
-      baseInfoData.push(['']);
+    // 楼栋信息（独立区域）
+    if (projectData.buildings && projectData.buildings.length > 0) {
+      baseInfoData.push(['', '', '']);
       baseInfoData.push(['楼栋列表', '面积(㎡)', '状态']);
       projectData.buildings.forEach((b: any) => {
-        baseInfoData.push([b.name, b.area, b.active ? '参与改造' : '不参与']);
+        baseInfoData.push([b.name || '', b.area || '', b.active ? '参与改造' : '不参与']);
       });
     }
     const wsBaseInfo = XLSX.utils.aoa_to_sheet(baseInfoData);
@@ -181,7 +182,7 @@ export function exportProjectReport(
 
   // 3. 财务核心结果
   if (opts.includeFinancial) {
-    const financialRows = [
+    const financialRows: any[][] = [
       ['综合财务评估'],
       ['指标名称', '数值', '单位', '备注'],
       ['初始总投资', financialData.totalInvestment.toFixed(3), '万元', 'CapEx'],
@@ -195,7 +196,7 @@ export function exportProjectReport(
     XLSX.utils.book_append_sheet(wb, wsFinancial, '整体财务评估');
 
     // 4. 年度现金流
-    const cashflowData = [
+    const cashflowData: any[][] = [
       ['25年生命周期现金流明细'],
       ['年份', '年度净收入(万元)', '累计净现金流(万元)'],
     ];
@@ -206,7 +207,7 @@ export function exportProjectReport(
     XLSX.utils.book_append_sheet(wb, wsCashflow, '年度现金流明细');
   }
 
-  const safeProjectName = projectData.name.replace(/[\\/:*?"<>|]/g, '_');
+  const safeProjectName = (projectData.name || '项目').replace(/[\\/:*?"<>|]/g, '_');
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   XLSX.writeFile(wb, `${safeProjectName}_详细评估报告_${dateStr}.xlsx`);
 }
@@ -219,7 +220,7 @@ export function exportSimplifiedReport(
 ) {
   const wb = XLSX.utils.book_new();
 
-  const data = [
+  const data: any[][] = [
     [`${projectName} - 快速估值概览`],
     [''],
     ['改造模块', '投资估算(万元)', '首年节省(万元)', '静态ROI(%)'],
@@ -230,7 +231,7 @@ export function exportSimplifiedReport(
   });
 
   data.push(['', '', '', '']);
-  data.push(['【合计】', totalInvestment.toFixed(3), totalSaving.toFixed(3), (totalSaving / totalInvestment * 100).toFixed(3)]);
+  data.push(['【合计】', totalInvestment.toFixed(3), totalSaving.toFixed(3), totalInvestment > 0 ? (totalSaving / totalInvestment * 100).toFixed(3) : '0.000']);
 
   const ws = XLSX.utils.aoa_to_sheet(data);
   XLSX.utils.book_append_sheet(wb, ws, '概览报告');

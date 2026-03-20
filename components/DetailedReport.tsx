@@ -119,8 +119,46 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
     // Chart data for first 15 years to fit nicely
     const chartData = cashFlowData.slice(1, 16);
 
+    const printStyle = `
+@media print {
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .fixed {
+    position: static !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .overflow-y-auto {
+    overflow: visible !important;
+    height: auto !important;
+    display: block !important;
+  }
+  .print-container {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    box-shadow: none !important;
+  }
+  .page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+    display: block;
+    height: 0;
+  }
+  tr, .page-break-inside-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+`;
+
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col">
+        <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col print:bg-white print:static print:block">
+            <style>{printStyle}</style>
             {/* Action Bar (Not printed) */}
             <div className="h-16 bg-slate-800 flex items-center justify-between px-6 shrink-0 print:hidden text-white shadow-md">
                 <div className="flex items-center gap-3">
@@ -141,17 +179,16 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* A4 Canvas Area */}
-            <div className="flex-1 overflow-y-auto p-8 flex justify-center print:p-0 print:overflow-visible bg-slate-200 print:bg-white custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-8 flex justify-center bg-slate-200 print:bg-white print:p-0 print:block print:overflow-visible">
                 <div
                     ref={printRef}
-                    className="bg-white shadow-2xl print:shadow-none mx-auto print:mx-0 print:w-full relative"
+                    className="bg-white shadow-2xl print:shadow-none mx-auto print:mx-0 print:w-full print:block print-container relative"
                     style={{
                         width: '210mm',
-                        minHeight: '297mm',
                     }}
                 >
                     {/* PAGE 1: Executive Summary */}
-                    <div className="p-[15mm] min-h-[297mm] print:break-after-page flex flex-col">
+                    <div className="p-[15mm] min-h-[297mm] print:min-h-0 flex flex-col">
                         {/* Header */}
                         <div className="border-b-4 border-slate-800 pb-6 mb-8 flex items-end justify-between">
                             <div className="flex-1 pr-4">

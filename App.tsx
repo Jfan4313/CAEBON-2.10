@@ -89,10 +89,12 @@ const App: React.FC = () => {
     <StorageProvider>
       <AuthProvider>
         <ErrorBoundary>
-          <div className="flex h-screen bg-slate-50 font-sans text-slate-900 relative">
-            <Sidebar currentView={currentView} onChangeView={setCurrentView} />
-            <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-              <div className="flex-1 h-full overflow-hidden">
+          <div className="flex h-screen print:h-auto print:block bg-slate-50 font-sans text-slate-900 relative">
+            <div className="print:hidden">
+              <Sidebar currentView={currentView} onChangeView={setCurrentView} />
+            </div>
+            <main className="flex-1 flex flex-col min-w-0 overflow-hidden print:overflow-visible relative">
+              <div className="flex-1 h-full print:h-auto overflow-hidden print:overflow-visible">
                 <Suspense fallback={<LoadingFallback />}>
                   {renderContent}
                 </Suspense>
