@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { calculateCampusConsumptionRate, ConsumptionResult } from '../../services/campusConsumption';
-import { getSunHours } from '../../services/solarData';
+import { getSunHours, getSunHoursWithNASA } from '../../services/solarData';
+import { fetchNasaSolarData } from '../../services/nasaPower';
 import { DEFAULTS, SolarParamsState, BuildingData, DEFAULT_SOLUTIONS, DEFAULT_BRAND, SolarModuleBrand, SolarSolution, MODULE_BRANDS } from './types';
 
 export const useSolarRetrofit = () => {
@@ -124,7 +125,7 @@ export const useSolarRetrofit = () => {
     const lastLocation = useRef<string>(locationKey);
 
     // Get O&M rate from global project context
-    const omRate = projectBaseInfo?.omRate || 1.5;
+    const omRate = projectBaseInfo?.omRate ?? 0;
 
     // Financial Calculation Core
     // ========== 核心财务测算 ==========
@@ -216,17 +217,49 @@ export const useSolarRetrofit = () => {
         });
     }, [params, calculatedSelfConsumption, calculateFinancials, updateModule]);
 
-    // Sync Daily Sun Hours from Location
+    // Sync Daily Sun Hours from Location (优先使用精确坐标调用NASA)
     useEffect(() => {
-        const currentLoc = `${projectBaseInfo?.province}-${projectBaseInfo?.city}`;
-        if (currentLoc !== lastLocation.current && projectBaseInfo?.province) {
+        const currentLoc = projectBaseInfo?.latitude && projectBaseInfo?.longitude
+            ? `${projectBaseInfo.latitude}-${projectBaseInfo.longitude}`
+            : `${projectBaseInfo?.province}-${projectBaseInfo?.city}`;
+
+        if (currentLoc !== lastLocation.current && (projectBaseInfo?.latitude || projectBaseInfo?.province)) {
             lastLocation.current = currentLoc;
-            const newSunHours = getSunHours(projectBaseInfo.province, projectBaseInfo.city || '');
-            if (newSunHours && Math.abs(newSunHours - params.advParams.dailySunHours) > 0.01) {
-                handleUpdate({ advParams: { ...params.advParams, dailySunHours: newSunHours } });
+
+            // 优先使用精确坐标调用 NASA API
+            if (projectBaseInfo.latitude && projectBaseInfo.longitude) {
+                fetchNasaSolarData(projectBaseInfo.latitude, projectBaseInfo.longitude)
+                    .then(nasaData => {
+                        const newSunHours = nasaData.annualAverage;
+                        if (Math.abs(newSunHours - params.advParams.dailySunHours) > 0.01) {
+                            handleUpdate({ advParams: { ...params.advParams, dailySunHours: parseFloat(newSunHours.toFixed(2)) } });
+                        }
+                    })
+                    .catch(() => {
+                        // NASA失败时使用本地数据兜底
+                        const fallbackSunHours = getSunHours(projectBaseInfo.province, projectBaseInfo.city || '');
+                        if (fallbackSunHours && Math.abs(fallbackSunHours - params.advParams.dailySunHours) > 0.01) {
+                            handleUpdate({ advParams: { ...params.advParams, dailySunHours: fallbackSunHours } });
+                        }
+                    });
+            } else {
+                // 降级：使用省市名称查询
+                getSunHoursWithNASA(projectBaseInfo.province, projectBaseInfo.city || '')
+                    .then(newSunHours => {
+                        if (newSunHours && Math.abs(newSunHours - params.advParams.dailySunHours) > 0.01) {
+                            handleUpdate({ advParams: { ...params.advParams, dailySunHours: parseFloat(newSunHours.toFixed(2)) } });
+                        }
+                    })
+                    .catch(() => {
+                        // 最终兜底：使用本地静态数据
+                        const fallbackSunHours = getSunHours(projectBaseInfo.province, projectBaseInfo.city || '');
+                        if (fallbackSunHours && Math.abs(fallbackSunHours - params.advParams.dailySunHours) > 0.01) {
+                            handleUpdate({ advParams: { ...params.advParams, dailySunHours: fallbackSunHours } });
+                        }
+                    });
             }
         }
-    }, [projectBaseInfo?.province, projectBaseInfo?.city, handleUpdate, params.advParams]);
+    }, [projectBaseInfo?.latitude, projectBaseInfo?.longitude, projectBaseInfo?.province, projectBaseInfo?.city, handleUpdate, params.advParams]);
 
     // Sync Electricity Price
     useEffect(() => {

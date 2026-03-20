@@ -15,7 +15,7 @@ export function useHvacLogic() {
     const savedParams = currentModule.params || {};
 
     // Get O&M rate from global project context
-    const omRate = projectBaseInfo?.omRate || 1.5;
+    const omRate = projectBaseInfo?.omRate ?? 0;
 
     const [mode, setMode] = useState<'simple' | 'advanced'>(savedParams.mode || 'simple');
 

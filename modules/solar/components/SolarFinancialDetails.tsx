@@ -113,43 +113,43 @@ export const SolarFinancialDetails: React.FC<SolarFinancialDetailsProps> = ({
                     <span className="text-[10px] text-slate-400">单位: 万元 (除发电量外) | 精度: 0.001</span>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left whitespace-nowrap">
+                    <table className="w-full text-sm text-left whitespace-nowrap" style={{ minWidth: '600px' }}>
                         <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                             <tr>
-                                <th className="px-5 py-4 sticky left-0 bg-slate-50">运营年份</th>
-                                <th className="px-5 py-4">发电量(万度)</th>
-                                <th className="px-5 py-4 text-right">
-                                    {isEmc ? '投资方营收' : '总营收'}
+                                <th className="px-3 py-2.5 sticky left-0 bg-slate-50 text-xs">年份</th>
+                                <th className="px-3 py-2.5 text-xs">发电量<br/><span className="text-[10px] font-normal">(万度)</span></th>
+                                <th className="px-3 py-2.5 text-right text-xs">
+                                    {isEmc ? '投资方<br/>营收' : '总营收'}
                                 </th>
-                                {isEmc && <th className="px-5 py-4 text-right text-blue-600">业主收益</th>}
-                                <th className="px-5 py-4 text-right">运维质保</th>
-                                <th className="px-5 py-4 text-right">所得税费</th>
-                                <th className="px-5 py-4 text-right bg-slate-50/50 font-bold text-slate-700">
-                                    {isEmc ? '投资方净收益' : '净现金流'}
+                                {isEmc && <th className="px-3 py-2.5 text-right text-blue-600 text-xs">业主<br/>收益</th>}
+                                <th className="px-3 py-2.5 text-right text-xs">运维<br/>质保</th>
+                                <th className="px-3 py-2.5 text-right text-xs">所得<br/>税费</th>
+                                <th className="px-3 py-2.5 text-right bg-slate-50/50 font-bold text-slate-700 text-xs">
+                                    {isEmc ? '投资方<br/>净收益' : '净<br/>现金流'}
                                 </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             <tr className="hover:bg-slate-50 bg-slate-50/30">
-                                <td className="px-5 py-3 font-bold text-slate-700 sticky left-0 bg-slate-50/30">第 0 年 (投资)</td>
-                                <td className="px-5 py-3 text-slate-400">-</td>
-                                <td className="px-5 py-3 text-right text-slate-400">-</td>
-                                {isEmc && <td className="px-5 py-3 text-right text-slate-400">-</td>}
-                                <td className="px-5 py-3 text-right text-slate-400">-</td>
-                                <td className="px-5 py-3 text-right text-slate-400">-</td>
-                                <td className="px-5 py-3 text-right font-bold text-red-500">
+                                <td className="px-3 py-2 font-bold text-slate-700 sticky left-0 bg-slate-50/30 text-xs">第 0 年</td>
+                                <td className="px-3 py-2 text-slate-400 text-xs">-</td>
+                                <td className="px-3 py-2 text-right text-slate-400 text-xs">-</td>
+                                {isEmc && <td className="px-3 py-2 text-right text-slate-400 text-xs">-</td>}
+                                <td className="px-3 py-2 text-right text-slate-400 text-xs">-</td>
+                                <td className="px-3 py-2 text-right text-slate-400 text-xs">-</td>
+                                <td className="px-3 py-2 text-right font-bold text-red-500 text-xs">
                                     -{investment.toFixed(3)}
                                 </td>
                             </tr>
                             {longTermMetrics.yearlyDetails.map((row: any, i: number) => (
                                 <tr key={i} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-5 py-3 font-medium text-slate-700 sticky left-0 bg-white">第 {row.year} 年</td>
-                                    <td className="px-5 py-3 text-slate-600 font-mono">{row.generation.toFixed(3)}</td>
-                                    <td className="px-5 py-3 text-right text-orange-600 font-medium font-mono">{row.revenue.toFixed(3)}</td>
-                                    {isEmc && <td className="px-5 py-3 text-right text-blue-600 font-medium font-mono">{row.ownerBenefit.toFixed(3)}</td>}
-                                    <td className="px-5 py-3 text-right text-orange-500 font-mono">-{row.opex.toFixed(3)}</td>
-                                    <td className="px-5 py-3 text-right text-slate-500 font-mono">-{row.tax.toFixed(3)}</td>
-                                    <td className={`px-5 py-3 text-right font-bold bg-slate-50/30 font-mono ${row.netIncome >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                    <td className="px-3 py-2 font-medium text-slate-700 sticky left-0 bg-white text-xs">第 {row.year} 年</td>
+                                    <td className="px-3 py-2 text-slate-600 font-mono text-xs">{row.generation.toFixed(3)}</td>
+                                    <td className="px-3 py-2 text-right text-orange-600 font-medium font-mono text-xs">{row.revenue.toFixed(3)}</td>
+                                    {isEmc && <td className="px-3 py-2 text-right text-blue-600 font-medium font-mono text-xs">{row.ownerBenefit.toFixed(3)}</td>}
+                                    <td className="px-3 py-2 text-right text-orange-500 font-mono text-xs">-{row.opex.toFixed(3)}</td>
+                                    <td className="px-3 py-2 text-right text-slate-500 font-mono text-xs">-{row.tax.toFixed(3)}</td>
+                                    <td className={`px-3 py-2 text-right font-bold bg-slate-50/30 font-mono text-xs ${row.netIncome >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                         {row.netIncome.toFixed(3)}
                                     </td>
                                 </tr>

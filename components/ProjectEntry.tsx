@@ -4,6 +4,7 @@ import { Building, EquipmentItem } from './project-entry/types';
 import { BuildingList } from './project-entry/BuildingList';
 import { SystemConfigTable } from './project-entry/SystemConfigTable';
 import { BillImport } from './project-entry/BillImport';
+import { LocationPicker } from './LocationPicker';
 // --- 省份城市数据 ---
 const PROVINCE_CITIES: Record<string, string[]> = {
     // 直辖市
@@ -611,6 +612,30 @@ const ProjectEntry: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* 精确位置选择 (地图) */}
+                            <div className="mt-4 space-y-2">
+                                <label className="text-sm font-semibold text-slate-700 ml-1 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[16px] text-blue-500">map</span>
+                                    精确位置选择
+                                    <span className="text-xs font-normal text-slate-400">(可选 - 用于获取更准确的日照数据)</span>
+                                </label>
+                                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                                    <LocationPicker
+                                        latitude={projectBaseInfo.latitude}
+                                        longitude={projectBaseInfo.longitude}
+                                        address={projectBaseInfo.formattedAddress}
+                                        onLocationChange={(lat, lon, addr) => {
+                                            setProjectBaseInfo(prev => ({
+                                                ...prev,
+                                                latitude: lat,
+                                                longitude: lon,
+                                                formattedAddress: addr
+                                            }));
+                                        }}
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         {/* Collapsible Advanced Parameters */}
@@ -640,10 +665,10 @@ const ProjectEntry: React.FC = () => {
                                             <input
                                                 type="number"
                                                 step="0.1"
-                                                value={projectBaseInfo.omRate ?? 1.5}
+                                                value={projectBaseInfo.omRate ?? 0}
                                                 onChange={(e) => setProjectBaseInfo({ ...projectBaseInfo, omRate: parseFloat(e.target.value) || 0 })}
                                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary transition-all"
-                                                placeholder="1.5"
+                                                placeholder="0"
                                             />
                                             <span className="absolute right-4 top-3 text-sm text-slate-400 font-medium">%</span>
                                             <p className="text-[10px] text-slate-400 mt-1 absolute -bottom-5 left-1">占初始投资(CAPEX)的百分比，每年扣除</p>
@@ -659,13 +684,13 @@ const ProjectEntry: React.FC = () => {
                                             <input
                                                 type="number"
                                                 step="0.1"
-                                                value={projectBaseInfo.taxRate ?? 25.0}
+                                                value={projectBaseInfo.taxRate ?? 0}
                                                 onChange={(e) => setProjectBaseInfo({ ...projectBaseInfo, taxRate: parseFloat(e.target.value) || 0 })}
                                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 focus:bg-white focus:border-primary transition-all"
-                                                placeholder="25.0"
+                                                placeholder="0"
                                             />
                                             <span className="absolute right-4 top-3 text-sm text-slate-400 font-medium">%</span>
-                                            <p className="text-[10px] text-slate-400 mt-1 absolute -bottom-5 left-1">高新企业可选15%，一般企业25%</p>
+                                            <p className="text-[10px] text-slate-400 mt-1 absolute -bottom-5 left-1">小微企业免税，高新企业15%，一般企业25%</p>
                                         </div>
                                     </div>
                                 </div>

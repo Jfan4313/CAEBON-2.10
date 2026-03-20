@@ -82,6 +82,8 @@ export interface SolarSolution {
     cableType: CableType; // 线缆材质
     epcPrice: number; // 元/Wp
     voltageUpgradeCost?: number; // 升压设备成本（仅高压接入需要）
+    layoutImage?: string; // 铺设图 (Base64 数据URL)
+    useSameLayout?: boolean; // 是否使用与第一个方案相同的铺设图（仅用于非第一个方案）
 }
 
 // 默认方案配置
@@ -141,7 +143,7 @@ export const DEFAULTS: SolarParamsState = {
         dailySunHours: 3.8,
         prValue: 82,
         azimuthEfficiency: 98,
-        generationDays: 330,
+        generationDays: 365,  // 固定365天，不可更改
         degradationFirstYear: 2.0,
         degradationLinear: 0.55,
         feedInTariff: 0.35,

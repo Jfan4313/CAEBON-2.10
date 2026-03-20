@@ -357,8 +357,12 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                         <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">系统设计参数</h4>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="space-y-1">
-                                <label className="text-xs text-slate-500">日照时长 (h/day)</label>
+                                <label className="text-xs text-slate-500 flex items-center gap-1">
+                                    日照时长 (h/day)
+                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[9px]">NASA数据</span>
+                                </label>
                                 <input type="number" step="0.1" value={params.advParams.dailySunHours} onChange={(e) => handleUpdate({ advParams: { ...params.advParams, dailySunHours: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                                <span className="text-[10px] text-slate-400">根据项目地址自动获取</span>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs text-slate-500">系统综合效率 (%)</label>
@@ -370,7 +374,8 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs text-slate-500">年发电天数 (天)</label>
-                                <input type="number" value={params.advParams.generationDays} onChange={(e) => handleUpdate({ advParams: { ...params.advParams, generationDays: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                                <input type="number" value={365} disabled className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm outline-none text-slate-500 cursor-not-allowed" />
+                                <span className="text-[10px] text-slate-400">固定365天</span>
                             </div>
                         </div>
                     </div>

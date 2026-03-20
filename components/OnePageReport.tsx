@@ -21,8 +21,8 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
     const payback = totalSaving > 0 ? totalInvestment / totalSaving : 0;
 
     // Math for IRR
-    const omRate = projectBaseInfo.omRate ?? 1.5;
-    const taxRate = projectBaseInfo.taxRate ?? 25.0;
+    const omRate = projectBaseInfo.omRate ?? 0;
+    const taxRate = projectBaseInfo.taxRate ?? 0;
 
     const spvConfig = projectBaseInfo.spvConfig || { debtRatio: 70, loanInterest: 4.5, loanTerm: 10, shareholderARate: 51 };
     const loanAmount = totalInvestment * (spvConfig.debtRatio / 100);

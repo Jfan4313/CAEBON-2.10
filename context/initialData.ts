@@ -123,9 +123,13 @@ export const initialProjectBaseInfo: ProjectBaseInfo = {
     type: 'factory',
     province: 'Shanghai',
     city: 'Pudong',
+    // 新增: 精确位置信息 (默认为空)
+    latitude: undefined,
+    longitude: undefined,
+    formattedAddress: undefined,
     buildings: [],
-    omRate: 1.5, // Default 1.5% of total CAPEX per year
-    taxRate: 25.0, // Default 25% corporate tax
+    omRate: 0, // 不使用全局运维费用
+    taxRate: 0, // 小微企业免税
     discountRate: 5.0,
     spvConfig: {
         debtRatio: 70, // 70% loan

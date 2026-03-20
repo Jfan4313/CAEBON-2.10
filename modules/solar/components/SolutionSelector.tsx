@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MODULE_BRANDS, SolarSolution, SolarModuleBrand, CableType } from '../types';
 import { ModuleBrandSelector } from './ModuleBrandSelector';
+import { LayoutImageUploader } from './LayoutImageUploader';
 
 interface SolutionSelectorProps {
     solutions: SolarSolution[];
@@ -196,6 +197,24 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
                                 onSelect={(brand) => onUpdateSolution(currentSolution.id, { brand })}
                             />
                         </div>
+                    </div>
+
+                    {/* 铺设图上传 */}
+                    <div className="pt-4 border-t border-slate-100">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="material-icons text-[18px] text-primary">map</span>
+                            <label className="text-sm font-bold text-slate-700">光伏铺设图</label>
+                        </div>
+                        <LayoutImageUploader
+                            currentImage={currentSolution.layoutImage}
+                            onImageChange={(imageData) => onUpdateSolution(currentSolution.id, { layoutImage: imageData })}
+                            canUseSameLayout={solutions.length > 1 && currentSolution.id !== solutions[0].id}
+                            usingSameLayout={currentSolution.useSameLayout}
+                            onToggleSameLayout={(useSame) => onUpdateSolution(currentSolution.id, {
+                                useSameLayout: useSame,
+                                layoutImage: useSame ? undefined : currentSolution.layoutImage
+                            })}
+                        />
                     </div>
                 </div>
             )}

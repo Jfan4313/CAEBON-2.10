@@ -251,8 +251,8 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Main Chart Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-96">
-        <div className="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto lg:h-96">
+        <div className="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col h-full">
           <div className="flex items-center justify-between mb-4">
              <div>
                  <h3 className="text-base font-bold text-slate-800">能源节省预测分析</h3>
@@ -262,8 +262,8 @@ const Dashboard: React.FC = () => {
                 年度 <span className="material-symbols-outlined text-[14px]">expand_more</span>
              </button>
           </div>
-          <div className="flex-1 w-full" style={{ height: '400px' }}>
-            <ResponsiveContainer width="100%" height={400}>
+          <div className="flex-1 w-full min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} barSize={14} barGap={4} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
@@ -289,7 +289,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 h-full overflow-y-auto">
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col justify-center flex-1">
                 <div className="flex justify-between items-start mb-2">
                     <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
@@ -316,7 +316,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Detail Table */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex-1">
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 mt-6">
          <div className="flex justify-between items-center mb-4">
              <h3 className="text-base font-bold text-slate-800">改造模块效益明细</h3>
              <button className="text-slate-400 hover:text-primary"><span className="material-symbols-outlined">refresh</span></button>

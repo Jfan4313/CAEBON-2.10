@@ -38,8 +38,8 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
     const activeModules = (Object.values(modules) as any[]).filter(m => m.isActive);
     const totalInvestment = activeModules.reduce((sum, m) => sum + (Number(m.investment) || 0), 0);
     const totalSaving = activeModules.reduce((sum, m) => sum + (Number(m.yearlySaving) || 0), 0);
-    const omRate = projectBaseInfo.omRate ?? 1.5;
-    const taxRate = projectBaseInfo.taxRate ?? 25.0;
+    const omRate = projectBaseInfo.omRate ?? 0;
+    const taxRate = projectBaseInfo.taxRate ?? 0;
 
     // SPV Config
     const spvConfig = projectBaseInfo.spvConfig || { debtRatio: 70, loanInterest: 4.5, loanTerm: 10, shareholderARate: 51 };

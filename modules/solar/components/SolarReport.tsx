@@ -1205,15 +1205,111 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                 </div>
             )
         }] : []),
-        // Slide 11/12: O&M Maintenance Plan
+        // Slide: Layout Images (only show if at least one solution has a layout image)
+        ...(params.solutions?.some(s => s.layoutImage || s.useSameLayout) ? [{
+            title: solutionComparisonData.length > 1 ? '九、光伏铺设图' : '八、光伏铺设图',
+            content: (
+                <div className="h-full flex flex-col bg-white">
+                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="material-icons text-emerald-400 text-3xl">map</span>
+                            <h2 className="text-3xl font-bold">{solutionComparisonData.length > 1 ? '九、光伏铺设图' : '八、光伏铺设图'}</h2>
+                        </div>
+                        <div className="flex items-center gap-2 opacity-50">
+                            <span className="material-icons text-sm">wb_sunny</span>
+                            <span className="text-xs">零碳评估</span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 p-6">
+                        <div className="grid grid-cols-2 gap-6 h-full">
+                            {params.solutions?.filter(s => s.layoutImage || s.useSameLayout).map((solution, index) => {
+                                // Get the actual layout image (might be from solution 1 if useSameLayout is true)
+                                const layoutImage = solution.useSameLayout
+                                    ? params.solutions?.[0]?.layoutImage
+                                    : solution.layoutImage;
+                                const sourceName = solution.useSameLayout
+                                    ? `${params.solutions?.[0]?.name} (共用)`
+                                    : solution.name;
+
+                                return (
+                                    <div key={solution.id} className="bg-slate-50 rounded-xl border-2 border-slate-200 overflow-hidden flex flex-col">
+                                        <div className="bg-white px-4 py-3 border-b border-slate-200">
+                                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                                <span className={`px-2 py-1 rounded text-xs ${
+                                                    solution.connectionType === 'high'
+                                                        ? 'bg-red-100 text-red-700'
+                                                        : 'bg-blue-100 text-blue-700'
+                                                }`}>
+                                                    {solution.connectionType === 'high' ? '10kV高压' : '380V低压'}
+                                                </span>
+                                                {solution.name}
+                                            </h3>
+                                            <p className="text-xs text-slate-500 mt-1">{solution.description}</p>
+                                            {solution.useSameLayout && (
+                                                <p className="text-xs text-blue-600 mt-1">使用方案一的铺设图</p>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 p-4 bg-white">
+                                            {layoutImage ? (
+                                                <img
+                                                    src={layoutImage}
+                                                    alt={`${solution.name} 铺设图`}
+                                                    className="w-full h-full object-contain rounded-lg"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                    <div className="text-center">
+                                                        <span className="material-icons text-5xl">image_not_supported</span>
+                                                        <p className="mt-2 text-sm">暂无铺设图</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="bg-slate-100 px-4 py-2 text-xs text-slate-600 border-t border-slate-200">
+                                            <div className="flex justify-between">
+                                                <span>EPC单价: ¥{solution.epcPrice.toFixed(2)}/Wp</span>
+                                                <span>组件: {solution.brand === 'longi' ? '隆基' : solution.brand === 'tongwei' ? '通威' : '通用'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
+                        <span className="font-semibold">{solutionComparisonData.length > 1 ? '9/11' : '8/10'}</span>
+                        <span>零碳项目收益评估软件</span>
+                    </div>
+                </div>
+            )
+        }] : []),
+        // Slide {solutionComparisonData.length > 1 ? '十一' : '十'}: O&M Maintenance Plan
         {
-            title: solutionComparisonData.length > 1 ? '九、光伏运维计划' : '九、光伏运维计划',
+            title: (() => {
+                const hasLayoutImage = params.solutions?.some(s => s.layoutImage || s.useSameLayout);
+                const hasMultipleSolutions = solutionComparisonData.length > 1;
+                if (hasMultipleSolutions) {
+                    return hasLayoutImage ? '十、光伏运维计划' : '九、光伏运维计划';
+                } else {
+                    return hasLayoutImage ? '九、光伏运维计划' : '八、光伏运维计划';
+                }
+            })(),
             content: (
                 <div className="h-full flex flex-col bg-white">
                     <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <span className="material-icons text-cyan-400 text-3xl">build</span>
-                            <h2 className="text-3xl font-bold">九、光伏运维计划</h2>
+                            <h2 className="text-3xl font-bold">{(() => {
+                                const hasLayoutImage = params.solutions?.some(s => s.layoutImage || s.useSameLayout);
+                                const hasMultipleSolutions = solutionComparisonData.length > 1;
+                                if (hasMultipleSolutions) {
+                                    return hasLayoutImage ? '十、光伏运维计划' : '九、光伏运维计划';
+                                } else {
+                                    return hasLayoutImage ? '九、光伏运维计划' : '八、光伏运维计划';
+                                }
+                            })()}</h2>
                         </div>
                         <div className="flex items-center gap-2 opacity-50">
                             <span className="material-icons text-sm">wb_sunny</span>
@@ -1337,7 +1433,15 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">{solutionComparisonData.length > 1 ? '10/10' : '9/9'}</span>
+                        <span className="font-semibold">{(() => {
+                            const hasLayoutImage = params.solutions?.some(s => s.layoutImage || s.useSameLayout);
+                            const hasMultipleSolutions = solutionComparisonData.length > 1;
+                            if (hasMultipleSolutions) {
+                                return hasLayoutImage ? '10/11' : '9/10';
+                            } else {
+                                return hasLayoutImage ? '9/10' : '8/9';
+                            }
+                        })()}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>

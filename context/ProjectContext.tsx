@@ -19,6 +19,10 @@ export interface ProjectBaseInfo {
     storageCapacity?: number;
     province: string;
     city: string;
+    // 新增: 精确位置信息 (用于NASA API)
+    latitude?: number;  // 纬度
+    longitude?: number; // 经度
+    formattedAddress?: string; // 完整地址
     buildings: any[];
     // Financial & Risk parameters
     omRate?: number; // Annual Operations & Maintenance rate (% of CAPEX)

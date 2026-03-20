@@ -17,7 +17,7 @@ export function useStorageLogic() {
     const savedParams = currentModule.params || {};
 
     // Get O&M rate from global project context
-    const omRate = projectBaseInfo?.omRate || 1.5;
+    const omRate = projectBaseInfo?.omRate ?? 0;
 
     // --- State ---
     const [mode, setMode] = useState<'simple' | 'advanced'>(savedParams.mode || 'simple');
