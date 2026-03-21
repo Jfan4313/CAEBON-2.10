@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, AreaChart, Area, ComposedChart, Line, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
 import { useProject } from '../../context/ProjectContext';
+import { calculateIRR } from '../../utils/financial';
 
 // --- Constants ---
 const CHARGER_Types = {
@@ -20,25 +21,6 @@ interface EVEquipment {
     utilization: number; // hours/day (Turnover)
     serviceFee: number; // Yuan/kWh
 }
-
-// --- Helper: IRR Calculation ---
-const calculateIRR = (cashFlows: number[], guess = 0.1) => {
-    const maxIter = 100;
-    const tol = 0.00001;
-    let x0 = guess;
-    for (let i = 0; i < maxIter; i++) {
-        let fValue = 0;
-        let fDerivative = 0;
-        for (let j = 0; j < cashFlows.length; j++) {
-            fValue += cashFlows[j] / Math.pow(1 + x0, j);
-            fDerivative += -j * cashFlows[j] / Math.pow(1 + x0, j + 1);
-        }
-        const x1 = x0 - fValue / fDerivative;
-        if (Math.abs(x1 - x0) <= tol) return x1;
-        x0 = x1;
-    }
-    return x0;
-};
 
 export default function RetrofitEV() {
   const { modules, toggleModule, updateModule, saveProject, transformers, bills } = useProject();
@@ -190,7 +172,7 @@ export default function RetrofitEV() {
           revenue: parseFloat(annualRevenue.toFixed(1)),
           netProfit: parseFloat(netProfit.toFixed(1)),
           payback: parseFloat(payback.toFixed(1)),
-          irr: (irr * 100).toFixed(1),
+          irr: irr.toFixed(1),
           totalPower: parseFloat(totalPower.toFixed(0)),
           count: chargerCount,
           totalKWh: parseFloat((totalKWh/10000).toFixed(1)),

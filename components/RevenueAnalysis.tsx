@@ -7,6 +7,7 @@ import {
 import { View } from '../types';
 import { useProject, ModuleData } from '../context/ProjectContext';
 import { exportFinancialSheet, FinancialSummaryData, AnnualCashFlowData } from '../utils/excelExport';
+import { calculateIRR } from '../utils/financial';
 import { AnimatedNumber } from './ui/AnimatedNumber';
 
 interface RevenueAnalysisProps {
@@ -15,26 +16,6 @@ interface RevenueAnalysisProps {
 
 // --- Helpers ---
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
-
-// Simple IRR approximation (Bisection method)
-const calculateIRR = (cashFlows: number[]) => {
-    let min = -1.0;
-    let max = 1.0;
-    let guess = 0.1;
-    let npv = 0;
-    // Limit iterations
-    for (let i = 0; i < 50; i++) {
-        npv = 0;
-        for (let j = 0; j < cashFlows.length; j++) {
-            npv += cashFlows[j] / Math.pow(1 + guess, j);
-        }
-        if (Math.abs(npv) < 1) break;
-        if (npv > 0) min = guess;
-        else max = guess;
-        guess = (min + max) / 2;
-    }
-    return guess * 100;
-};
 
 // DCF Calculator for single item
 const calculateSingleDCF = (investment: number, yearlySaving: number, params: any) => {
