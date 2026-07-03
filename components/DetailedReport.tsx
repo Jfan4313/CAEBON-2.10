@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { useProject } from '../context/ProjectContext';
+import { getEffectiveActiveModules } from '../utils/moduleAggregation';
 import {
     ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
@@ -35,7 +36,7 @@ export default function DetailedReport({ onClose }: { onClose: () => void }) {
         return { npv: parseFloat(npv.toFixed(2)), irr: parseFloat(irr.toFixed(1)) };
     };
 
-    const activeModules = (Object.values(modules) as any[]).filter(m => m.isActive);
+    const activeModules = getEffectiveActiveModules(modules);
     const totalInvestment = activeModules.reduce((sum, m) => sum + (Number(m.investment) || 0), 0);
     const totalSaving = activeModules.reduce((sum, m) => sum + (Number(m.yearlySaving) || 0), 0);
     const omRate = projectBaseInfo.omRate ?? 0;

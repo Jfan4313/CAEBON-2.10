@@ -2,6 +2,7 @@ export type View =
   | 'dashboard'
   | 'project-entry'
   | 'price-config'
+  | 'retrofit-energy-sales'
   | 'retrofit-solar'
   | 'retrofit-storage'
   | 'retrofit-hvac'
@@ -26,6 +27,7 @@ export type ModuleType =
   | 'water'
   | 'ev'
   | 'microgrid'
+  | 'sales'
   | 'vpp'
   | 'ai'
   | 'carbon';
@@ -37,6 +39,7 @@ export type StrategyType =
   | 'replace'
   | 'smart'
   | 'grid-tied'
+  | 'retail'
   | 'dr'
   | 'ai'
   | 'trade';

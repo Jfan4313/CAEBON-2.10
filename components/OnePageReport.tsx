@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { useProject } from '../context/ProjectContext';
+import { getEffectiveActiveModules } from '../utils/moduleAggregation';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine,
     BarChart, Bar, Tooltip as RechartsTooltip, Legend, Cell, PieChart, Pie
@@ -15,7 +16,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
         window.print();
     };
 
-    const activeModules = (Object.values(modules) as any[]).filter(m => m.isActive);
+    const activeModules = getEffectiveActiveModules(modules);
     const totalInvestment: number = activeModules.reduce((sum: number, m) => sum + (Number(m.investment) || 0), 0);
     const totalSaving: number = activeModules.reduce((sum: number, m) => sum + (Number(m.yearlySaving) || 0), 0);
     const payback = totalSaving > 0 ? totalInvestment / totalSaving : 0;

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { calculationService, CalculationResult, SolarParams, StorageParams, HVACParams, LightingParams, EVParams } from '../services/api';
 import { initialModules } from './initialData';
 import { useApp } from './AppContext';
+import { getEffectiveActiveModules } from '../utils/moduleAggregation';
 
 export interface ModuleData {
     id: string;
@@ -51,11 +52,9 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const getSummary = useCallback(() => {
         let totalInvestment = 0;
         let totalSaving = 0;
-        Object.values(modules).forEach(mod => {
-            if (mod.isActive) {
-                totalInvestment += mod.investment;
-                totalSaving += mod.yearlySaving;
-            }
+        getEffectiveActiveModules(modules).forEach(mod => {
+            totalInvestment += mod.investment;
+            totalSaving += mod.yearlySaving;
         });
         const roi = totalInvestment > 0 ? (totalSaving / totalInvestment) * 100 : 0;
         return { totalInvestment, totalSaving, roi };

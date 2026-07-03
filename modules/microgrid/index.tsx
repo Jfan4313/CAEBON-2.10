@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ComposedChart, Line, Area, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
+import { ComposedChart, Line, Area, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine } from 'recharts';
 import { useProject } from '../../context/ProjectContext';
+import { IntegratedEnergyPanel } from './components/IntegratedEnergyPanel';
+import { calculateIntegratedScenario } from './calculations';
+import { DEFAULT_ENHANCED_PARAMS, type MicrogridTab } from './types';
 
 // --- Constants ---
 const PACKAGES = {
@@ -105,6 +108,7 @@ export default function RetrofitMicrogrid() {
   const { modules, toggleModule, updateModule, saveProject, transformers } = useProject();
   const currentModule = modules['retrofit-microgrid'];
   const solarModule = modules['retrofit-solar'];
+  const energySalesModule = modules['retrofit-energy-sales'];
   const aiModule = modules['retrofit-ai'];
   
   // Use params from context or defaults
@@ -119,6 +123,16 @@ export default function RetrofitMicrogrid() {
           performance: { ...DEFAULTS.preciseState.performance, ...currentModule.params?.preciseState?.performance },
           loads: { ...DEFAULTS.preciseState.loads, ...currentModule.params?.preciseState?.loads },
           economics: { ...DEFAULTS.preciseState.economics, ...currentModule.params?.preciseState?.economics }
+      },
+      activeTab: (currentModule.params?.activeTab === 'integrated' ? 'integrated' : 'system') as MicrogridTab,
+      integratedEnergy: {
+          ...DEFAULT_ENHANCED_PARAMS.integratedEnergy,
+          ...currentModule.params?.integratedEnergy,
+          scenarios: currentModule.params?.integratedEnergy?.scenarios || DEFAULT_ENHANCED_PARAMS.integratedEnergy.scenarios,
+          takeoverModuleIds: Array.from(new Set([
+              ...(currentModule.params?.integratedEnergy?.takeoverModuleIds || DEFAULT_ENHANCED_PARAMS.integratedEnergy.takeoverModuleIds),
+              'retrofit-energy-sales'
+          ]))
       }
   };
 
@@ -141,6 +155,10 @@ export default function RetrofitMicrogrid() {
   const totalCapacity = useMemo(() => {
       return transformers.reduce((acc, t) => acc + t.capacity, 0) || 1000;
   }, [transformers]);
+
+  const linkedSalesResult = energySalesModule?.isActive ? energySalesModule.params?.calculationResult : undefined;
+  const annualDemandKwh = Number(linkedSalesResult?.annualSalesKwh || totalCapacity * 0.45 * 2000);
+  const benchmarkPrice = Number(linkedSalesResult?.benchmarkPrice || 0.85);
 
   // --- Financial Calculations ---
   const financials = useMemo(() => {
@@ -247,6 +265,31 @@ export default function RetrofitMicrogrid() {
       };
   }, [params.mode, params.quickState, params.preciseState, solarCapacity, totalCapacity, isAiBundled]);
 
+  const integratedCalculationContext = useMemo(() => ({
+      modules,
+      microgridInvestment: financials.investment,
+      microgridSynergy: financials.synergy,
+      demandRevenue: financials.demand,
+      vppRevenue: financials.vpp,
+      reliabilityRevenue: financials.safety,
+      annualDemandKwh,
+      benchmarkPrice,
+      salesResult: linkedSalesResult
+  }), [modules, financials, annualDemandKwh, benchmarkPrice, linkedSalesResult]);
+  const selectedIntegratedScenario = params.integratedEnergy.scenarios.find((item: any) => item.id === params.integratedEnergy.selectedScenarioId)
+      || params.integratedEnergy.scenarios[0];
+  const selectedIntegratedResult = useMemo(
+      () => selectedIntegratedScenario ? calculateIntegratedScenario(selectedIntegratedScenario, integratedCalculationContext) : undefined,
+      [selectedIntegratedScenario, integratedCalculationContext]
+  );
+  const effectiveInvestment = params.integratedEnergy.enabled && selectedIntegratedResult
+      ? selectedIntegratedResult.totalInvestment
+      : financials.investment;
+  const effectiveAnnualRevenue = params.integratedEnergy.enabled && selectedIntegratedResult
+      ? selectedIntegratedResult.serviceProviderNet
+      : financials.totalDirect;
+  const effectivePayback = effectiveAnnualRevenue > 0 ? effectiveInvestment / effectiveAnnualRevenue : 0;
+
   // Simulation Data
   const keepRatio = params.mode === 'precise' 
       ? (params.preciseState.loads.l1 + params.preciseState.loads.l2) / 100 
@@ -266,18 +309,21 @@ export default function RetrofitMicrogrid() {
   // Sync Financials to Context (Guarded)
   useEffect(() => {
       if (
-          currentModule.investment !== financials.investment ||
-          currentModule.yearlySaving !== financials.totalDirect
+          currentModule.investment !== Number(effectiveInvestment.toFixed(3)) ||
+          currentModule.yearlySaving !== Number(effectiveAnnualRevenue.toFixed(3))
       ) {
           updateModule('retrofit-microgrid', {
               strategy: params.mode === 'quick' ? params.quickState.packageId : 'custom_topology',
-              investment: financials.investment,
-              yearlySaving: financials.totalDirect,
-              kpiPrimary: { label: '综合回报期', value: `${financials.payback} 年` },
-              kpiSecondary: { label: '需量收益', value: `¥${financials.demand}万/年` },
+              investment: Number(effectiveInvestment.toFixed(3)),
+              yearlySaving: Number(effectiveAnnualRevenue.toFixed(3)),
+              kpiPrimary: { label: params.integratedEnergy.enabled ? '综合回报期' : '回报期', value: `${effectivePayback.toFixed(2)} 年` },
+              kpiSecondary: {
+                  label: params.integratedEnergy.enabled ? '服务商净收益' : '需量收益',
+                  value: `¥${effectiveAnnualRevenue.toFixed(1)}万/年`
+              },
           });
       }
-  }, [financials, currentModule.investment, currentModule.yearlySaving, params.mode, params.quickState.packageId, updateModule]);
+  }, [effectiveInvestment, effectiveAnnualRevenue, effectivePayback, currentModule.investment, currentModule.yearlySaving, params.mode, params.quickState.packageId, params.integratedEnergy.enabled, updateModule]);
 
 
   // --- Handlers ---
@@ -305,13 +351,13 @@ export default function RetrofitMicrogrid() {
   if (!currentModule) return null;
 
   return (
-    <div className="flex h-full bg-slate-50 relative">
+    <div className="flex flex-col xl:flex-row h-full bg-slate-50 relative overflow-auto xl:overflow-hidden">
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-20 shrink-0">
+        <header className="min-h-16 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 px-4 md:px-6 py-3 z-20 shrink-0">
             <div className="flex items-center gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-slate-900">微电网系统配置</h2>
-                    <p className="text-xs text-slate-500">源网荷储协同控制与离网保障体系</p>
+                    <h2 className="text-xl font-bold text-slate-900">微电网与综合能源管理</h2>
+                    <p className="text-xs text-slate-500">源网荷储协同控制、离网保障与能源托管</p>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full ml-4">
                     <span className={`text-xs font-bold ${currentModule.isActive ? 'text-primary' : 'text-slate-400'}`}>
@@ -333,7 +379,7 @@ export default function RetrofitMicrogrid() {
             )}
         </header>
 
-        <div className={`flex-1 overflow-y-auto p-8 pb-32 transition-opacity duration-300 ${currentModule.isActive ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
+        <div className={`flex-1 overflow-y-auto p-4 md:p-8 pb-12 xl:pb-32 transition-opacity duration-300 ${currentModule.isActive ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
             <div className="max-w-6xl mx-auto space-y-6">
                 
                 {/* Bundle Notice */}
@@ -349,6 +395,25 @@ export default function RetrofitMicrogrid() {
                         </div>
                     </div>
                 )}
+
+                <nav className="bg-white border border-slate-200 rounded-xl p-1 grid grid-cols-2 gap-1" aria-label="微电网功能切换">
+                    {[
+                        { id: 'system', label: '系统配置', icon: 'hub' },
+                        { id: 'integrated', label: '综合能源管理', icon: 'energy_savings_leaf' }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => handleUpdate({ activeTab: tab.id as MicrogridTab })}
+                            className={`min-h-11 px-3 py-2 rounded-lg text-xs md:text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${params.activeTab === tab.id ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+                        >
+                            <span className="material-icons text-[18px]">{tab.icon}</span>
+                            <span>{tab.label}</span>
+                        </button>
+                    ))}
+                </nav>
+
+                {params.activeTab === 'system' && (
+                <>
 
                 {/* Mode Toggle */}
                 <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-2">
@@ -631,11 +696,23 @@ export default function RetrofitMicrogrid() {
                     </div>
                 </section>
 
+                </>
+                )}
+
+                {params.activeTab === 'integrated' && (
+                    <IntegratedEnergyPanel
+                        config={params.integratedEnergy}
+                        modules={modules}
+                        calculationContext={integratedCalculationContext}
+                        onChange={(integratedEnergy) => handleUpdate({ integratedEnergy })}
+                    />
+                )}
+
             </div>
         </div>
 
         {/* Sticky Footer */}
-        <div className="fixed bottom-0 left-64 right-[340px] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="hidden xl:flex fixed bottom-0 left-64 right-[340px] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-8 z-40 items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 text-slate-400">
                     <span className="material-icons text-[18px]">history</span>
@@ -657,12 +734,14 @@ export default function RetrofitMicrogrid() {
       </div>
         
       {/* Right Sidebar - Analytics */}
-      <aside className={`w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 h-screen overflow-y-auto shadow-xl mb-16 transition-all duration-300 ${currentModule.isActive ? '' : 'opacity-60 grayscale'}`}>
+      <aside className={`w-full xl:w-[340px] bg-white border-t xl:border-t-0 xl:border-l border-slate-200 flex flex-col shrink-0 z-20 h-auto xl:h-screen overflow-y-auto shadow-xl xl:mb-16 transition-all duration-300 ${currentModule.isActive ? '' : 'opacity-60 grayscale'}`}>
           <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   <span className="material-icons text-primary">analytics</span> 实时预估收益
               </h3>
-              {!currentModule.isActive && <span className="text-xs font-bold text-red-500 border border-red-200 bg-red-50 px-2 py-0.5 rounded">未计入</span>}
+              {!currentModule.isActive
+                  ? <span className="text-xs font-bold text-red-500 border border-red-200 bg-red-50 px-2 py-0.5 rounded">未计入</span>
+                  : params.integratedEnergy.enabled && <span className="text-[10px] font-bold text-indigo-600 border border-indigo-200 bg-indigo-50 px-2 py-0.5 rounded">统一汇总</span>}
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -671,7 +750,7 @@ export default function RetrofitMicrogrid() {
                       <span className="text-xs font-semibold text-slate-500 uppercase">年度总价值构成</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-slate-900 tracking-tight">¥ {financials.totalValue.toFixed(1)}</span>
+                      <span className="text-3xl font-bold text-slate-900 tracking-tight">¥ {(params.integratedEnergy.enabled && selectedIntegratedResult ? selectedIntegratedResult.grossBenefit : financials.totalValue).toFixed(1)}</span>
                       <span className="text-sm text-slate-500">万</span>
                   </div>
                   <div className="mt-2 space-y-2">
@@ -716,11 +795,11 @@ export default function RetrofitMicrogrid() {
                       <span className="text-xs font-semibold text-slate-500 uppercase">直接现金流回报</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-slate-900 tracking-tight">¥ {financials.totalDirect.toFixed(1)}</span>
+                      <span className="text-3xl font-bold text-slate-900 tracking-tight">¥ {effectiveAnnualRevenue.toFixed(1)}</span>
                       <span className="text-sm text-slate-500">万/年</span>
                   </div>
                   <div className="mt-2 text-xs text-slate-400">
-                      静态回收期: <span className="font-bold text-slate-700">{financials.payback} 年</span>
+                      静态回收期: <span className="font-bold text-slate-700">{effectivePayback.toFixed(2)} 年</span>
                   </div>
               </div>
 
@@ -731,7 +810,7 @@ export default function RetrofitMicrogrid() {
                        <span className="text-xs font-semibold text-blue-100 uppercase">总投资额</span>
                    </div>
                    <div className="flex items-baseline gap-2 relative z-10">
-                       <span className="text-3xl font-bold tracking-tight">¥ {financials.investment}</span>
+                       <span className="text-3xl font-bold tracking-tight">¥ {effectiveInvestment.toFixed(1)}</span>
                        <span className="text-sm text-blue-100">万元</span>
                    </div>
                    {isAiBundled && (

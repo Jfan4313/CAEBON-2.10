@@ -7,13 +7,17 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import SolarReport from './components/SolarReport';
 import { SolutionComparison } from './components/SolutionComparison';
 import { SolarFinancialDetails } from './components/SolarFinancialDetails';
+import { useProject } from '../../context/ProjectContext';
+import { isModuleTakenOver } from '../../utils/moduleAggregation';
 
 const RetrofitSolar: React.FC = () => {
+    const { modules } = useProject();
+    const isTakenOver = isModuleTakenOver('retrofit-solar', modules);
     const {
         currentModule, params, handleUpdate, buildings, setBuildings,
         selfUseMode, setSelfUseMode, calculatedSelfConsumption, setCalculatedSelfConsumption,
         consumptionResult, toggleModule, saveProject, transformers, bills, projectBaseInfo,
-        priceConfig, storageModule,
+        priceConfig, storageModule, sunHoursSource,
         // 新增：方案和品牌状态
         solutions, selectedSolutionId, currentSolution,
         handleSelectSolution, handleAddSolution, handleUpdateSolution, handleDeleteSolution
@@ -49,6 +53,7 @@ const RetrofitSolar: React.FC = () => {
                                 <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${currentModule.isActive ? 'translate-x-5' : 'translate-x-1'}`} />
                             </button>
                         </div>
+                        {isTakenOver && <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full">已纳入综合能源管理</span>}
                     </div>
                     <button className="flex items-center gap-2 text-sm text-primary font-medium hover:underline">
                         <span className="material-icons text-base">history</span> 加载历史方案
@@ -71,6 +76,7 @@ const RetrofitSolar: React.FC = () => {
                         setCalculatedSelfConsumption={setCalculatedSelfConsumption}
                         consumptionResult={consumptionResult}
                         storageModule={storageModule}
+                        sunHoursSource={sunHoursSource}
                         // 新增：方案和品牌相关
                         solutions={solutions}
                         selectedSolutionId={selectedSolutionId}
@@ -243,7 +249,11 @@ const RetrofitSolar: React.FC = () => {
 
             {/* Solar Report - Direct Presentation Mode */}
             {isSolarPresentationMode && (
-                <SolarReport onClose={() => setIsSolarPresentationMode(false)} defaultToPresentationMode={true} />
+                <SolarReport
+                    onClose={() => setIsSolarPresentationMode(false)}
+                    defaultToPresentationMode={true}
+                    selfConsumptionRate={calculatedSelfConsumption}
+                />
             )}
 
             {/* 方案对比模态框 */}

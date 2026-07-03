@@ -5,10 +5,11 @@ import {
     ScatterChart, Scatter, ZAxis, ReferenceArea, Label
 } from 'recharts';
 import { View } from '../types';
-import { useProject, ModuleData } from '../context/ProjectContext';
+import { useProject } from '../context/ProjectContext';
 import { exportFinancialSheet, FinancialSummaryData, AnnualCashFlowData } from '../utils/excelExport';
 import { calculateIRR } from '../utils/financial';
 import { AnimatedNumber } from './ui/AnimatedNumber';
+import { getEffectiveActiveModules } from '../utils/moduleAggregation';
 
 interface RevenueAnalysisProps {
     onChangeView?: (view: View) => void;
@@ -86,7 +87,7 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
 
     // --- 1. Centralized Data Aggregation & Module Analysis ---
     const analysisData = useMemo(() => {
-        const activeModules = (Object.values(modules) as ModuleData[]).filter(m => m.isActive);
+        const activeModules = getEffectiveActiveModules(modules);
 
         let totalInvestment = 0;
         let totalFirstYearSaving = 0;
@@ -218,7 +219,7 @@ export default function RevenueAnalysis({ onChangeView }: RevenueAnalysisProps) 
         const currentSimulation = simulationRef.current;
         const currentProjectInfo = projectBaseInfoRef.current;
 
-        const activeModules = (Object.values(currentModules) as ModuleData[]).filter(m => m.isActive);
+        const activeModules = getEffectiveActiveModules(currentModules);
 
         // 边界条件检查
         if (activeModules.length === 0) {

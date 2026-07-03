@@ -4,7 +4,7 @@ import { ProjectFullData } from '../types/projectStorage';
 import { AppProvider, useApp } from './AppContext';
 import { ModuleProvider, useModule } from './ModuleContext';
 import { ConfigProvider, useConfig } from './ConfigContext';
-import { initialProjectBaseInfo } from './initialData';
+import { initialModules, initialProjectBaseInfo } from './initialData';
 
 // Re-export types for backward compatibility
 export type { Transformer, Bill, PriceConfigState } from './ConfigContext';
@@ -39,7 +39,7 @@ export interface ProjectBaseInfo {
 interface ProjectContextType {
     // From Core (ProjectContext itself)
     projectBaseInfo: ProjectBaseInfo;
-    setProjectBaseInfo: (info: ProjectBaseInfo) => void;
+    setProjectBaseInfo: React.Dispatch<React.SetStateAction<ProjectBaseInfo>>;
     saveProject: () => Promise<void>;
 
     // Delegated from AppContext
@@ -90,7 +90,7 @@ const ProjectCoreProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 try {
                     const parsed = JSON.parse(savedData);
                     if (parsed.projectBaseInfo) setProjectBaseInfo(parsed.projectBaseInfo);
-                    if (parsed.modules) mod.setModules(parsed.modules);
+                    if (parsed.modules) mod.setModules({ ...initialModules, ...parsed.modules });
                     if (parsed.transformers) conf.setTransformers(parsed.transformers);
                     if (parsed.bills) conf.setBills(parsed.bills);
                     if (parsed.priceConfig) conf.setPriceConfig(parsed.priceConfig);
@@ -126,7 +126,10 @@ const ProjectCoreProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...app,
         ...mod,
         ...conf,
-        importProjectConfig: (data) => conf.importProjectConfig(data, { setProjectBaseInfo, setModules: mod.setModules }),
+        importProjectConfig: (data) => conf.importProjectConfig(data, {
+            setProjectBaseInfo,
+            setModules: (importedModules: any) => mod.setModules({ ...initialModules, ...importedModules })
+        }),
         exportProjectConfig: (filename) => conf.exportProjectConfig({ ...dataToSave, version: '1.0.0' }, filename),
         quickSaveProject: (name, desc) => conf.quickSaveProject({ ...dataToSave, version: '1.0.0' }, name, desc)
     };

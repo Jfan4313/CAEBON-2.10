@@ -11,9 +11,10 @@ import { jsPDF } from 'jspdf';
 interface SolarReportProps {
     onClose: () => void;
     defaultToPresentationMode?: boolean;
+    selfConsumptionRate?: number;
 }
 
-export default function SolarReport({ onClose, defaultToPresentationMode = true }: SolarReportProps) {
+export default function SolarReport({ onClose, defaultToPresentationMode = true, selfConsumptionRate }: SolarReportProps) {
     const printRef = useRef<HTMLDivElement>(null);
     const { projectBaseInfo, modules } = useProject();
     const solarModule = modules['retrofit-solar'];
@@ -202,8 +203,8 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
     }
 
     const params = solarModule.params;
-    // Use a fallback for calculatedSelfConsumption since it's not stored in the module state
-    const calculatedSelfConsumption = 85;
+    // Keep presentation metrics aligned with the live solar form.
+    const calculatedSelfConsumption = selfConsumptionRate ?? 85;
     const { longTermMetrics, chartData } = useSolarMetrics(params, calculatedSelfConsumption);
     const currentSolution = params.selectedSolutionId
         ? (params.solutions || []).find(s => s.id === params.selectedSolutionId)
@@ -364,7 +365,6 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
     // Calculate metrics for each solution for comparison
     const calculateSolutionMetrics = () => {
         const solutions = params.solutions || [];
-        if (solutions.length <= 1) return [];
 
         return solutions.map(solution => {
             // Create params for this solution
@@ -378,27 +378,56 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                 ...params,
                 simpleParams: {
                     ...params.simpleParams,
-                    epcPrice: effectiveEpcPrice
+                    capacity: solution.capacity ?? params.simpleParams.capacity,
+                    epcPrice: effectiveEpcPrice,
+                    connectionType: solution.connectionType,
+                    investmentMode: solution.investmentMode || 'epc',
+                    emcSubMode: solution.emcSubMode || params.simpleParams.emcSubMode
                 },
                 advParams: {
                     ...params.advParams,
                     degradationFirstYear: brandConfig.degradationFirstYear,
-                    degradationLinear: brandConfig.degradationLinear
-                }
+                    degradationLinear: brandConfig.degradationLinear,
+                    emcOwnerShareRate: solution.emcOwnerShareRate ?? params.advParams.emcOwnerShareRate,
+                    emcDiscountPrice: solution.emcDiscountPrice ?? params.advParams.emcDiscountPrice,
+                    emcFixedPrice: solution.emcFixedPrice ?? params.advParams.emcFixedPrice,
+                    emcSouthernAveragePrice: solution.emcSouthernAveragePrice ?? params.advParams.emcSouthernAveragePrice,
+                    roofRent: solution.roofRent ?? params.advParams.roofRent
+                },
+                selectedSolutionId: solution.id,
+                solutions
             };
 
             // Calculate metrics for this solution using static function
             const solMetrics = calculateSolarMetrics(solutionParams, calculatedSelfConsumption);
 
             // Calculate investment
-            const capacity = params.simpleParams.capacity;
+            const capacity = solution.capacity ?? params.simpleParams.capacity;
             const baseInvestment = (capacity * effectiveEpcPrice / 10);
             const voltageUpgradeCost = solution.connectionType === 'high' && solution.voltageUpgradeCost ? solution.voltageUpgradeCost : 0;
             const totalInvestment = baseInvestment + voltageUpgradeCost;
+            const investmentMode = solution.investmentMode || 'epc';
+            const emcSubModeLabel = (() => {
+                switch (solution.emcSubMode || params.simpleParams.emcSubMode) {
+                    case 'sharing':
+                        return '收益分成';
+                    case 'fixed':
+                        return '固定电价';
+                    case 'southern_average':
+                        return '南网参考价';
+                    case 'discount':
+                    default:
+                        return '折扣电价';
+                }
+            })();
 
             return {
                 id: solution.id,
                 name: solution.name,
+                investmentMode,
+                investmentModeLabel: investmentMode === 'emc' ? 'EMC' : 'EPC',
+                emcSubModeLabel,
+                capacity,
                 connectionType: solution.connectionType === 'high' ? '10kV高压' : '380V低压',
                 cableType: solution.cableType === 'copper' ? '铜芯' : '铝芯',
                 brand: brandConfig.name,
@@ -407,15 +436,53 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                 irr: solMetrics.irr,
                 paybackPeriod: solMetrics.paybackPeriod,
                 rev25Year: solMetrics.rev25Year || 0,
+                ownerBenefit25: solMetrics.totalOwnerBenefit25 || 0,
                 genYear1: solMetrics.genYear1
             };
         });
     };
 
     const solutionComparisonData = calculateSolutionMetrics();
+    const bestComparisonIrr = solutionComparisonData.length > 0 ? Math.max(...solutionComparisonData.map(s => s.irr)) : 0;
+    const bestComparisonPayback = solutionComparisonData.length > 0 ? Math.min(...solutionComparisonData.map(s => s.paybackPeriod)) : 0;
+    const lowestComparisonInvestment = solutionComparisonData.length > 0 ? Math.min(...solutionComparisonData.map(s => s.investment)) : 0;
+    const bestComparisonRevenue = solutionComparisonData.length > 0 ? Math.max(...solutionComparisonData.map(s => s.rev25Year)) : 0;
+    const bestPaybackSolution = solutionComparisonData.find(s => s.paybackPeriod === bestComparisonPayback);
+    const bestIrrSolution = solutionComparisonData.find(s => s.irr === bestComparisonIrr);
 
     // Get buildings for presentation (need to get from hook or props)
     const presentationBuildings = params.buildings || [];
+    const hasPresentationLayoutImage = params.solutions?.some(s => s.layoutImage || s.useSameLayout);
+    const presentationTotalSlides = hasPresentationLayoutImage ? 11 : 10;
+
+    const normalizeConsumptionRates = (rates?: number[]) => {
+        const source = rates && rates.length > 0 ? rates : [50, 60, 70, 80, 90, 100];
+        const safeBaseRate = Math.max(0, Math.min(100, Math.round(calculatedSelfConsumption)));
+        return Array.from(new Set([
+            ...source
+                .map(rate => Math.round(rate))
+                .filter(rate => Number.isFinite(rate) && rate >= 0 && rate <= 100),
+            safeBaseRate
+        ])).sort((a, b) => a - b);
+    };
+
+    const consumptionScenarioData = normalizeConsumptionRates(params.consumptionRateScenarios).map(rate => {
+        const metrics = calculateSolarMetrics(params, rate);
+        return {
+            rate,
+            irr: metrics.irr,
+            payback: metrics.paybackPeriod,
+            rev25Year: metrics.rev25Year,
+            ownerBenefit: metrics.totalOwnerBenefit25,
+            isBase: rate === Math.round(calculatedSelfConsumption)
+        };
+    });
+    const baseConsumptionScenario = consumptionScenarioData.find(item => item.isBase) || consumptionScenarioData[0];
+    const lowConsumptionScenario = consumptionScenarioData[0];
+    const highConsumptionScenario = consumptionScenarioData[consumptionScenarioData.length - 1];
+    const isEmcMode = params.simpleParams.investmentMode === 'emc';
+    const paybackRangeDiff = lowConsumptionScenario.payback - highConsumptionScenario.payback;
+    const baseToHighPaybackDiff = baseConsumptionScenario.payback - highConsumptionScenario.payback;
 
     // Presentation slides data
     const envImpact = calculateEnvironmentalImpact();
@@ -577,7 +644,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">1/10</span>
+                        <span className="font-semibold">1/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
@@ -704,7 +771,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">2/10</span>
+                        <span className="font-semibold">2/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
@@ -761,7 +828,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">3/10</span>
+                        <span className="font-semibold">3/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
@@ -846,7 +913,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">4/10</span>
+                        <span className="font-semibold">4/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
@@ -938,21 +1005,116 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">5/10</span>
+                        <span className="font-semibold">5/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
             )
         },
-        // Slide 6: 25-Year Cash Flow & Lifecycle (Merged)
+        // Slide 6: Consumption Rate Payback Analysis
         {
-            title: '六、25年现金流与生命周期',
+            title: '六、多消纳率回本周期分析',
+            content: (
+                <div className="h-full flex flex-col bg-white">
+                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="material-icons text-blue-400 text-3xl">timeline</span>
+                            <h2 className="text-3xl font-bold">六、多消纳率回本周期分析</h2>
+                        </div>
+                        <div className="flex items-center gap-2 opacity-50">
+                            <span className="material-icons text-sm">wb_sunny</span>
+                            <span className="text-xs">零碳评估</span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 p-8 flex flex-col">
+                        <div className="grid grid-cols-4 gap-4 mb-6">
+                            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 text-center">
+                                <p className="text-xs text-blue-600 font-semibold mb-1">当前消纳率</p>
+                                <p className="text-4xl font-black text-blue-700">{Math.round(calculatedSelfConsumption)}%</p>
+                            </div>
+                            <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 text-center">
+                                <p className="text-xs text-slate-600 font-semibold mb-1">当前回本周期</p>
+                                <p className="text-4xl font-black text-slate-800">{baseConsumptionScenario.payback.toFixed(2)}<span className="text-lg ml-1">年</span></p>
+                            </div>
+                            <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-4 text-center">
+                                <p className="text-xs text-emerald-600 font-semibold mb-1">高消纳回本</p>
+                                <p className="text-4xl font-black text-emerald-700">{highConsumptionScenario.payback.toFixed(2)}<span className="text-lg ml-1">年</span></p>
+                            </div>
+                            <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 text-center">
+                                <p className="text-xs text-amber-600 font-semibold mb-1">高低档回本差</p>
+                                <p className="text-4xl font-black text-amber-700">{paybackRangeDiff.toFixed(2)}<span className="text-lg ml-1">年</span></p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-6 flex-1">
+                            <div className="border-2 border-slate-200 rounded-2xl p-5">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4">回本周期与 IRR 曲线</h3>
+                                <ResponsiveContainer width="100%" height="85%">
+                                    <ComposedChart data={consumptionScenarioData}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                        <XAxis dataKey="rate" tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                        <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#2563eb' }} />
+                                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#64748b' }} />
+                                        <Tooltip formatter={(value: number, name: string) => [
+                                            name === 'payback' ? `${value.toFixed(2)} 年` : `${value.toFixed(2)}%`,
+                                            name === 'payback' ? '回本周期' : 'IRR'
+                                        ]} />
+                                        <Line yAxisId="left" type="monotone" dataKey="payback" name="回本周期" stroke="#2563eb" strokeWidth={4} dot={{ r: 4 }} />
+                                        <Line yAxisId="right" type="monotone" dataKey="irr" name="IRR" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
+
+                            <div className="border-2 border-slate-200 rounded-2xl p-5">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4">不同消纳率测算表</h3>
+                                <div className="overflow-hidden rounded-xl border border-slate-200">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-slate-100">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left text-slate-700">消纳率</th>
+                                                <th className="px-3 py-2 text-right text-slate-700">回本周期</th>
+                                                <th className="px-3 py-2 text-right text-slate-700">IRR</th>
+                                                <th className="px-3 py-2 text-right text-slate-700">25年净收益</th>
+                                                {isEmcMode && <th className="px-3 py-2 text-right text-slate-700">业主收益</th>}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {consumptionScenarioData.map((item) => (
+                                                <tr key={item.rate} className={`border-t border-slate-100 ${item.isBase ? 'bg-blue-50' : 'bg-white'}`}>
+                                                    <td className="px-3 py-2 font-bold text-slate-800">{item.rate}%</td>
+                                                    <td className="px-3 py-2 text-right font-bold text-blue-700">{item.payback.toFixed(2)}年</td>
+                                                    <td className="px-3 py-2 text-right text-slate-700">{item.irr.toFixed(2)}%</td>
+                                                    <td className="px-3 py-2 text-right text-emerald-700">{item.rev25Year.toFixed(1)}万</td>
+                                                    {isEmcMode && <td className="px-3 py-2 text-right text-blue-700">{item.ownerBenefit.toFixed(1)}万</td>}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="mt-4 p-4 bg-slate-800 text-white rounded-xl text-sm">
+                                    在 {lowConsumptionScenario.rate}% 至 {highConsumptionScenario.rate}% 消纳率区间内，回本周期由 {lowConsumptionScenario.payback.toFixed(2)} 年优化至 {highConsumptionScenario.payback.toFixed(2)} 年；相对当前基准{baseToHighPaybackDiff > 0 ? `可少 ${baseToHighPaybackDiff.toFixed(2)} 年` : '暂无缩短'}。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
+                        <span className="font-semibold">6/{presentationTotalSlides}</span>
+                        <span>零碳项目收益评估软件</span>
+                    </div>
+                </div>
+            )
+        },
+        // Slide 7: 25-Year Cash Flow & Lifecycle (Merged)
+        {
+            title: '七、25年现金流与生命周期',
             content: (
                 <div className="h-full flex flex-col bg-white">
                     <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <span className="material-icons text-cyan-400 text-3xl">show_chart</span>
-                            <h2 className="text-3xl font-bold">六、25年现金流与生命周期</h2>
+                            <h2 className="text-3xl font-bold">七、25年现金流与生命周期</h2>
                         </div>
                         <div className="flex items-center gap-2 opacity-50">
                             <span className="material-icons text-sm">wb_sunny</span>
@@ -1015,21 +1177,21 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">6/10</span>
+                        <span className="font-semibold">7/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
             )
         },
-        // Slide 10: Investment Summary
+        // Slide 8: Investment Summary
         {
-            title: '七、投资收益汇总',
+            title: '八、投资收益汇总',
             content: (
                 <div className="h-full flex flex-col bg-white">
                     <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <span className="material-icons text-pink-400 text-3xl">summarize</span>
-                            <h2 className="text-3xl font-bold">七、投资收益汇总</h2>
+                            <h2 className="text-3xl font-bold">八、投资收益汇总</h2>
                         </div>
                         <div className="flex items-center gap-2 opacity-50">
                             <span className="material-icons text-sm">wb_sunny</span>
@@ -1083,21 +1245,21 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">7/10</span>
+                        <span className="font-semibold">8/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
             )
         },
-        // Slide 11: Solution Comparison (only show if multiple solutions exist)
-        ...(solutionComparisonData.length > 1 ? [{
-            title: '八、方案对比分析',
+        // Slide 9: Solution Comparison
+        {
+            title: '九、方案对比分析',
             content: (
                 <div className="h-full flex flex-col bg-white">
                     <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <span className="material-icons text-indigo-400 text-3xl">compare</span>
-                            <h2 className="text-3xl font-bold">八、方案对比分析</h2>
+                            <h2 className="text-3xl font-bold">九、方案对比分析</h2>
                         </div>
                         <div className="flex items-center gap-2 opacity-50">
                             <span className="material-icons text-sm">wb_sunny</span>
@@ -1106,47 +1268,85 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="flex-1 p-8 flex flex-col">
-                        {/* Solution Comparison Table */}
-                        <div className="border-2 border-slate-200 rounded-xl overflow-hidden mb-6">
-                            <table className="w-full text-sm">
+                        <div className="grid grid-cols-4 gap-4 mb-5">
+                            <div className="border border-emerald-200 bg-emerald-50 rounded-2xl p-4">
+                                <p className="text-xs text-slate-500 mb-1">最高IRR</p>
+                                <p className="text-2xl font-bold text-emerald-700">{bestComparisonIrr.toFixed(2)}%</p>
+                                <p className="text-xs text-emerald-700 mt-1 truncate">{bestIrrSolution?.name || '-'}</p>
+                            </div>
+                            <div className="border border-blue-200 bg-blue-50 rounded-2xl p-4">
+                                <p className="text-xs text-slate-500 mb-1">最短回本</p>
+                                <p className="text-2xl font-bold text-blue-700">{bestComparisonPayback.toFixed(2)}年</p>
+                                <p className="text-xs text-blue-700 mt-1 truncate">{bestPaybackSolution?.name || '-'}</p>
+                            </div>
+                            <div className="border border-purple-200 bg-purple-50 rounded-2xl p-4">
+                                <p className="text-xs text-slate-500 mb-1">最低投资</p>
+                                <p className="text-2xl font-bold text-purple-700">{lowestComparisonInvestment.toFixed(1)}万</p>
+                                <p className="text-xs text-purple-700 mt-1">建造成本口径</p>
+                            </div>
+                            <div className="border border-amber-200 bg-amber-50 rounded-2xl p-4">
+                                <p className="text-xs text-slate-500 mb-1">最高25年收益</p>
+                                <p className="text-2xl font-bold text-amber-700">{bestComparisonRevenue.toFixed(1)}万</p>
+                                <p className="text-xs text-amber-700 mt-1">投资方净收益</p>
+                            </div>
+                        </div>
+
+                        <div className="border border-slate-200 rounded-2xl overflow-hidden mb-5 shadow-sm">
+                            <table className="w-full text-xs">
                                 <thead>
-                                    <tr className="bg-slate-100">
-                                        <th className="px-4 py-3 text-left font-bold text-slate-800">方案名称</th>
-                                        <th className="px-4 py-3 text-center font-bold text-slate-800">接入方式</th>
-                                        <th className="px-4 py-3 text-center font-bold text-slate-800">组件品牌</th>
-                                        <th className="px-4 py-3 text-right font-bold text-slate-800">EPC单价</th>
-                                        <th className="px-4 py-3 text-right font-bold text-slate-800">总投资</th>
-                                        <th className="px-4 py-3 text-right font-bold text-slate-800">IRR</th>
-                                        <th className="px-4 py-3 text-right font-bold text-slate-800">回本周期</th>
-                                        <th className="px-4 py-3 text-right font-bold text-slate-800">25年收益</th>
+                                    <tr className="bg-slate-900 text-white">
+                                        <th className="px-3 py-3 text-left font-bold">方案名称</th>
+                                        <th className="px-3 py-3 text-center font-bold">商业模式</th>
+                                        <th className="px-3 py-3 text-center font-bold">接入/线缆</th>
+                                        <th className="px-3 py-3 text-right font-bold">容量</th>
+                                        <th className="px-3 py-3 text-center font-bold">组件</th>
+                                        <th className="px-3 py-3 text-right font-bold">成本单价</th>
+                                        <th className="px-3 py-3 text-right font-bold">总投资</th>
+                                        <th className="px-3 py-3 text-right font-bold">回本</th>
+                                        <th className="px-3 py-3 text-right font-bold">IRR</th>
+                                        <th className="px-3 py-3 text-right font-bold">投资方收益</th>
+                                        <th className="px-3 py-3 text-right font-bold">业主收益</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {solutionComparisonData.map((solution, index) => {
-                                        const isBestIRR = solution.irr === Math.max(...solutionComparisonData.map(s => s.irr));
-                                        const isBestPayback = solution.paybackPeriod === Math.min(...solutionComparisonData.map(s => s.paybackPeriod));
+                                        const isBestIRR = solution.irr === bestComparisonIrr;
+                                        const isBestPayback = solution.paybackPeriod === bestComparisonPayback;
                                         const isSelected = solution.id === params.selectedSolutionId;
                                         return (
                                             <tr key={solution.id} className={`border-b border-slate-100 ${isSelected ? 'bg-blue-50 font-semibold' : index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                                                <td className="px-4 py-3">
+                                                <td className="px-3 py-3">
                                                     <div className="flex items-center gap-2">
                                                         {isSelected && <span className="material-icons text-blue-600 text-sm">check_circle</span>}
                                                         <span className={isSelected ? 'text-blue-800' : 'text-slate-800'}>{solution.name}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-3 text-center text-slate-700">{solution.connectionType}</td>
-                                                <td className="px-4 py-3 text-center text-slate-700">{solution.brand}</td>
-                                                <td className="px-4 py-3 text-right text-slate-700">¥{solution.epcPrice.toFixed(2)}</td>
-                                                <td className="px-4 py-3 text-right text-slate-700">¥{solution.investment.toFixed(2)}万</td>
-                                                <td className={`px-4 py-3 text-right ${isBestIRR ? 'text-emerald-700 font-bold' : 'text-slate-700'}`}>
-                                                    {solution.irr.toFixed(2)}%
-                                                    {isBestIRR && <span className="material-icons text-emerald-500 text-xs align-middle ml-1">star</span>}
+                                                <td className="px-3 py-3 text-center">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${solution.investmentMode === 'emc' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                        {solution.investmentModeLabel}
+                                                    </span>
+                                                    {solution.investmentMode === 'emc' && <p className="text-[10px] text-slate-500 mt-1">{solution.emcSubModeLabel}</p>}
                                                 </td>
-                                                <td className={`px-4 py-3 text-right ${isBestPayback ? 'text-emerald-700 font-bold' : 'text-slate-700'}`}>
+                                                <td className="px-3 py-3 text-center text-slate-700">
+                                                    <p>{solution.connectionType}</p>
+                                                    <p className="text-[10px] text-slate-500">{solution.cableType}</p>
+                                                </td>
+                                                <td className="px-3 py-3 text-right text-slate-700">{solution.capacity.toFixed(0)}kWp</td>
+                                                <td className="px-3 py-3 text-center text-slate-700">{solution.brand}</td>
+                                                <td className="px-3 py-3 text-right text-slate-700">¥{solution.epcPrice.toFixed(2)}/Wp</td>
+                                                <td className="px-3 py-3 text-right text-slate-700">¥{solution.investment.toFixed(1)}万</td>
+                                                <td className={`px-3 py-3 text-right ${isBestPayback ? 'text-emerald-700 font-bold' : 'text-slate-700'}`}>
                                                     {solution.paybackPeriod.toFixed(2)}年
                                                     {isBestPayback && <span className="material-icons text-emerald-500 text-xs align-middle ml-1">star</span>}
                                                 </td>
-                                                <td className="px-4 py-3 text-right text-slate-700">¥{solution.rev25Year.toFixed(2)}万</td>
+                                                <td className={`px-3 py-3 text-right ${isBestIRR ? 'text-emerald-700 font-bold' : 'text-slate-700'}`}>
+                                                    {solution.irr.toFixed(2)}%
+                                                    {isBestIRR && <span className="material-icons text-emerald-500 text-xs align-middle ml-1">star</span>}
+                                                </td>
+                                                <td className="px-3 py-3 text-right text-slate-700">¥{solution.rev25Year.toFixed(1)}万</td>
+                                                <td className="px-3 py-3 text-right text-blue-700">
+                                                    {solution.investmentMode === 'emc' ? `¥${solution.ownerBenefit25.toFixed(1)}万` : '-'}
+                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -1154,66 +1354,35 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                             </table>
                         </div>
 
-                        {/* Key Metrics Cards */}
-                        <div className="grid grid-cols-4 gap-4 mb-6">
-                            <div className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white rounded-xl p-4 text-center">
-                                <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <span className="material-icons text-white text-lg">show_chart</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-1">最高IRR</p>
-                                <p className="text-lg font-bold text-emerald-700">{Math.max(...solutionComparisonData.map(s => s.irr)).toFixed(2)}%</p>
-                            </div>
-                            <div className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white rounded-xl p-4 text-center">
-                                <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <span className="material-icons text-white text-lg">schedule</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-1">最短回本</p>
-                                <p className="text-lg font-bold text-blue-700">{Math.min(...solutionComparisonData.map(s => s.paybackPeriod)).toFixed(2)}年</p>
-                            </div>
-                            <div className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white rounded-xl p-4 text-center">
-                                <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <span className="material-icons text-white text-lg">account_balance_wallet</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-1">最低投资</p>
-                                <p className="text-lg font-bold text-purple-700">¥{Math.min(...solutionComparisonData.map(s => s.investment)).toFixed(2)}万</p>
-                            </div>
-                            <div className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white rounded-xl p-4 text-center">
-                                <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <span className="material-icons text-white text-lg">trending_up</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-1">最高收益</p>
-                                <p className="text-lg font-bold text-amber-700">¥{Math.max(...solutionComparisonData.map(s => s.rev25Year)).toFixed(2)}万</p>
-                            </div>
-                        </div>
-
-                        {/* Recommendation */}
                         <div className="mt-auto p-4 bg-indigo-50 border-2 border-indigo-200 rounded-xl">
                             <div className="flex items-center gap-3">
                                 <span className="material-icons text-indigo-600 text-2xl">lightbulb</span>
                                 <div>
                                     <p className="text-sm font-bold text-indigo-800">方案建议</p>
-                                    <p className="text-xs text-indigo-700">根据IRR和回本周期综合评估，推荐选择IRR最高或回本周期最短的方案</p>
+                                    <p className="text-xs text-indigo-700">
+                                        当前回本最快为 {bestPaybackSolution?.name || '-'}，最高 IRR 为 {bestIrrSolution?.name || '-'}；EMC 方案同步展示业主侧 25 年收益，便于和投资方收益一起比选。
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">8/10</span>
+                        <span className="font-semibold">9/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
             )
-        }] : []),
+        },
         // Slide: Layout Images (only show if at least one solution has a layout image)
-        ...(params.solutions?.some(s => s.layoutImage || s.useSameLayout) ? [{
-            title: solutionComparisonData.length > 1 ? '九、光伏铺设图' : '八、光伏铺设图',
+        ...(hasPresentationLayoutImage ? [{
+            title: '十、光伏铺设图',
             content: (
                 <div className="h-full flex flex-col bg-white">
                     <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <span className="material-icons text-emerald-400 text-3xl">map</span>
-                            <h2 className="text-3xl font-bold">{solutionComparisonData.length > 1 ? '九、光伏铺设图' : '八、光伏铺设图'}</h2>
+                            <h2 className="text-3xl font-bold">十、光伏铺设图</h2>
                         </div>
                         <div className="flex items-center gap-2 opacity-50">
                             <span className="material-icons text-sm">wb_sunny</span>
@@ -1268,7 +1437,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                                         </div>
                                         <div className="bg-slate-100 px-4 py-2 text-xs text-slate-600 border-t border-slate-200">
                                             <div className="flex justify-between">
-                                                <span>EPC单价: ¥{solution.epcPrice.toFixed(2)}/Wp</span>
+                                                <span>建造成本单价: ¥{solution.epcPrice.toFixed(2)}/Wp</span>
                                                 <span>组件: {solution.brand === 'longi' ? '隆基' : solution.brand === 'tongwei' ? '通威' : '通用'}</span>
                                             </div>
                                         </div>
@@ -1279,22 +1448,16 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">{solutionComparisonData.length > 1 ? '9/11' : '8/10'}</span>
+                        <span className="font-semibold">10/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
             )
         }] : []),
-        // Slide {solutionComparisonData.length > 1 ? '十一' : '十'}: O&M Maintenance Plan
+        // Slide 10/11: O&M Maintenance Plan
         {
             title: (() => {
-                const hasLayoutImage = params.solutions?.some(s => s.layoutImage || s.useSameLayout);
-                const hasMultipleSolutions = solutionComparisonData.length > 1;
-                if (hasMultipleSolutions) {
-                    return hasLayoutImage ? '十、光伏运维计划' : '九、光伏运维计划';
-                } else {
-                    return hasLayoutImage ? '九、光伏运维计划' : '八、光伏运维计划';
-                }
+                return hasPresentationLayoutImage ? '十一、光伏运维计划' : '十、光伏运维计划';
             })(),
             content: (
                 <div className="h-full flex flex-col bg-white">
@@ -1302,13 +1465,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                         <div className="flex items-center gap-3">
                             <span className="material-icons text-cyan-400 text-3xl">build</span>
                             <h2 className="text-3xl font-bold">{(() => {
-                                const hasLayoutImage = params.solutions?.some(s => s.layoutImage || s.useSameLayout);
-                                const hasMultipleSolutions = solutionComparisonData.length > 1;
-                                if (hasMultipleSolutions) {
-                                    return hasLayoutImage ? '十、光伏运维计划' : '九、光伏运维计划';
-                                } else {
-                                    return hasLayoutImage ? '九、光伏运维计划' : '八、光伏运维计划';
-                                }
+                                return hasPresentationLayoutImage ? '十一、光伏运维计划' : '十、光伏运维计划';
                             })()}</h2>
                         </div>
                         <div className="flex items-center gap-2 opacity-50">
@@ -1434,13 +1591,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
 
                     <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
                         <span className="font-semibold">{(() => {
-                            const hasLayoutImage = params.solutions?.some(s => s.layoutImage || s.useSameLayout);
-                            const hasMultipleSolutions = solutionComparisonData.length > 1;
-                            if (hasMultipleSolutions) {
-                                return hasLayoutImage ? '10/11' : '9/10';
-                            } else {
-                                return hasLayoutImage ? '9/10' : '8/9';
-                            }
+                            return `${presentationTotalSlides}/${presentationTotalSlides}`;
                         })()}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
@@ -1652,7 +1803,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                             <div className="text-base font-medium text-slate-800">{params.advParams.degradationLinear}%/年</div>
                         </div>
                         <div>
-                            <p className="text-sm text-slate-500 mb-1">EPC 合同单价</p>
+                            <p className="text-sm text-slate-500 mb-1">建造成本单价</p>
                             <div className="text-base font-medium text-slate-800">¥{params.simpleParams.epcPrice.toFixed(2)} 元/Wp</div>
                         </div>
                         <div>
@@ -1726,11 +1877,78 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                     </div>
                 </section>
 
+                {/* 5. Consumption Rate Scenario Analysis */}
+                <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6 print:shadow-none">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
+                        <span className="material-icons text-blue-600">timeline</span>
+                        五、多消纳率回本周期分析
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-100">
+                            <div className="text-xs text-blue-600 mb-1">当前消纳率</div>
+                            <div className="text-2xl font-bold text-blue-700">{Math.round(calculatedSelfConsumption)}%</div>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-4 text-center border border-slate-100">
+                            <div className="text-xs text-slate-500 mb-1">当前回本周期</div>
+                            <div className="text-2xl font-bold text-slate-800">{baseConsumptionScenario.payback.toFixed(2)}年</div>
+                        </div>
+                        <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-100">
+                            <div className="text-xs text-emerald-600 mb-1">高消纳回本</div>
+                            <div className="text-2xl font-bold text-emerald-700">{highConsumptionScenario.payback.toFixed(2)}年</div>
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-4 text-center border border-amber-100">
+                            <div className="text-xs text-amber-600 mb-1">高低档回本差</div>
+                            <div className="text-2xl font-bold text-amber-700">{paybackRangeDiff.toFixed(2)}年</div>
+                        </div>
+                    </div>
+                    <div className="h-64 mb-6">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={consumptionScenarioData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="rate" tickFormatter={(value) => `${value}%`} />
+                                <YAxis yAxisId="left" tick={{ fill: '#2563eb' }} />
+                                <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b' }} />
+                                <Tooltip formatter={(value: number, name: string) => [
+                                    name === 'payback' ? `${value.toFixed(2)} 年` : `${value.toFixed(2)}%`,
+                                    name === 'payback' ? '回本周期' : 'IRR'
+                                ]} />
+                                <Line yAxisId="left" type="monotone" dataKey="payback" name="回本周期" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} />
+                                <Line yAxisId="right" type="monotone" dataKey="irr" name="IRR" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} />
+                                <Legend />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-700">消纳率</th>
+                                    <th className="px-4 py-3 text-right font-semibold text-slate-700">回本周期</th>
+                                    <th className="px-4 py-3 text-right font-semibold text-slate-700">IRR</th>
+                                    <th className="px-4 py-3 text-right font-semibold text-slate-700">25年投资方净收益</th>
+                                    {isEmcMode && <th className="px-4 py-3 text-right font-semibold text-slate-700">业主25年收益</th>}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {consumptionScenarioData.map((item) => (
+                                    <tr key={item.rate} className={`border-b border-slate-100 ${item.isBase ? 'bg-blue-50' : ''}`}>
+                                        <td className="px-4 py-3 font-medium text-slate-800">{item.rate}%</td>
+                                        <td className="px-4 py-3 text-right font-bold text-blue-700">{item.payback.toFixed(2)} 年</td>
+                                        <td className="px-4 py-3 text-right text-slate-700">{item.irr.toFixed(2)}%</td>
+                                        <td className="px-4 py-3 text-right text-emerald-700">{item.rev25Year.toFixed(2)} 万元</td>
+                                        {isEmcMode && <td className="px-4 py-3 text-right text-blue-700">{item.ownerBenefit.toFixed(2)} 万元</td>}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
                 {/* 6. Solution Comparison */}
                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6 print:shadow-none">
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
                         <span className="material-icons text-blue-600">compare</span>
-                        五、方案对比分析
+                        六、方案对比分析
                     </h3>
                     <SolutionComparison
                         solutions={params.solutions || []}
@@ -1743,7 +1961,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6 print:shadow-none">
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
                         <span className="material-icons text-blue-600">bar_chart</span>
-                        六、月度发电量分布
+                        七、月度发电量分布
                     </h3>
                     <div className="h-64 mb-6">
                         <ResponsiveContainer width="100%" height="100%">
@@ -1804,7 +2022,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6 print:shadow-none">
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
                         <span className="material-icons text-blue-600">show_chart</span>
-                        七、25年现金流趋势
+                        八、25年现金流趋势
                     </h3>
                     <div className="h-64 mb-6">
                         <ResponsiveContainer width="100%" height="100%">
@@ -1898,7 +2116,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true 
                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6 print:shadow-none">
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
                         <span className="material-icons text-blue-600">summarize</span>
-                        八、投资收益汇总表
+                        九、投资收益汇总表
                     </h3>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm border-collapse">

@@ -133,6 +133,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
           <span className="font-medium text-sm">电价模型配置</span>
         </div>
 
+        <div
+          className={navItemClass(currentView === 'retrofit-energy-sales')}
+          onClick={() => onChangeView('retrofit-energy-sales')}
+        >
+          <span className={iconClass(currentView === 'retrofit-energy-sales')}>receipt_long</span>
+          <span className="font-medium text-sm">售电服务</span>
+        </div>
+
         {/* Retrofit Submenu */}
         <div className="space-y-1 pt-1">
           <div

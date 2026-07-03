@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, BarChart, Bar, ComposedChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, Cell, PieChart, Pie, Brush } from 'recharts';
 import { useProject } from '../../context/ProjectContext';
+import { isModuleTakenOver } from '../../utils/moduleAggregation';
 
 // --- Constants & Config ---
 const REGIONS = {
@@ -45,6 +46,7 @@ const generateResponseData = (baselineLoad: number, responseCap: number, startHo
 
 export default function RetrofitVPP() {
   const { modules, toggleModule, updateModule, saveProject, transformers } = useProject();
+  const isTakenOver = isModuleTakenOver('retrofit-vpp', modules);
   const currentModule = modules['retrofit-vpp'];
   const savedParams = currentModule.params || {};
 
@@ -204,6 +206,7 @@ export default function RetrofitVPP() {
                         <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${currentModule.isActive ? 'translate-x-5' : 'translate-x-1'}`} />
                     </button>
                 </div>
+                {isTakenOver && <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full">已纳入综合能源管理</span>}
             </div>
             <button className="flex items-center gap-2 text-sm text-primary font-medium hover:underline">
                 <span className="material-icons text-base">history</span> 加载历史方案

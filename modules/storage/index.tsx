@@ -1,8 +1,12 @@
 import React from 'react';
 import { useStorageLogic } from './hooks';
 import { StorageSimulationChart } from './components/StorageSimulationChart';
+import { useProject } from '../../context/ProjectContext';
+import { isModuleTakenOver } from '../../utils/moduleAggregation';
 
 const RetrofitStorage: React.FC = () => {
+    const { modules } = useProject();
+    const isTakenOver = isModuleTakenOver('retrofit-storage', modules);
     const {
         mode, setMode,
         isChartExpanded, setIsChartExpanded,
@@ -47,6 +51,7 @@ const RetrofitStorage: React.FC = () => {
                                 <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${currentModule.isActive ? 'translate-x-5' : 'translate-x-1'}`} />
                             </button>
                         </div>
+                        {isTakenOver && <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full">已纳入综合能源管理</span>}
                     </div>
                     <button className="flex items-center gap-2 text-sm text-primary font-medium hover:underline">
                         <span className="material-icons text-base">history</span> 加载历史方案

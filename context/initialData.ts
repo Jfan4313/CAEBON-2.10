@@ -71,6 +71,16 @@ export const initialModules: Record<string, ModuleData> = {
         kpiPrimary: { label: 'PCC容量', value: '2500 kVA' },
         kpiSecondary: { label: '可靠性', value: '99.9%' }
     },
+    'retrofit-energy-sales': {
+        id: 'retrofit-energy-sales',
+        name: '售电服务',
+        isActive: false,
+        strategy: 'retail',
+        investment: 0,
+        yearlySaving: 0,
+        kpiPrimary: { label: '年售电量', value: '0 万度' },
+        kpiSecondary: { label: '售电净收益', value: '¥0万/年' }
+    },
     'retrofit-vpp': {
         id: 'retrofit-vpp',
         name: '虚拟电厂',

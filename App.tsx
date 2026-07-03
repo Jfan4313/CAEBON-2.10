@@ -10,10 +10,11 @@ import { AuthProvider } from './context/AuthContext';
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const ProjectEntry = lazy(() => import('./components/ProjectEntry'));
 const PriceConfig = lazy(() => import('./components/PriceConfig'));
+const EnergySales = lazy(() => import('./modules/energy-sales'));
 const RetrofitSolar = lazy(() => import('./modules/solar'));
 const RetrofitStorage = lazy(() => import('./components/RetrofitStorage'));
 const RetrofitEV = lazy(() => import('./components/RetrofitEV'));
-const RetrofitMicrogrid = lazy(() => import('./components/RetrofitMicrogrid'));
+const RetrofitMicrogrid = lazy(() => import('./modules/microgrid'));
 const RetrofitVPP = lazy(() => import('./components/RetrofitVPP'));
 const RetrofitAI = lazy(() => import('./components/RetrofitAI'));
 const RetrofitCarbon = lazy(() => import('./components/RetrofitCarbon'));
@@ -47,6 +48,8 @@ const App: React.FC = () => {
         return <ProjectEntry />;
       case 'price-config':
         return <PriceConfig />;
+      case 'retrofit-energy-sales':
+        return <EnergySales />;
       case 'retrofit-solar':
         return <RetrofitSolar />;
       case 'retrofit-storage':

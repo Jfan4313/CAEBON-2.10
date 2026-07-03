@@ -1,27 +1,120 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { calculateCampusConsumptionRate, ConsumptionResult } from '../../services/campusConsumption';
-import { getSunHours, getSunHoursWithNASA } from '../../services/solarData';
+import { getLocalSunHoursInfo, SunHoursResult } from '../../services/solarData';
 import { fetchNasaSolarData } from '../../services/nasaPower';
-import { DEFAULTS, SolarParamsState, BuildingData, DEFAULT_SOLUTIONS, DEFAULT_BRAND, SolarModuleBrand, SolarSolution, MODULE_BRANDS } from './types';
+import { DEFAULTS, SolarParamsState, BuildingData, DEFAULT_SOLUTIONS, SolarSolution, MODULE_BRANDS, EmcSubMode, InvestmentMode } from './types';
+
+const getAverageElectricityPrice = (priceConfig: any, fallback = DEFAULTS.advParams.electricityPrice) => {
+    if (!priceConfig) return fallback;
+
+    if (priceConfig.mode === 'fixed') {
+        return Number(priceConfig.fixedPrice) || fallback;
+    }
+
+    if (priceConfig.mode === 'tou') {
+        const segments = priceConfig.touSegments || [];
+        const totalDuration = segments.reduce((sum: number, seg: any) => sum + (Number(seg.end) - Number(seg.start)), 0);
+        const weightedSum = segments.reduce((sum: number, seg: any) => sum + Number(seg.price) * (Number(seg.end) - Number(seg.start)), 0);
+        return totalDuration > 0 ? weightedSum / totalDuration : fallback;
+    }
+
+    if (priceConfig.mode === 'spot') {
+        const prices = priceConfig.spotPrices || [];
+        const avgSpotPrice = prices.reduce((sum: number, p: number) => sum + Number(p), 0) / prices.length;
+        return avgSpotPrice || fallback;
+    }
+
+    return fallback;
+};
+
+const getSolutionInvestmentMode = (solution?: SolarSolution | null): InvestmentMode => solution?.investmentMode || 'epc';
+
+const getSolutionEmcSubMode = (solution?: SolarSolution | null, fallback: EmcSubMode = 'sharing'): EmcSubMode => {
+    return solution?.emcSubMode || fallback;
+};
+
+const applySolutionToParams = (params: SolarParamsState, solution?: SolarSolution | null): SolarParamsState => {
+    if (!solution) return params;
+
+    const brandConfig = MODULE_BRANDS[solution.brand];
+
+    return {
+        ...params,
+        selectedSolutionId: solution.id,
+        simpleParams: {
+            ...params.simpleParams,
+            capacity: solution.capacity ?? params.simpleParams.capacity,
+            epcPrice: solution.epcPrice,
+            connectionType: solution.connectionType,
+            investmentMode: getSolutionInvestmentMode(solution),
+            emcSubMode: getSolutionEmcSubMode(solution, params.simpleParams.emcSubMode)
+        },
+        advParams: {
+            ...params.advParams,
+            degradationFirstYear: brandConfig ? brandConfig.degradationFirstYear : params.advParams.degradationFirstYear,
+            degradationLinear: brandConfig ? brandConfig.degradationLinear : params.advParams.degradationLinear,
+            emcOwnerShareRate: solution.emcOwnerShareRate ?? params.advParams.emcOwnerShareRate,
+            emcDiscountPrice: solution.emcDiscountPrice ?? params.advParams.emcDiscountPrice,
+            emcFixedPrice: solution.emcFixedPrice ?? params.advParams.emcFixedPrice,
+            emcSouthernAveragePrice: solution.emcSouthernAveragePrice ?? params.advParams.emcSouthernAveragePrice,
+            roofRent: solution.roofRent ?? params.advParams.roofRent
+        }
+    };
+};
+
+const getEffectiveEmcSalePrice = (params: SolarParamsState) => {
+    switch (params.simpleParams.emcSubMode) {
+        case 'fixed':
+            return params.advParams.emcFixedPrice;
+        case 'discount':
+        case 'southern_average':
+        default:
+            return params.advParams.emcDiscountPrice;
+    }
+};
+
+const getOwnerBenchmarkPrice = (params: SolarParamsState) => {
+    return params.advParams.emcSouthernAveragePrice || params.advParams.electricityPrice;
+};
 
 export const useSolarRetrofit = () => {
     const { modules, toggleModule, updateModule, saveProject, transformers, bills, projectBaseInfo, priceConfig } = useProject();
     const currentModule = modules['retrofit-solar'];
+    const southernAveragePrice = parseFloat(getAverageElectricityPrice(priceConfig).toFixed(4));
+    const storedAdvParams = currentModule?.params?.advParams || {};
+    const normalizedSolutions: SolarSolution[] = (currentModule?.params?.solutions || DEFAULTS.solutions).map((solution: SolarSolution) => ({
+        ...solution,
+        investmentMode: solution.investmentMode || 'epc',
+        emcSubMode: solution.emcSubMode || DEFAULTS.simpleParams.emcSubMode,
+        emcOwnerShareRate: solution.emcOwnerShareRate ?? currentModule?.params?.advParams?.emcOwnerShareRate ?? DEFAULTS.advParams.emcOwnerShareRate,
+        emcDiscountPrice: solution.emcDiscountPrice ?? currentModule?.params?.advParams?.emcDiscountPrice ?? DEFAULTS.advParams.emcDiscountPrice,
+        emcFixedPrice: solution.emcFixedPrice ?? currentModule?.params?.advParams?.emcFixedPrice ?? DEFAULTS.advParams.emcFixedPrice,
+        emcSouthernAveragePrice: solution.emcSouthernAveragePrice ?? currentModule?.params?.advParams?.emcSouthernAveragePrice ?? southernAveragePrice,
+        roofRent: solution.roofRent ?? currentModule?.params?.advParams?.roofRent ?? DEFAULTS.advParams.roofRent
+    }));
 
     // Fallback to defaults if params are not set
     const params: SolarParamsState = {
         mode: currentModule?.params?.mode || DEFAULTS.mode,
         simpleParams: { ...DEFAULTS.simpleParams, ...currentModule?.params?.simpleParams },
-        advParams: { ...DEFAULTS.advParams, ...currentModule?.params?.advParams },
-        solutions: currentModule?.params?.solutions || DEFAULTS.solutions,
+        advParams: { ...DEFAULTS.advParams, ...storedAdvParams, emcSouthernAveragePrice: storedAdvParams.emcSouthernAveragePrice ?? southernAveragePrice },
+        solutions: normalizedSolutions,
         selectedSolutionId: currentModule?.params?.selectedSolutionId || DEFAULTS.selectedSolutionId,
+        showConsumptionRateAnalysis: currentModule?.params?.showConsumptionRateAnalysis ?? DEFAULTS.showConsumptionRateAnalysis,
+        consumptionRateScenarios: currentModule?.params?.consumptionRateScenarios ?? DEFAULTS.consumptionRateScenarios,
+        effectiveSelfConsumptionRate: currentModule?.params?.effectiveSelfConsumptionRate ?? DEFAULTS.effectiveSelfConsumptionRate,
     };
 
     // UI Local State
     const [selfUseMode, setSelfUseMode] = useState<'auto' | 'manual'>('auto');
     const [calculatedSelfConsumption, setCalculatedSelfConsumption] = useState(85);
     const [consumptionResult, setConsumptionResult] = useState<ConsumptionResult | null>(null);
+    const [sunHoursSource, setSunHoursSource] = useState<SunHoursResult>({
+        value: params.advParams.dailySunHours,
+        source: 'default',
+        label: '等待地址同步'
+    });
     const [buildings, setBuildings] = useState<BuildingData[]>(
         currentModule?.params?.buildings || [
             { id: 1, name: '1号车间', area: 5000, active: true, manualCapacity: 400, transformerId: 0 }
@@ -36,28 +129,14 @@ export const useSolarRetrofit = () => {
     const handleSelectSolution = (id: string) => {
         const solution = solutions.find(s => s.id === id);
         if (solution) {
-            const brandConfig = MODULE_BRANDS[solution.brand];
-            // 更新主状态参数，让其与选中的方案对齐
-            handleUpdate({
-                selectedSolutionId: id,
-                simpleParams: {
-                    ...params.simpleParams,
-                    epcPrice: solution.epcPrice
-                },
-                advParams: {
-                    ...params.advParams,
-                    degradationFirstYear: brandConfig ? brandConfig.degradationFirstYear : params.advParams.degradationFirstYear,
-                    degradationLinear: brandConfig ? brandConfig.degradationLinear : params.advParams.degradationLinear
-                }
-            });
+            handleUpdate(applySolutionToParams(params, solution));
         }
     };
 
     // 增加方案
     const handleAddSolution = (newSolution: SolarSolution) => {
-        handleUpdate({
-            solutions: [...solutions, newSolution]
-        });
+        const newSolutions = [...solutions, newSolution];
+        handleUpdate(applySolutionToParams({ ...params, solutions: newSolutions }, newSolution));
     };
 
     // 更新方案
@@ -69,18 +148,10 @@ export const useSolarRetrofit = () => {
         if (id === selectedSolutionId) {
             const current = updatedSolutions.find(s => s.id === id);
             if (current) {
-                // 只同步 EPC 价格到全局参数（如果更新包含 EPC 价格）
-                if ('epcPrice' in updates) {
-                    paramsUpdate.simpleParams = { ...params.simpleParams, epcPrice: current.epcPrice };
-                }
-                if (updates.brand) {
-                    const brandConfig = MODULE_BRANDS[updates.brand];
-                    paramsUpdate.advParams = {
-                        ...params.advParams,
-                        degradationFirstYear: brandConfig.degradationFirstYear,
-                        degradationLinear: brandConfig.degradationLinear
-                    };
-                }
+                const syncedParams = applySolutionToParams({ ...params, solutions: updatedSolutions }, current);
+                paramsUpdate.selectedSolutionId = syncedParams.selectedSolutionId;
+                paramsUpdate.simpleParams = syncedParams.simpleParams;
+                paramsUpdate.advParams = syncedParams.advParams;
             }
         }
 
@@ -107,22 +178,17 @@ export const useSolarRetrofit = () => {
         // 如果删除的是当前选中的方案，则自动切换到第一个可用方案
         if (id === selectedSolutionId) {
             const nextSolution = newSolutions[0];
-            const brandConfig = MODULE_BRANDS[nextSolution.brand];
-            
-            paramsUpdate.selectedSolutionId = nextSolution.id;
-            paramsUpdate.simpleParams = { ...params.simpleParams, epcPrice: nextSolution.epcPrice };
-            paramsUpdate.advParams = { 
-                ...params.advParams,
-                degradationFirstYear: brandConfig ? brandConfig.degradationFirstYear : params.advParams.degradationFirstYear,
-                degradationLinear: brandConfig ? brandConfig.degradationLinear : params.advParams.degradationLinear 
-            };
+            const syncedParams = applySolutionToParams({ ...params, solutions: newSolutions }, nextSolution);
+
+            paramsUpdate.selectedSolutionId = syncedParams.selectedSolutionId;
+            paramsUpdate.simpleParams = syncedParams.simpleParams;
+            paramsUpdate.advParams = syncedParams.advParams;
         }
         
         handleUpdate(paramsUpdate);
     };
 
-    const locationKey = `${projectBaseInfo?.province}-${projectBaseInfo?.city}`;
-    const lastLocation = useRef<string>(locationKey);
+    const lastLocation = useRef<string>('');
 
     // Get O&M rate from global project context
     const omRate = projectBaseInfo?.omRate ?? 0;
@@ -134,7 +200,7 @@ export const useSolarRetrofit = () => {
     const calculateFinancials = useCallback((p: SolarParamsState, selfRate: number) => {
         const capacity = p.simpleParams.capacity || 0;
 
-        // 根据方案确定 EPC 单价
+        // 根据方案确定建造成本单价，EPC/EMC 投资模型共用该成本。
         let epcPrice = p.simpleParams.epcPrice;
         const selectedSolution = (p.solutions || []).find(s => s.id === p.selectedSolutionId);
         if (selectedSolution) {
@@ -143,8 +209,8 @@ export const useSolarRetrofit = () => {
 
         // 如果是高压接入，增加升压设备成本
         let voltageUpgradeCost = 0;
-        if (p.simpleParams.connectionType === 'high' && selectedSolution) {
-            voltageUpgradeCost = selectedSolution.voltageUpgradeCost || 15;
+        if ((selectedSolution?.connectionType || p.simpleParams.connectionType) === 'high') {
+            voltageUpgradeCost = selectedSolution?.voltageUpgradeCost || 15;
         }
 
         const baseInvestment = parseFloat((capacity * epcPrice / 10).toFixed(3));
@@ -174,12 +240,11 @@ export const useSolarRetrofit = () => {
                 ownerBenefit = totalSelfUseRevenue * ownerShare + roofRentIncome;
                 investorRevenue = totalSelfUseRevenue * (1 - ownerShare) + gridRevenue - roofRentIncome;
             } else {
-                // ===== 折扣电价模式 =====
-                // 投资方以折扣价向业主售电 → 投资方的自用收入 = 自用电量 × 折扣电价
-                // 业主节省 = 自用电量 × (市电价 - 折扣价) + 屋顶租金
-                const discountRevenue = selfUseGen * p.advParams.emcDiscountPrice; // 投资方售电收入
-                ownerBenefit = selfUseGen * (p.advParams.electricityPrice - p.advParams.emcDiscountPrice) + roofRentIncome;
-                investorRevenue = discountRevenue + gridRevenue - roofRentIncome;
+                const salePrice = getEffectiveEmcSalePrice(p);
+                const benchmarkPrice = getOwnerBenchmarkPrice(p);
+                const saleRevenue = selfUseGen * salePrice;
+                ownerBenefit = selfUseGen * (benchmarkPrice - salePrice) + roofRentIncome;
+                investorRevenue = saleRevenue + gridRevenue - roofRentIncome;
             }
         } else {
             // 自投 / 贷款 / EPC：全部收益归投资方(业主=投资方)
@@ -202,7 +267,7 @@ export const useSolarRetrofit = () => {
             ownerBenefit: parseFloat(ownerBenefit.toFixed(3)),
             investorRevenue: parseFloat(investorRevenue.toFixed(3))
         };
-    }, []);
+    }, [omRate, projectBaseInfo?.taxRate]);
 
     const handleUpdate = useCallback((newParamsPart: Partial<SolarParamsState>) => {
         const newParams = { ...params, ...newParamsPart };
@@ -223,42 +288,46 @@ export const useSolarRetrofit = () => {
             ? `${projectBaseInfo.latitude}-${projectBaseInfo.longitude}`
             : `${projectBaseInfo?.province}-${projectBaseInfo?.city}`;
 
-        if (currentLoc !== lastLocation.current && (projectBaseInfo?.latitude || projectBaseInfo?.province)) {
-            lastLocation.current = currentLoc;
+        if (!currentLoc || currentLoc === 'undefined-undefined' || currentLoc === lastLocation.current) return;
+        if (!(projectBaseInfo?.latitude || projectBaseInfo?.province)) return;
 
-            // 优先使用精确坐标调用 NASA API
+        let cancelled = false;
+        lastLocation.current = currentLoc;
+
+        const syncSunHours = async () => {
+            let sunHoursInfo: SunHoursResult = getLocalSunHoursInfo(projectBaseInfo.province, projectBaseInfo.city || '');
+
             if (projectBaseInfo.latitude && projectBaseInfo.longitude) {
-                fetchNasaSolarData(projectBaseInfo.latitude, projectBaseInfo.longitude)
-                    .then(nasaData => {
-                        const newSunHours = nasaData.annualAverage;
-                        if (Math.abs(newSunHours - params.advParams.dailySunHours) > 0.01) {
-                            handleUpdate({ advParams: { ...params.advParams, dailySunHours: parseFloat(newSunHours.toFixed(2)) } });
-                        }
-                    })
-                    .catch(() => {
-                        // NASA失败时使用本地数据兜底
-                        const fallbackSunHours = getSunHours(projectBaseInfo.province, projectBaseInfo.city || '');
-                        if (fallbackSunHours && Math.abs(fallbackSunHours - params.advParams.dailySunHours) > 0.01) {
-                            handleUpdate({ advParams: { ...params.advParams, dailySunHours: fallbackSunHours } });
-                        }
-                    });
+                // 优先使用精确坐标调用 NASA API
+                try {
+                    const nasaData = await fetchNasaSolarData(projectBaseInfo.latitude, projectBaseInfo.longitude);
+                    sunHoursInfo = {
+                        value: nasaData.annualAverage,
+                        source: 'nasa_coordinates',
+                        label: 'NASA精确坐标多年均值'
+                    };
+                } catch {
+                    sunHoursInfo = getLocalSunHoursInfo(projectBaseInfo.province, projectBaseInfo.city || '');
+                }
             } else {
-                // 降级：使用省市名称查询
-                getSunHoursWithNASA(projectBaseInfo.province, projectBaseInfo.city || '')
-                    .then(newSunHours => {
-                        if (newSunHours && Math.abs(newSunHours - params.advParams.dailySunHours) > 0.01) {
-                            handleUpdate({ advParams: { ...params.advParams, dailySunHours: parseFloat(newSunHours.toFixed(2)) } });
-                        }
-                    })
-                    .catch(() => {
-                        // 最终兜底：使用本地静态数据
-                        const fallbackSunHours = getSunHours(projectBaseInfo.province, projectBaseInfo.city || '');
-                        if (fallbackSunHours && Math.abs(fallbackSunHours - params.advParams.dailySunHours) > 0.01) {
-                            handleUpdate({ advParams: { ...params.advParams, dailySunHours: fallbackSunHours } });
-                        }
-                    });
+                sunHoursInfo = getLocalSunHoursInfo(projectBaseInfo.province, projectBaseInfo.city || '');
             }
-        }
+
+            if (cancelled || !sunHoursInfo) return;
+
+            const newSunHours = parseFloat(sunHoursInfo.value.toFixed(2));
+            setSunHoursSource({ ...sunHoursInfo, value: newSunHours });
+
+            if (Math.abs(newSunHours - params.advParams.dailySunHours) > 0.01) {
+                handleUpdate({ advParams: { ...params.advParams, dailySunHours: newSunHours } });
+            }
+        };
+
+        syncSunHours();
+
+        return () => {
+            cancelled = true;
+        };
     }, [projectBaseInfo?.latitude, projectBaseInfo?.longitude, projectBaseInfo?.province, projectBaseInfo?.city, handleUpdate, params.advParams]);
 
     // Sync Electricity Price
@@ -269,11 +338,11 @@ export const useSolarRetrofit = () => {
             if (priceConfig.mode === 'fixed') {
                 newElectricityPrice = priceConfig.fixedPrice;
             } else if (priceConfig.mode === 'tou') {
-                const totalDuration = priceConfig.touSegments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
-                const weightedSum = priceConfig.touSegments.reduce((sum, seg) => sum + seg.price * (seg.end - seg.start), 0);
+                const totalDuration = priceConfig.touSegments.reduce((sum: number, seg: any) => sum + (seg.end - seg.start), 0);
+                const weightedSum = priceConfig.touSegments.reduce((sum: number, seg: any) => sum + seg.price * (seg.end - seg.start), 0);
                 newElectricityPrice = totalDuration > 0 ? weightedSum / totalDuration : DEFAULTS.advParams.electricityPrice;
             } else if (priceConfig.mode === 'spot') {
-                const avgSpotPrice = priceConfig.spotPrices.reduce((sum, p) => sum + p, 0) / priceConfig.spotPrices.length;
+                const avgSpotPrice = priceConfig.spotPrices.reduce((sum: number, p: number) => sum + p, 0) / priceConfig.spotPrices.length;
                 newElectricityPrice = avgSpotPrice || DEFAULTS.advParams.electricityPrice;
             }
 
@@ -281,15 +350,25 @@ export const useSolarRetrofit = () => {
                 handleUpdate({ advParams: { ...params.advParams, electricityPrice: parseFloat(newElectricityPrice.toFixed(4)) } });
             }
         }
-    }, [priceConfig, params.mode, params.advParams.electricityPrice, handleUpdate]);
+    }, [priceConfig, params.mode, params.advParams, southernAveragePrice, handleUpdate]);
 
-    // Sync Building Capacity to Global Parameter
+    // Sync Building Capacity to the default global parameter.
+    // If the selected solution has its own capacity, keep the active scheme independent.
     useEffect(() => {
         const totalBuildingCapacity = buildings.filter(b => b.active).reduce((sum, b) => sum + b.manualCapacity, 0);
-        if (totalBuildingCapacity > 0 && totalBuildingCapacity !== params.simpleParams.capacity) {
-            handleUpdate({ simpleParams: { ...params.simpleParams, capacity: totalBuildingCapacity } });
+        const selectedSolution = (params.solutions || []).find(s => s.id === params.selectedSolutionId);
+        const shouldFollowBuildingCapacity = !selectedSolution?.capacity;
+        const nextSimpleParams = {
+            ...params.simpleParams,
+            area: buildings.filter(b => b.active).reduce((sum, b) => sum + (Number(b.area) || 0), 0) || params.simpleParams.area
+        };
+
+        if (totalBuildingCapacity > 0 && shouldFollowBuildingCapacity && totalBuildingCapacity !== params.simpleParams.capacity) {
+            handleUpdate({ simpleParams: { ...nextSimpleParams, capacity: totalBuildingCapacity } });
+        } else if (nextSimpleParams.area !== params.simpleParams.area) {
+            handleUpdate({ simpleParams: nextSimpleParams });
         }
-    }, [buildings, params.simpleParams.capacity, handleUpdate]);
+    }, [buildings, params.simpleParams, params.solutions, params.selectedSolutionId, handleUpdate]);
 
     // Sync buildings from projectBaseInfo to solar module
     useEffect(() => {
@@ -352,6 +431,12 @@ export const useSolarRetrofit = () => {
         }
     }, [selfUseMode, projectBaseInfo, params.simpleParams.capacity, params.advParams.dailySunHours, params.advParams.generationDays, params.advParams.prValue, bills, modules]);
 
+    useEffect(() => {
+        if (Math.abs((params.effectiveSelfConsumptionRate ?? 85) - calculatedSelfConsumption) > 0.01) {
+            handleUpdate({ effectiveSelfConsumptionRate: calculatedSelfConsumption });
+        }
+    }, [calculatedSelfConsumption, params.effectiveSelfConsumptionRate, handleUpdate]);
+
     return {
         currentModule,
         params,
@@ -370,6 +455,7 @@ export const useSolarRetrofit = () => {
         projectBaseInfo,
         priceConfig,
         storageModule: modules['retrofit-storage'],
+        sunHoursSource,
         // 新增：方案和品牌状态
         solutions,
         selectedSolutionId,
@@ -391,7 +477,12 @@ const calculateSolarMetrics = (params: SolarParamsState, selfRate: number) => {
     }));
 
     const capacity = params.simpleParams.capacity || 0;
-    const investment = capacity * params.simpleParams.epcPrice / 10;
+    const selectedSolution = (params.solutions || []).find(s => s.id === params.selectedSolutionId);
+    const epcPrice = selectedSolution?.epcPrice ?? params.simpleParams.epcPrice;
+    const voltageUpgradeCost = (selectedSolution?.connectionType || params.simpleParams.connectionType) === 'high'
+        ? (selectedSolution?.voltageUpgradeCost || 15)
+        : 0;
+    const investment = capacity * epcPrice / 10 + voltageUpgradeCost;
     const roofRentIncome = params.simpleParams.area * params.advParams.roofRent / 10000; // 万元/年
     const details: any[] = [];
     const cashFlows = [-investment];
@@ -422,9 +513,11 @@ const calculateSolarMetrics = (params: SolarParamsState, selfRate: number) => {
                 ownerBenefit = totalSelfUseRevenue * ownerShare + roofRentIncome;
                 investorRevenue = totalSelfUseRevenue * (1 - ownerShare) + gridRevenue - roofRentIncome;
             } else {
-                const discountRevenue = selfUseGen * params.advParams.emcDiscountPrice;
-                ownerBenefit = selfUseGen * (params.advParams.electricityPrice - params.advParams.emcDiscountPrice) + roofRentIncome;
-                investorRevenue = discountRevenue + gridRevenue - roofRentIncome;
+                const salePrice = getEffectiveEmcSalePrice(params);
+                const benchmarkPrice = getOwnerBenchmarkPrice(params);
+                const saleRevenue = selfUseGen * salePrice;
+                ownerBenefit = selfUseGen * (benchmarkPrice - salePrice) + roofRentIncome;
+                investorRevenue = saleRevenue + gridRevenue - roofRentIncome;
             }
         } else {
             investorRevenue = totalSelfUseRevenue + gridRevenue;

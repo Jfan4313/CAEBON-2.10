@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
-import { MODULE_BRANDS, SolarSolution, SolarModuleBrand, CableType } from '../types';
-import { ModuleBrandSelector } from './ModuleBrandSelector';
-import { LayoutImageUploader } from './LayoutImageUploader';
+import React from 'react';
+import { EmcSubMode, InvestmentMode, SolarSolution } from '../types';
 
 interface SolutionSelectorProps {
     solutions: SolarSolution[];
     selectedSolutionId: string | null;
+    defaultCapacity: number;
     onSelectSolution: (id: string) => void;
     onAddSolution: (solution: SolarSolution) => void;
     onUpdateSolution: (id: string, updates: Partial<SolarSolution>) => void;
@@ -13,16 +12,20 @@ interface SolutionSelectorProps {
     currentSolution: SolarSolution | null;
 }
 
-// 计算方案投资估算
-const calculateSolutionInvestment = (solution: SolarSolution, capacity: number) => {
-    const baseInvestment = parseFloat((capacity * solution.epcPrice / 10).toFixed(2));
-    const voltageUpgradeCost = solution.connectionType === 'high' && solution.voltageUpgradeCost ? solution.voltageUpgradeCost : 0;
-    return parseFloat((baseInvestment + voltageUpgradeCost).toFixed(2));
+const getEmcModeLabel = (mode?: EmcSubMode) => {
+    switch (mode) {
+        case 'sharing': return '收益分成';
+        case 'fixed': return '固定电价';
+        case 'southern_average': return '折扣电价';
+        case 'discount':
+        default: return '折扣电价';
+    }
 };
 
 export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
     solutions,
     selectedSolutionId,
+    defaultCapacity,
     onSelectSolution,
     onAddSolution,
     onUpdateSolution,
@@ -45,14 +48,17 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
     return (
         <div className="space-y-6">
             {/* 方案顶部操作区 */}
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-bold text-slate-800">
-                    {solutions.length > 1 ? '接入方案与配置' : '接入方案配置'}
-                </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+                <div>
+                    <h3 className="text-lg font-semibold text-[#1d1d1f]">
+                        {solutions.length > 1 ? '接入方案与配置' : '接入方案配置'}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">每个方案独立保存合作模式、线缆、组件和投资口径</p>
+                </div>
                 {solutions.length > 0 && (
                     <button
                         onClick={handleAdd}
-                        className="flex items-center gap-1 text-sm text-primary hover:text-primary-dark font-medium bg-primary/10 px-3 py-1.5 rounded-md transition-colors"
+                        className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold solar-apple-primary px-4 py-2 rounded-full transition-all hover:brightness-95"
                     >
                         <span className="material-icons text-[18px]">add</span>
                         新增对比方案
@@ -68,28 +74,30 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
                             key={solution.id}
                             onClick={() => onSelectSolution(solution.id)}
                             className={`
-                                relative p-4 rounded-xl border-2 transition-all cursor-pointer group
+                                relative p-4 rounded-[22px] border transition-all cursor-pointer group overflow-hidden
                                 ${selectedSolutionId === solution.id
-                                    ? 'border-primary bg-gradient-to-br from-primary/5 to-primary/10 shadow-lg scale-[1.02]'
-                                    : 'border-slate-200 hover:border-primary/40 bg-white hover:shadow-md'}
+                                    ? 'border-[#0071e3]/70 bg-white shadow-[0_18px_42px_rgba(0,113,227,0.12)]'
+                                    : 'border-slate-200/80 bg-white/80 hover:border-slate-300 hover:shadow-[0_16px_34px_rgba(15,23,42,0.07)]'}
                             `}
                         >
+                            {selectedSolutionId === solution.id && (
+                                <div className="absolute inset-x-0 top-0 h-1 bg-[#0071e3]"></div>
+                            )}
                             {/* 方案头部 */}
                             <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                                        solution.connectionType === 'high'
-                                            ? 'bg-red-100 text-red-700'
-                                            : 'bg-blue-100 text-blue-700'
-                                    }`}>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="solar-apple-pill px-2.5 py-1 text-xs font-semibold">
                                         {solution.connectionType === 'high' ? '10kV高压' : '380V低压'}
                                     </span>
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                                        solution.cableType === 'copper'
-                                            ? 'bg-orange-100 text-orange-700'
+                                    <span className="solar-apple-pill px-2.5 py-1 text-xs font-semibold">
+                                        {solution.cableType === 'copper' ? '铜芯' : '铝芯'}
+                                    </span>
+                                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                        (solution.investmentMode || 'epc') === 'emc'
+                                            ? 'bg-[#0071e3]/10 text-[#0071e3]'
                                             : 'bg-slate-100 text-slate-700'
                                     }`}>
-                                        {solution.cableType === 'copper' ? '铜芯' : '铝芯'}
+                                        {(solution.investmentMode || 'epc').toUpperCase()}
                                     </span>
                                 </div>
                                 <button
@@ -108,26 +116,35 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
                             </div>
 
                             {/* 方案名称 */}
-                            <div className="font-bold text-slate-800 text-base mb-2">{solution.name}</div>
+                            <div className="font-semibold text-[#1d1d1f] text-base mb-2 leading-snug">{solution.name}</div>
 
                             {/* 组件品牌 */}
                             <div className="flex items-center gap-1.5 mb-3">
                                 <span className="material-icons text-[14px] text-slate-400">business</span>
                                 <span className="text-xs text-slate-600">
                                     {solution.brand === 'longi' ? '隆基组件' : solution.brand === 'tongwei' ? '通威组件' : '通用组件'}
+                                    {(solution.investmentMode || 'epc') === 'emc' ? ` · ${getEmcModeLabel(solution.emcSubMode)}` : ''}
                                 </span>
                             </div>
 
-                            {/* EPC 单价展示 */}
-                            <div className="flex items-baseline gap-1 pt-2 border-t border-slate-100">
-                                <span className="text-xs text-slate-500">EPC单价</span>
-                                <span className="text-xl font-black text-primary">¥{solution.epcPrice.toFixed(2)}</span>
-                                <span className="text-xs text-slate-400">/Wp</span>
+                            {/* 建造成本单价展示 */}
+                            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
+                                <div>
+                                    <div className="text-[10px] text-slate-400">铺设容量</div>
+                                    <div className="text-sm font-semibold text-slate-800">{(solution.capacity ?? defaultCapacity).toFixed(0)} kWp</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] text-slate-400">建造成本</div>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg font-semibold text-[#0071e3]">¥{solution.epcPrice.toFixed(2)}</span>
+                                        <span className="text-[10px] text-slate-400">/Wp</span>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 选中指示器 */}
                             {selectedSolutionId === solution.id && (
-                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center shadow-lg">
+                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-[#0071e3] rounded-full flex items-center justify-center shadow-lg">
                                     <span className="material-icons text-white text-[14px]">check</span>
                                 </div>
                             )}
@@ -138,83 +155,70 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
 
             {/* 当前方案详细配置 */}
             {currentSolution && (
-                <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4 space-y-6">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div className="flex items-center gap-2 flex-1">
-                            <input
-                                type="text"
-                                value={currentSolution.name}
-                                onChange={(e) => onUpdateSolution(currentSolution.id, { name: e.target.value })}
-                                className="text-base font-bold text-slate-800 bg-transparent border-b border-dashed border-slate-300 focus:border-primary outline-none px-1 py-0.5 w-1/2 min-w-[200px]"
-                                placeholder="方案名称"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* 接入方式 */}
-                        <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-500">接入电压等级</label>
-                            <div className="flex bg-slate-100 p-1 rounded-lg">
-                                <button
-                                    onClick={() => onUpdateSolution(currentSolution.id, { connectionType: 'low' })}
-                                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${currentSolution.connectionType === 'low' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
-                                >
-                                    低压 (380V)
-                                </button>
-                                <button
-                                    onClick={() => onUpdateSolution(currentSolution.id, { connectionType: 'high' })}
-                                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${currentSolution.connectionType === 'high' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
-                                >
-                                    高压 (10kV)
-                                </button>
+                <div className="solar-apple-panel p-5 mt-4 space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white/90 rounded-[18px] border border-white p-4 shadow-sm">
+                            <label className="text-xs font-semibold text-slate-500 mb-2 block">方案名称</label>
+                            <div className="flex items-center gap-2">
+                                <span className="material-icons text-slate-300 text-[18px]">edit_note</span>
+                                <input
+                                    type="text"
+                                    value={currentSolution.name}
+                                    onChange={(e) => onUpdateSolution(currentSolution.id, { name: e.target.value })}
+                                    className="text-base font-semibold text-[#1d1d1f] bg-transparent border-none outline-none px-1 py-1 w-full"
+                                    placeholder="方案名称"
+                                />
                             </div>
                         </div>
 
-                        {/* 线缆材质 */}
-                        <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-500">线缆材质</label>
-                            <div className="flex bg-slate-100 p-1 rounded-lg">
-                                <button
-                                    onClick={() => onUpdateSolution(currentSolution.id, { cableType: 'aluminum' })}
-                                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${currentSolution.cableType === 'aluminum' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-                                >
-                                    铝缆 (成本优)
-                                </button>
-                                <button
-                                    onClick={() => onUpdateSolution(currentSolution.id, { cableType: 'copper' })}
-                                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${currentSolution.cableType === 'copper' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'}`}
-                                >
-                                    铜缆 (性能优)
-                                </button>
+                        <div className="bg-white/90 rounded-[18px] border border-white p-4 shadow-sm">
+                            <label className="text-xs font-semibold text-slate-500 mb-2 block">本方案铺设容量</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    step="1"
+                                    value={currentSolution.capacity ?? defaultCapacity}
+                                    onChange={(e) => {
+                                        const nextCapacity = parseFloat(e.target.value) || 0;
+                                        onUpdateSolution(currentSolution.id, { capacity: nextCapacity });
+                                    }}
+                                    className="text-base font-semibold text-[#1d1d1f] bg-transparent border-none outline-none px-1 py-1 w-full"
+                                />
+                                <span className="text-xs text-slate-400 font-mono">kWp</span>
                             </div>
-                        </div>
-
-                        {/* 组件品牌整合 */}
-                        <div className="col-span-3 pt-4 border-t border-slate-50">
-                            <ModuleBrandSelector
-                                selectedBrand={currentSolution.brand}
-                                onSelect={(brand) => onUpdateSolution(currentSolution.id, { brand })}
-                            />
+                            <div className="mt-2 flex items-center justify-between gap-3">
+                                <span className="text-[10px] text-slate-400">
+                                    {currentSolution.capacity ? '该方案使用独立容量' : '当前跟随楼栋容量汇总'}
+                                </span>
+                                {currentSolution.capacity && (
+                                    <button
+                                        onClick={() => onUpdateSolution(currentSolution.id, { capacity: undefined })}
+                                        className="text-[10px] font-semibold text-[#0071e3] hover:text-blue-700"
+                                    >
+                                        跟随楼栋汇总
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
 
-                    {/* 铺设图上传 */}
-                    <div className="pt-4 border-t border-slate-100">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="material-icons text-[18px] text-primary">map</span>
-                            <label className="text-sm font-bold text-slate-700">光伏铺设图</label>
+                    <div className="p-4 rounded-[18px] border border-white bg-white/90 shadow-sm">
+                        <label className="text-xs font-semibold text-slate-500 mb-2 block">当前方案合作模式</label>
+                        <div className="solar-apple-segment grid grid-cols-2 gap-2">
+                            {[
+                                { id: 'emc', label: 'EMC 节能分成', icon: 'handshake' },
+                                { id: 'epc', label: 'EPC 工程总包', icon: 'construction' }
+                            ].map((mode) => (
+                                <button
+                                    key={mode.id}
+                                    onClick={() => onUpdateSolution(currentSolution.id, { investmentMode: mode.id as InvestmentMode })}
+                                    className={`solar-apple-segment-item flex items-center justify-center gap-2 py-3 text-xs ${(currentSolution.investmentMode || 'epc') === mode.id ? 'is-active' : ''}`}
+                                >
+                                    <span className="material-icons text-[18px]">{mode.icon}</span>
+                                    {mode.label}
+                                </button>
+                            ))}
                         </div>
-                        <LayoutImageUploader
-                            currentImage={currentSolution.layoutImage}
-                            onImageChange={(imageData) => onUpdateSolution(currentSolution.id, { layoutImage: imageData })}
-                            canUseSameLayout={solutions.length > 1 && currentSolution.id !== solutions[0].id}
-                            usingSameLayout={currentSolution.useSameLayout}
-                            onToggleSameLayout={(useSame) => onUpdateSolution(currentSolution.id, {
-                                useSameLayout: useSame,
-                                layoutImage: useSame ? undefined : currentSolution.layoutImage
-                            })}
-                        />
                     </div>
                 </div>
             )}

@@ -1,13 +1,15 @@
 export type InvestmentMode = 'epc' | 'emc';
 
-/** EMC 细分结算模式：收益分成 vs 折扣电价（二选一） */
-export type EmcSubMode = 'sharing' | 'discount';
+/** EMC 细分结算模式。southern_average 仅保留用于兼容旧方案，界面不再作为结算方式展示。 */
+export type EmcSubMode = 'sharing' | 'discount' | 'fixed' | 'southern_average';
+export type SolarConnectionType = 'high' | 'low';
 
 export interface SolarSimpleParams {
     connectionPoint: number;
     area: number;
     capacity: number;
-    epcPrice: number;
+    epcPrice: number; // 建造成本单价（元/Wp），EPC/EMC 投资模型共用
+    connectionType: SolarConnectionType;
     investmentMode: InvestmentMode;
     emcSubMode: EmcSubMode; // 仅当 investmentMode === 'emc' 时生效
 }
@@ -30,6 +32,10 @@ export interface SolarAdvParams {
     emcOwnerShareRate: number;
     // 【折扣电价模式】投资方向业主售电的价格 (元/kWh), 需低于市电价格
     emcDiscountPrice: number;
+    // 【固定电价模式】投资方向业主售电的固定价格 (元/kWh)
+    emcFixedPrice: number;
+    // 【业主对标电价】南网均价/尖峰评估电价等参照值，仅用于计算业主每度省多少钱
+    emcSouthernAveragePrice: number;
     // 【通用】业主向投资方收取的屋顶使用费 (元/㎡/年)
     roofRent: number;
 }
@@ -77,10 +83,18 @@ export interface SolarSolution {
     id: string;
     name: string;
     description: string;
-    connectionType: 'high' | 'low'; // 高压/低压接入
+    capacity?: number; // 本方案铺设容量（kWp）。未填写时跟随楼栋容量汇总
+    connectionType: SolarConnectionType; // 高压/低压接入
     brand: SolarModuleBrand; // 组件品牌
     cableType: CableType; // 线缆材质
-    epcPrice: number; // 元/Wp
+    epcPrice: number; // 建造成本单价（元/Wp），EPC/EMC 投资模型共用
+    investmentMode: InvestmentMode; // 该方案独立合作方式
+    emcSubMode?: EmcSubMode;
+    emcOwnerShareRate?: number;
+    emcDiscountPrice?: number;
+    emcFixedPrice?: number;
+    emcSouthernAveragePrice?: number;
+    roofRent?: number;
     voltageUpgradeCost?: number; // 升压设备成本（仅高压接入需要）
     layoutImage?: string; // 铺设图 (Base64 数据URL)
     useSameLayout?: boolean; // 是否使用与第一个方案相同的铺设图（仅用于非第一个方案）
@@ -95,7 +109,8 @@ export const DEFAULT_SOLUTIONS: SolarSolution[] = [
         connectionType: 'low',
         brand: 'tongwei',
         cableType: 'aluminum',
-        epcPrice: 3.2
+        epcPrice: 3.2,
+        investmentMode: 'epc'
     },
     {
         id: 'solution-2',
@@ -104,7 +119,8 @@ export const DEFAULT_SOLUTIONS: SolarSolution[] = [
         connectionType: 'low',
         brand: 'longi',
         cableType: 'copper',
-        epcPrice: 3.5
+        epcPrice: 3.5,
+        investmentMode: 'epc'
     },
     {
         id: 'solution-3',
@@ -114,6 +130,7 @@ export const DEFAULT_SOLUTIONS: SolarSolution[] = [
         brand: 'generic',
         cableType: 'aluminum',
         epcPrice: 3.4,
+        investmentMode: 'epc',
         voltageUpgradeCost: 15 // 升压设备成本（万元）
     }
 ];
@@ -126,6 +143,9 @@ export interface SolarParamsState {
     advParams: SolarAdvParams;
     solutions?: SolarSolution[];
     selectedSolutionId?: string | null;
+    showConsumptionRateAnalysis?: boolean;
+    consumptionRateScenarios?: number[];
+    effectiveSelfConsumptionRate?: number;
 }
 
 export const DEFAULTS: SolarParamsState = {
@@ -135,6 +155,7 @@ export const DEFAULTS: SolarParamsState = {
         area: 5000,
         capacity: 400,
         epcPrice: 3.5,
+        connectionType: 'low',
         investmentMode: 'epc',
         emcSubMode: 'sharing'
     },
@@ -152,10 +173,15 @@ export const DEFAULTS: SolarParamsState = {
         taxRate: 0, // 默认 0% (新能源享三免三减半）
         emcOwnerShareRate: 10,   // 业主获 10% 自用电费
         emcDiscountPrice: 0.65,  // 投资方售电 0.65 元/度
+        emcFixedPrice: 0.6,
+        emcSouthernAveragePrice: 0.85,
         roofRent: 5              // 屋顶租金 5 元/㎡/年
     },
     solutions: DEFAULT_SOLUTIONS,
-    selectedSolutionId: DEFAULT_SOLUTIONS[0].id
+    selectedSolutionId: DEFAULT_SOLUTIONS[0].id,
+    showConsumptionRateAnalysis: false,
+    consumptionRateScenarios: [50, 60, 70, 80, 90, 100],
+    effectiveSelfConsumptionRate: 85
 };
 
 export interface BuildingData {

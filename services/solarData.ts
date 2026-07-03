@@ -5,6 +5,54 @@
 
 import { fetchNasaSolarData } from './nasaPower';
 
+export type SunHoursSource = 'nasa_coordinates' | 'nasa_city' | 'local_city' | 'local_province' | 'default';
+
+export interface SunHoursResult {
+    value: number;
+    source: SunHoursSource;
+    label: string;
+}
+
+const PROVINCE_CODE_TO_CN: Record<string, string> = {
+    Beijing: '北京',
+    Shanghai: '上海',
+    Tianjin: '天津',
+    Chongqing: '重庆',
+    Jiangsu: '江苏',
+    Zhejiang: '浙江',
+    Shandong: '山东',
+    Anhui: '安徽',
+    Fujian: '福建',
+    Jiangxi: '江西',
+    Guangdong: '广东',
+    Guangxi: '广西',
+    Hainan: '海南',
+    Henan: '河南',
+    Hubei: '湖北',
+    Hunan: '湖南',
+    Hebei: '河北',
+    Shanxi: '山西',
+    Neimenggu: '内蒙古',
+    Liaoning: '辽宁',
+    Jilin: '吉林',
+    Heilongjiang: '黑龙江',
+    Shaanxi: '陕西',
+    Gansu: '甘肃',
+    Qinghai: '青海',
+    Ningxia: '宁夏',
+    Xinjiang: '新疆',
+    Sichuan: '四川',
+    Guizhou: '贵州',
+    Yunnan: '云南',
+    Xizang: '西藏'
+};
+
+const normalizeProvince = (province?: string): string => {
+    if (!province) return '';
+    const mapped = PROVINCE_CODE_TO_CN[province] || province;
+    return mapped.replace(/省|市|壮族自治区|回族自治区|维吾尔自治区|自治区/g, '');
+};
+
 export const CITY_SUNLIGHT_HOURS: Record<string, number> = {
     // 华北地区
     '北京市': 3.6, '天津市': 3.5, '石家庄市': 3.4, '太原市': 4.1, '呼和浩特市': 4.8, '包头市': 5.0,
@@ -19,7 +67,7 @@ export const CITY_SUNLIGHT_HOURS: Record<string, number> = {
     '郑州市': 3.3, '武汉市': 3.1, '长沙市': 2.8,
 
     // 华南地区
-    '广州市': 3.1, '深圳市': 3.2, '南宁市': 3.1, '海口市': 3.8, '三亚市': 4.2, '佛山市': 3.1, '东莞市': 3.2,
+    '广州市': 3.1, '深圳市': 3.2, '南宁市': 3.1, '海口市': 3.8, '三亚市': 4.2, '佛山市': 3.1, '东莞市': 3.2, '中山市': 4.1, '珠海市': 3.9, '惠州市': 3.8, '江门市': 3.9,
 
     // 西南地区
     '重庆市': 2.2, '成都市': 2.5, '贵阳市': 2.4, '昆明市': 4.5, '拉萨市': 5.5, '攀枝花市': 3.8, '丽江市': 4.2, '日喀则市': 5.0, '阿里地区': 5.1,
@@ -74,6 +122,10 @@ export const CITY_COORDINATES: Record<string, { lat: number; lon: number }> = {
     '三亚市': { lat: 18.2524, lon: 109.5117 },
     '佛山市': { lat: 23.0218, lon: 113.1219 },
     '东莞市': { lat: 23.0205, lon: 113.7518 },
+    '中山市': { lat: 22.5176, lon: 113.3928 },
+    '珠海市': { lat: 22.2716, lon: 113.5767 },
+    '惠州市': { lat: 23.1115, lon: 114.4152 },
+    '江门市': { lat: 22.5787, lon: 113.0819 },
 
     // 西南地区
     '重庆市': { lat: 29.5627, lon: 106.5528 },
@@ -108,7 +160,7 @@ export const getSunHours = (province: string, city?: string): number => {
     }
 
     // 2. 如果没匹配到，返回该省会城市或近似全省均值兜底
-    switch (province) {
+    switch (normalizeProvince(province)) {
         case '北京': return 3.6;
         case '天津': return 3.5;
         case '上海': return 3.1;
@@ -144,6 +196,26 @@ export const getSunHours = (province: string, city?: string): number => {
     }
 };
 
+export const getLocalSunHoursInfo = (province: string, city?: string): SunHoursResult => {
+    if (city && CITY_SUNLIGHT_HOURS[city]) {
+        return {
+            value: CITY_SUNLIGHT_HOURS[city],
+            source: 'local_city',
+            label: '本地20年城市均值'
+        };
+    }
+
+    const normalizedProvince = normalizeProvince(province);
+    const provinceValue = getSunHours(normalizedProvince, city);
+    const source: SunHoursSource = normalizedProvince ? 'local_province' : 'default';
+
+    return {
+        value: provinceValue,
+        source,
+        label: source === 'local_province' ? '本地20年省级均值' : '全国默认兜底'
+    };
+};
+
 /**
  * 根据省市获取对应的光伏日均有效日照时长（优先使用NASA数据）
  * @param province 省份
@@ -167,6 +239,24 @@ export const getSunHoursWithNASA = async (province: string, city?: string): Prom
     return getSunHours(province, city);
 };
 
+export const getSunHoursInfoWithNASA = async (province: string, city?: string): Promise<SunHoursResult> => {
+    if (city && CITY_COORDINATES[city]) {
+        try {
+            const coords = CITY_COORDINATES[city];
+            const nasaData = await fetchNasaSolarData(coords.lat, coords.lon);
+            return {
+                value: nasaData.annualAverage,
+                source: 'nasa_city',
+                label: 'NASA城市坐标多年均值'
+            };
+        } catch (error) {
+            console.warn('NASA API调用失败，使用本地数据:', error);
+        }
+    }
+
+    return getLocalSunHoursInfo(province, city);
+};
+
 /**
  * 根据省市获取对应的坐标（用于NASA API）
  */
@@ -188,6 +278,6 @@ export const getCityCoordinates = (province: string, city?: string): { lat: numb
         '新疆': '乌鲁木齐市'
     };
 
-    const capital = provinceCapitals[province];
+    const capital = provinceCapitals[normalizeProvince(province)];
     return capital && CITY_COORDINATES[capital] ? CITY_COORDINATES[capital] : null;
 };

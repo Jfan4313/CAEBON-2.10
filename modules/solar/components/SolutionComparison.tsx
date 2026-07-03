@@ -1,6 +1,6 @@
 import React from 'react';
 import { SolarSolution, SolarParamsState } from '../types';
-import { useSolarMetrics, calculateSolarMetrics } from '../hooks';
+import { calculateSolarMetrics } from '../hooks';
 
 interface SolutionComparisonProps {
     solutions: SolarSolution[];
@@ -13,19 +13,40 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
     params,
     selfConsumptionRate
 }) => {
+    if (solutions.length === 0) {
+        return (
+            <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-4">
+                暂无可对比方案
+            </div>
+        );
+    }
+
     // 计算每个方案的财务指标
     const solutionResults = solutions.map(solution => {
         const modifiedParams: SolarParamsState = {
             ...params,
             simpleParams: {
                 ...params.simpleParams,
+                capacity: solution.capacity ?? params.simpleParams.capacity,
                 epcPrice: solution.epcPrice,
-                connectionType: solution.connectionType
-            }
+                connectionType: solution.connectionType,
+                investmentMode: solution.investmentMode || 'epc',
+                emcSubMode: solution.emcSubMode || params.simpleParams.emcSubMode
+            },
+            advParams: {
+                ...params.advParams,
+                emcOwnerShareRate: solution.emcOwnerShareRate ?? params.advParams.emcOwnerShareRate,
+                emcDiscountPrice: solution.emcDiscountPrice ?? params.advParams.emcDiscountPrice,
+                emcFixedPrice: solution.emcFixedPrice ?? params.advParams.emcFixedPrice,
+                emcSouthernAveragePrice: solution.emcSouthernAveragePrice ?? params.advParams.emcSouthernAveragePrice,
+                roofRent: solution.roofRent ?? params.advParams.roofRent
+            },
+            selectedSolutionId: solution.id,
+            solutions
         };
         const longTermMetrics = calculateSolarMetrics(modifiedParams, selfConsumptionRate);
         // 计算投资总额
-        const capacity = params.simpleParams.capacity || 0;
+        const capacity = solution.capacity ?? params.simpleParams.capacity ?? 0;
         const baseInvestment = parseFloat((capacity * solution.epcPrice / 10).toFixed(2));
         const voltageUpgradeCost = solution.connectionType === 'high' && solution.voltageUpgradeCost ? solution.voltageUpgradeCost : 0;
         const totalInvestment = parseFloat((baseInvestment + voltageUpgradeCost).toFixed(2));
@@ -60,6 +81,20 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                                 </th>
                             ))}
                         </tr>
+                        <tr className="border-b border-slate-100">
+                            <td className="px-4 py-3 font-medium">合作方式</td>
+                            {solutionResults.map((r, i) => (
+                                <td key={i} className={`px-4 py-3 text-center ${
+                                    r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
+                                }`}>
+                                    <span className={`px-2 py-1 rounded text-white text-xs ${
+                                        (r.solution.investmentMode || 'epc') === 'emc' ? 'bg-amber-500' : 'bg-emerald-500'
+                                    }`}>
+                                        {(r.solution.investmentMode || 'epc').toUpperCase()}
+                                    </span>
+                                </td>
+                            ))}
+                        </tr>
                     </thead>
                     <tbody>
                         <tr className="border-b border-slate-100">
@@ -77,7 +112,17 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                             ))}
                         </tr>
                         <tr className="border-b border-slate-100">
-                            <td className="px-4 py-3 font-medium">EPC单价</td>
+                            <td className="px-4 py-3 font-medium">铺设容量</td>
+                            {solutionResults.map((r, i) => (
+                                <td key={i} className={`px-4 py-3 text-center ${
+                                    r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
+                                }`}>
+                                    {(r.solution.capacity ?? params.simpleParams.capacity).toFixed(2)} kWp
+                                </td>
+                            ))}
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                            <td className="px-4 py-3 font-medium">建造成本单价</td>
                             {solutionResults.map((r, i) => (
                                 <td key={i} className={`px-4 py-3 text-center ${
                                     r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
@@ -147,6 +192,16 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                                     r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
                                 }`}>
                                     ¥{r.rev25Year.toFixed(2)}万
+                                </td>
+                            ))}
+                        </tr>
+                        <tr>
+                            <td className="px-4 py-3 font-medium">业主25年收益</td>
+                            {solutionResults.map((r, i) => (
+                                <td key={i} className={`px-4 py-3 text-center ${
+                                    r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
+                                }`}>
+                                    ¥{r.totalOwnerBenefit25.toFixed(2)}万
                                 </td>
                             ))}
                         </tr>

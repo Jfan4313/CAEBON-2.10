@@ -240,6 +240,7 @@ const ProjectEntry: React.FC = () => {
     // Sync to Global Context whenever local state changes
     useEffect(() => {
         setProjectBaseInfo({
+            ...projectBaseInfo,
             name: projectName,
             type: projectType,
             province,

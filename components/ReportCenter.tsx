@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useProject } from '../context/ProjectContext';
+import { getEffectiveActiveModules } from '../utils/moduleAggregation';
 import { exportProjectReport, exportSimplifiedReport, FinancialSummaryData } from '../utils/excelExport';
 import { exportToWord, generateAndPrintReport } from '../utils/reportExport';
 import OnePageReport from './OnePageReport';
@@ -25,7 +26,7 @@ const ReportCenter: React.FC = () => {
 
   // 导出处理函数
   const handleExportReport = useCallback(() => {
-    const activeModules = Object.values(modules).filter((m: any) => m.isActive);
+    const activeModules = getEffectiveActiveModules(modules);
 
     // 边界条件检查
     if (activeModules.length === 0) {
