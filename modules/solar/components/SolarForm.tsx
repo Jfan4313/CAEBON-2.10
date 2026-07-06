@@ -443,6 +443,18 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                                 <input type="number" value={params.advParams.omCost} step="0.01" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, omCost: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
                             </div>
                             <div className="space-y-1">
+                                <label className="text-xs text-slate-500">保险费率 (%)</label>
+                                <input type="number" value={params.advParams.insuranceRate} step="0.01" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, insuranceRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs text-slate-500">收入增值税 (%)</label>
+                                <input type="number" value={params.advParams.revenueVatRate} step="0.1" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, revenueVatRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs text-slate-500">成本进项税 (%)</label>
+                                <input type="number" value={params.advParams.costVatRate} step="0.1" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, costVatRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                            </div>
+                            <div className="space-y-1">
                                 <label className="text-xs text-slate-500">综合税率 (%)</label>
                                 <input type="number" value={params.advParams.taxRate} step="0.1" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, taxRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary font-bold text-slate-700" />
                             </div>

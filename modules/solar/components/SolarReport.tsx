@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, LabelList } from 'recharts';
+import { ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import { useProject } from '../../../context/ProjectContext';
 import { useSolarMetrics, calculateSolarMetrics } from '../hooks';
 import { SolutionComparison } from './SolutionComparison';
@@ -13,6 +13,65 @@ interface SolarReportProps {
     defaultToPresentationMode?: boolean;
     selfConsumptionRate?: number;
 }
+
+type SolarPptVisual = 'rooftop' | 'panel' | 'panelWarm' | 'sunset';
+
+const solarPptVisuals: Record<SolarPptVisual, string> = {
+    rooftop: '/solar-ppt/photo-industrial-rooftop.jpg',
+    panel: '/solar-ppt/photo-panel-rain.jpg',
+    panelWarm: '/solar-ppt/photo-panel-warm.jpg',
+    sunset: '/solar-ppt/photo-solar-sunset.jpg'
+};
+
+const PhotoBackground: React.FC<{ visual: SolarPptVisual; overlay?: string; className?: string }> = ({
+    visual,
+    overlay = 'bg-gradient-to-r from-slate-950/82 via-slate-950/45 to-slate-950/18',
+    className = ''
+}) => (
+    <div className={`absolute inset-0 pointer-events-none overflow-hidden ${className}`}>
+        <img src={solarPptVisuals[visual]} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className={`absolute inset-0 ${overlay}`}></div>
+    </div>
+);
+
+const CleanSlideBackground: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+    <div className={`h-full flex flex-col relative overflow-hidden bg-[#f5f7fb] ${className}`}>
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_18%_12%,rgba(37,99,235,.08),transparent_26%),radial-gradient(circle_at_82%_16%,rgba(16,185,129,.10),transparent_28%),linear-gradient(135deg,#ffffff_0%,#f7fafc_48%,#eef5ff_100%)]"></div>
+        {children}
+    </div>
+);
+
+const PremiumSlideHeader: React.FC<{ icon: string; title: React.ReactNode; tone?: 'amber' | 'sky' | 'emerald' | 'violet' | 'slate' }> = ({ icon, title, tone = 'sky' }) => {
+    const toneClass = {
+        amber: 'text-amber-500 bg-amber-50',
+        sky: 'text-sky-500 bg-sky-50',
+        emerald: 'text-emerald-500 bg-emerald-50',
+        violet: 'text-violet-500 bg-violet-50',
+        slate: 'text-slate-600 bg-slate-100'
+    }[tone];
+
+    return (
+        <div className="relative z-10 px-10 py-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${toneClass}`}>
+                    <span className="material-icons text-3xl">{icon}</span>
+                </div>
+                <h2 className="text-3xl font-black text-slate-950 leading-tight">{title}</h2>
+            </div>
+            <div className="flex items-center gap-2 text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm">
+                <span className="material-icons text-amber-500 text-sm">wb_sunny</span>
+                <span className="text-xs font-bold">零碳评估</span>
+            </div>
+        </div>
+    );
+};
+
+const PremiumSlideFooter: React.FC<{ page: React.ReactNode; total: number }> = ({ page, total }) => (
+    <div className="relative z-10 px-8 py-4 flex justify-between items-center text-base text-slate-500 bg-white border-t border-slate-200">
+        <span className="font-semibold">{page}/{total}</span>
+        <span>零碳项目收益评估软件</span>
+    </div>
+);
 
 export default function SolarReport({ onClose, defaultToPresentationMode = true, selfConsumptionRate }: SolarReportProps) {
     const printRef = useRef<HTMLDivElement>(null);
@@ -87,7 +146,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                 slideWrapper.style.height = '100%';
                 slideWrapper.style.position = 'relative';
                 slideWrapper.style.overflow = 'hidden';
-                slideWrapper.style.background = index === 0 ? '#1e293b' : 'white';
+                slideWrapper.style.background = '#f3f6fb';
 
                 const slideContent = document.createElement('div');
                 slideContent.style.width = '100%';
@@ -112,7 +171,7 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                     useCORS: true,
                     logging: false,
                     allowTaint: true,
-                    backgroundColor: index === 0 ? '#1e293b' : '#ffffff',
+                    backgroundColor: '#f3f6fb',
                     width: slideWidth,
                     height: slideHeight
                 });
@@ -301,23 +360,6 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
         };
     };
 
-    const calculateSeasonalGeneration = () => {
-        const seasonMap: Record<string, string> = { spring: '春季', summer: '夏季', autumn: '秋季', winter: '冬季' };
-        const seasonIcons: Record<string, string> = { spring: 'local_florist', summer: 'wb_sunny', autumn: 'park', winter: 'ac_unit' };
-        const seasons = { spring: [2, 3, 4], summer: [5, 6, 7], autumn: [8, 9, 10], winter: [11, 0, 1] };
-        return Object.entries(seasons).map(([season, months]) => ({
-            season: seasonMap[season],
-            icon: seasonIcons[season],
-            value: months.reduce((sum: number, m: number) => sum + (chartData[m]?.retrofit || 0), 0) / 100
-        }));
-    };
-
-    const getIRRRating = (irr: number) => {
-        if (irr >= 15) return { label: '优秀', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' };
-        if (irr >= 10) return { label: '良好', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' };
-        return { label: '一般', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' };
-    };
-
     const getInvestmentModeLabel = (mode: string) => {
         if (mode === 'epc') return { label: 'EPC总承包', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: 'engineering' };
         if (mode === 'emc') return { label: 'EMC合同能源管理', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: 'handshake' };
@@ -426,7 +468,12 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                 name: solution.name,
                 investmentMode,
                 investmentModeLabel: investmentMode === 'emc' ? 'EMC' : 'EPC',
+                emcSubMode: solution.emcSubMode || params.simpleParams.emcSubMode,
                 emcSubModeLabel,
+                emcOwnerShareRate: solution.emcOwnerShareRate ?? params.advParams.emcOwnerShareRate,
+                emcDiscountPrice: solution.emcDiscountPrice ?? params.advParams.emcDiscountPrice,
+                emcFixedPrice: solution.emcFixedPrice ?? params.advParams.emcFixedPrice,
+                emcSouthernAveragePrice: solution.emcSouthernAveragePrice ?? params.advParams.emcSouthernAveragePrice,
                 capacity,
                 connectionType: solution.connectionType === 'high' ? '10kV高压' : '380V低压',
                 cableType: solution.cableType === 'copper' ? '铜芯' : '铝芯',
@@ -437,23 +484,28 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                 paybackPeriod: solMetrics.paybackPeriod,
                 rev25Year: solMetrics.rev25Year || 0,
                 ownerBenefit25: solMetrics.totalOwnerBenefit25 || 0,
+                ownerBenefitYear1: solMetrics.yearlyDetails?.[0]?.ownerBenefit || 0,
+                netIncomeYear1: solMetrics.yearlyDetails?.[0]?.netIncome || 0,
                 genYear1: solMetrics.genYear1
             };
         });
     };
 
     const solutionComparisonData = calculateSolutionMetrics();
-    const bestComparisonIrr = solutionComparisonData.length > 0 ? Math.max(...solutionComparisonData.map(s => s.irr)) : 0;
     const bestComparisonPayback = solutionComparisonData.length > 0 ? Math.min(...solutionComparisonData.map(s => s.paybackPeriod)) : 0;
-    const lowestComparisonInvestment = solutionComparisonData.length > 0 ? Math.min(...solutionComparisonData.map(s => s.investment)) : 0;
-    const bestComparisonRevenue = solutionComparisonData.length > 0 ? Math.max(...solutionComparisonData.map(s => s.rev25Year)) : 0;
     const bestPaybackSolution = solutionComparisonData.find(s => s.paybackPeriod === bestComparisonPayback);
-    const bestIrrSolution = solutionComparisonData.find(s => s.irr === bestComparisonIrr);
 
-    // Get buildings for presentation (need to get from hook or props)
-    const presentationBuildings = params.buildings || [];
-    const hasPresentationLayoutImage = params.solutions?.some(s => s.layoutImage || s.useSameLayout);
-    const presentationTotalSlides = hasPresentationLayoutImage ? 11 : 10;
+    const presentationLayoutEntries = (params.solutions || []).reduce<Array<{ solution: any; image: string }>>((entries, solution) => {
+        const image = solution.useSameLayout
+            ? params.solutions?.[0]?.layoutImage
+            : solution.layoutImage;
+
+        if (!image || entries.some(entry => entry.image === image)) return entries;
+        return [...entries, { solution, image }];
+    }, []);
+    const hasPresentationLayoutImage = presentationLayoutEntries.length > 0;
+    const hasSinglePresentationLayoutImage = presentationLayoutEntries.length === 1;
+    const presentationTotalSlides = 10;
 
     const normalizeConsumptionRates = (rates?: number[]) => {
         const source = rates && rates.length > 0 ? rates : [50, 60, 70, 80, 90, 100];
@@ -480,1119 +532,726 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
     const baseConsumptionScenario = consumptionScenarioData.find(item => item.isBase) || consumptionScenarioData[0];
     const lowConsumptionScenario = consumptionScenarioData[0];
     const highConsumptionScenario = consumptionScenarioData[consumptionScenarioData.length - 1];
-    const isEmcMode = params.simpleParams.investmentMode === 'emc';
     const paybackRangeDiff = lowConsumptionScenario.payback - highConsumptionScenario.payback;
-    const baseToHighPaybackDiff = baseConsumptionScenario.payback - highConsumptionScenario.payback;
 
     // Presentation slides data
     const envImpact = calculateEnvironmentalImpact();
-    const seasonalData = calculateSeasonalGeneration();
-    const irrRating = getIRRRating(longTermMetrics.irr);
     const investMode = getInvestmentModeLabel(params.simpleParams.investmentMode);
+    const recommendedSolutionConfig = params.solutions?.find(solution => solution.id === params.selectedSolutionId) || params.solutions?.[0];
+    const recommendedComparison = solutionComparisonData.find(solution => solution.id === params.selectedSolutionId)
+        || bestPaybackSolution
+        || solutionComparisonData[0];
+    const recommendationModeLabel = recommendedComparison?.investmentModeLabel || investMode.label;
+    const isReportEmcMode = (recommendedComparison?.investmentMode || params.simpleParams.investmentMode) === 'emc';
+    const safeNumber = (value: unknown, fallback = 0) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const formatSafe = (value: unknown, digits = 1, fallback = 0) => safeNumber(value, fallback).toFixed(digits);
+    const effectiveInvestment = safeNumber(solarModule.investment, recommendedComparison?.investment || params.simpleParams.capacity * params.simpleParams.epcPrice / 10);
+    const effectiveYearOneIncome = safeNumber(solarModule.yearlySaving, longTermMetrics.yearlyDetails?.[0]?.netIncome ?? 0);
+    const effectivePaybackPeriod = safeNumber(longTermMetrics.paybackPeriod, 25);
+    const effectiveIrr = safeNumber(longTermMetrics.irr, 0);
+    const effectiveRev25Year = safeNumber(longTermMetrics.rev25Year, 0);
+    const effectiveGenYear1 = safeNumber(longTermMetrics.genYear1, 0);
+    const firstYearOwnerBenefit = safeNumber(longTermMetrics.yearlyDetails?.[0]?.ownerBenefit, 0);
+    const ownerTotalBenefit25 = safeNumber(longTermMetrics.totalOwnerBenefit25, 0);
+    const annualRoofRentValue = (params.simpleParams.area * (params.advParams.roofRent || 0)) / 10000;
+    const inferredLocation = (() => {
+        const name = projectBaseInfo?.name || '';
+        if (name.includes('浦东')) return '上海市 浦东新区';
+        if (name.includes('上海')) return '上海市';
+        if (name.includes('中山')) return '广东省 中山市';
+        if (name.includes('广州')) return '广东省 广州市';
+        if (name.includes('深圳')) return '广东省 深圳市';
+        return '';
+    })();
+    const configuredLocation = [projectBaseInfo?.province, projectBaseInfo?.city].filter(Boolean).join(' ');
+    const projectLocationDisplay = inferredLocation || configuredLocation || '项目地点待确认';
+    const recommendedSolutionName = recommendedComparison?.name || recommendedSolutionConfig?.name || '当前推荐方案';
+    const currentCapacityText = `${formatSafe(params.simpleParams.capacity, 2)} kWp`;
+    const cashFlowChartData = longTermMetrics.yearlyDetails.filter((_: any, index: number) => index % 3 === 0 || index === 24);
+    const getEmcSettlementParts = (solution?: any) => {
+        const subMode = solution?.emcSubModeLabel || (() => {
+            switch (params.simpleParams.emcSubMode) {
+                case 'sharing': return '收益分成';
+                case 'fixed': return '固定电价';
+                case 'southern_average': return '南网参考价';
+                case 'discount':
+                default: return '折扣电价';
+            }
+        })();
+        const rawMode = solution?.emcSubMode || recommendedSolutionConfig?.emcSubMode || params.simpleParams.emcSubMode;
+        if ((solution?.investmentMode || params.simpleParams.investmentMode) !== 'emc') {
+            return { modeText: '-', detailText: '-', savingText: '-', isSharing: false };
+        }
+        if (rawMode === 'sharing') {
+            const ownerShare = solution?.emcOwnerShareRate ?? recommendedSolutionConfig?.emcOwnerShareRate ?? params.advParams.emcOwnerShareRate;
+            return {
+                modeText: '收益分成',
+                detailText: `业主分成 ${formatSafe(ownerShare, 0)}%`,
+                savingText: `业主分成 ${formatSafe(ownerShare, 0)}%`,
+                isSharing: true
+            };
+        }
+
+        const salePrice = rawMode === 'fixed'
+            ? (solution?.emcFixedPrice ?? recommendedSolutionConfig?.emcFixedPrice ?? params.advParams.emcFixedPrice)
+            : (solution?.emcDiscountPrice ?? recommendedSolutionConfig?.emcDiscountPrice ?? params.advParams.emcDiscountPrice);
+        const benchmarkPrice = solution?.emcSouthernAveragePrice ?? recommendedSolutionConfig?.emcSouthernAveragePrice ?? params.advParams.emcSouthernAveragePrice ?? params.advParams.electricityPrice;
+        const perKwhSaving = Math.max(0, benchmarkPrice - salePrice);
+        return {
+            modeText: subMode,
+            detailText: `省 ${formatSafe(perKwhSaving, 3)} 元/度`,
+            savingText: `${formatSafe(perKwhSaving, 3)} 元/度`,
+            isSharing: false
+        };
+    };
+    const assumptions = [
+        { label: '年有效日照', value: `${formatSafe(params.advParams.dailySunHours, 2)} h`, note: '按项目地址或人工确认值' },
+        { label: '系统效率 PR', value: `${formatSafe(params.advParams.prValue, 1)}%`, note: '逆变、线损、温升综合效率' },
+        { label: '综合电价', value: `${formatSafe(params.advParams.electricityPrice, 4)} 元/kWh`, note: '用于自发自用收益测算' },
+        { label: '上网电价', value: `${formatSafe(params.advParams.feedInTariff, 4)} 元/kWh`, note: '余电上网收入口径' },
+        { label: '首年衰减', value: `${formatSafe(params.advParams.degradationFirstYear, 2)}%`, note: '组件首年性能衰减' },
+        { label: '线性衰减', value: `${formatSafe(params.advParams.degradationLinear, 2)}%/年`, note: '第二年起年度衰减' },
+        { label: '运维成本', value: `${formatSafe(params.advParams.omCost, 3)} 元/W/年`, note: '清洗、巡检、监控与维护' },
+        { label: '保险费率', value: `${formatSafe(params.advParams.insuranceRate, 2)}%`, note: '按投资额年度估算' }
+    ];
+
+    const compactComparisonData = solutionComparisonData.slice(0, 6);
+    const hasAnyEmcComparison = compactComparisonData.some(solution => solution.investmentMode === 'emc');
+    const recommendedEmcSettlement = getEmcSettlementParts(recommendedComparison);
+    const isReportSharingEmcMode = isReportEmcMode && recommendedEmcSettlement.isSharing;
+    const ownerBenefitChartData = longTermMetrics.yearlyDetails.reduce((acc: any[], detail: any, index: number) => {
+        const previousTotal = index > 0 ? acc[index - 1]?.cumulativeOwnerBenefit || 0 : 0;
+        const ownerBenefit = safeNumber(detail.ownerBenefit, 0);
+        acc.push({
+            ...detail,
+            ownerBenefit,
+            cumulativeOwnerBenefit: previousTotal + ownerBenefit
+        });
+        return acc;
+    }, []).filter((_: any, index: number) => index % 3 === 0 || index === 24);
+
+    const proposalStatCards = isReportEmcMode
+        ? [
+            { label: '业主投入', value: '¥0', tone: 'text-slate-950' },
+            { label: '首年综合收益', value: `¥${formatSafe(firstYearOwnerBenefit, 1)}万`, tone: 'text-emerald-600' },
+            { label: '25年综合收益', value: `¥${formatSafe(ownerTotalBenefit25, 1)}万`, tone: 'text-emerald-600' },
+            {
+                label: recommendedEmcSettlement.isSharing ? '收益分成' : '每度节省',
+                value: recommendedEmcSettlement.isSharing ? recommendedEmcSettlement.detailText : recommendedEmcSettlement.savingText,
+                tone: 'text-blue-600'
+            }
+        ]
+        : [
+            { label: '总投资', value: `¥${formatSafe(effectiveInvestment, 1)}万`, tone: 'text-slate-950' },
+            { label: '首年净收益', value: `¥${formatSafe(effectiveYearOneIncome, 1)}万`, tone: 'text-emerald-600' },
+            { label: 'IRR', value: `${formatSafe(effectiveIrr, 2)}%`, tone: 'text-blue-600' },
+            { label: '25年净收益', value: `¥${formatSafe(effectiveRev25Year, 1)}万`, tone: 'text-emerald-600' }
+        ];
+
+    const solutionFacts = isReportEmcMode
+        ? [
+            ['方案名称', recommendedSolutionName],
+            ['合作模式', 'EMC合同能源管理'],
+            ['结算方式', recommendedEmcSettlement.modeText],
+            [recommendedEmcSettlement.isSharing ? '分成口径' : '每度节省', recommendedEmcSettlement.isSharing ? recommendedEmcSettlement.detailText : recommendedEmcSettlement.savingText],
+            ['铺设容量', `${formatSafe(recommendedComparison?.capacity ?? params.simpleParams.capacity, 2)} kWp`],
+            ['接入方式', recommendedComparison?.connectionType || (params.simpleParams.connectionType === 'high' ? '10kV高压' : '380V低压')],
+            ['线缆材质', recommendedComparison?.cableType || (recommendedSolutionConfig?.cableType === 'copper' ? '铜芯' : '铝芯')],
+            ['组件品牌', recommendedComparison?.brand || '通用组件']
+        ]
+        : [
+            ['方案名称', recommendedSolutionName],
+            ['合作模式', 'EPC总承包'],
+            ['铺设容量', `${formatSafe(recommendedComparison?.capacity ?? params.simpleParams.capacity, 2)} kWp`],
+            ['建造单价', `¥${formatSafe(recommendedComparison?.epcPrice ?? params.simpleParams.epcPrice, 2)}/Wp`],
+            ['接入方式', recommendedComparison?.connectionType || (params.simpleParams.connectionType === 'high' ? '10kV高压' : '380V低压')],
+            ['线缆材质', recommendedComparison?.cableType || (recommendedSolutionConfig?.cableType === 'copper' ? '铜芯' : '铝芯')],
+            ['组件品牌', recommendedComparison?.brand || '通用组件']
+        ];
+
+    const maxPayback = Math.max(...consumptionScenarioData.map(item => safeNumber(item.payback, 0)), 1);
+    const maxScenarioRevenue = Math.max(...consumptionScenarioData.map(item => safeNumber(item.rev25Year, 0)), 1);
+    const maxOwnerBenefit = Math.max(...consumptionScenarioData.map(item => safeNumber(item.ownerBenefit, 0)), 1);
+    const layoutFootnote = '收益测算以平台当前配置容量为准';
+    const revenueLabel = isReportSharingEmcMode ? '投资方25年收益' : (isReportEmcMode ? '业主25年收益' : '项目25年净收益');
 
     const slides = [
-        // Slide 0: Cover
         {
             title: '封面',
             content: (
-                <div className="h-full flex flex-col justify-center items-center bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 text-white relative overflow-hidden">
-                    {/* Decorative Background Elements */}
-                    <div className="absolute top-0 left-0 w-full h-full overflow-hidden opacity-10">
-                        <div className="absolute top-10 left-10 w-64 h-64 bg-blue-500 rounded-full blur-3xl"></div>
-                        <div className="absolute bottom-10 right-10 w-80 h-80 bg-yellow-500 rounded-full blur-3xl"></div>
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-500 rounded-full blur-3xl"></div>
-                    </div>
-
-                    {/* Logo Badge - Top Right */}
-                    <div className="absolute top-6 right-6 flex items-center gap-3 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
-                        <span className="material-icons text-yellow-400">wb_sunny</span>
-                        <span className="text-sm font-semibold">零碳评估</span>
-                    </div>
-
-                    <div className="text-center relative z-10">
-                        {/* Main Icon */}
-                        <div className="mb-8">
-                            <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full mb-6 shadow-2xl shadow-orange-500/50">
-                                <span className="material-icons text-6xl text-white">solar_power</span>
+                <div className="h-full relative overflow-hidden bg-slate-950 text-white">
+                    <PhotoBackground visual="rooftop" overlay="bg-gradient-to-r from-slate-950/90 via-slate-950/58 to-slate-950/18" />
+                    <div className="relative z-10 h-full px-16 py-12 flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-3 text-white/85">
+                                <span className="material-icons text-amber-300">wb_sunny</span>
+                                <span className="font-bold tracking-[0.18em] uppercase text-sm">Solar Investment Proposal</span>
+                            </div>
+                            <div className="text-right text-white/70 text-sm">
+                                <p>{projectLocationDisplay}</p>
+                                <p>{new Date().toLocaleDateString('zh-CN')}</p>
                             </div>
                         </div>
 
-                        {/* Report Title */}
-                        <div className="inline-block bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-4">
-                            <span className="text-xs font-bold tracking-widest uppercase">Professional Assessment Report</span>
+                        <div className="max-w-4xl">
+                            <p className="text-lg font-bold text-emerald-300 mb-5">光伏收益评估与推荐方案</p>
+                            <h1 className="text-7xl font-black leading-tight tracking-tight">
+                                {projectBaseInfo?.name || '分布式光伏项目'}
+                            </h1>
                         </div>
 
-                        <h1 className="text-5xl font-bold mb-4 tracking-tight">分布式光伏发电项目</h1>
-                        <h2 className="text-4xl font-light text-blue-300 mb-16">收益评估报告</h2>
-
-                        {/* Divider */}
-                        <div className="flex items-center gap-4 mb-10">
-                            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent to-blue-400"></div>
-                            <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                            <div className="w-32 h-0.5 bg-blue-400"></div>
-                            <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                            <div className="w-16 h-0.5 bg-gradient-to-l from-transparent to-blue-400"></div>
+                        <div className="grid grid-cols-[1fr_360px] gap-8 items-end">
+                            <div className="grid grid-cols-3 gap-4">
+                                {[
+                                    ['装机容量', currentCapacityText],
+                                    ['推荐方案', recommendedSolutionName],
+                                    ['合作模式', recommendationModeLabel]
+                                ].map(([label, value]) => (
+                                    <div key={label} className="rounded-3xl bg-white text-slate-950 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
+                                        <p className="text-sm font-bold text-slate-500">{label}</p>
+                                        <p className="text-2xl font-black mt-3 leading-tight">{value}</p>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="rounded-[36px] bg-[#050816] border border-white/12 p-7 shadow-[0_28px_90px_rgba(0,0,0,0.34)]">
+                                <p className="text-sm font-black tracking-[0.28em] text-amber-300 uppercase">{isReportEmcMode ? 'Owner Benefit' : 'Payback'}</p>
+                                {isReportEmcMode ? (
+                                    <>
+                                        <div className="mt-4 flex items-end gap-3">
+                                            <span className="text-[86px] leading-none font-black text-emerald-300">{formatSafe(firstYearOwnerBenefit, 1)}</span>
+                                            <span className="text-3xl font-black pb-3">万/年</span>
+                                        </div>
+                                        <p className="text-2xl font-black mt-2">业主首年综合收益</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="mt-4 flex items-end gap-3">
+                                            <span className="text-[104px] leading-none font-black text-amber-300">{formatSafe(effectivePaybackPeriod, 2)}</span>
+                                            <span className="text-3xl font-black pb-3">年</span>
+                                        </div>
+                                        <p className="text-2xl font-black mt-2">预计回本</p>
+                                    </>
+                                )}
+                            </div>
                         </div>
-
-                        {/* Project Info */}
-                        <div className="space-y-3">
-                            <p className="text-2xl font-medium">{projectBaseInfo?.name || '-'}</p>
-                            <p className="text-lg text-slate-300">
-                                {projectBaseInfo?.province || ''} {projectBaseInfo?.city || ''}
-                            </p>
-                            <p className="text-base text-slate-400">{new Date().toLocaleDateString('zh-CN')}</p>
-                        </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="absolute bottom-8 left-0 right-0 text-center">
-                        <div className="flex items-center justify-center gap-2 mb-2">
-                            <span className="material-icons text-yellow-400 text-sm">wb_sunny</span>
-                            <p className="text-sm font-semibold">零碳项目收益评估软件</p>
-                        </div>
-                        <p className="text-xs text-slate-500">Professional Carbon-Neutral Project Assessment Platform</p>
                     </div>
                 </div>
             )
         },
-        // Slide 1: Project Overview
         {
-            title: '一、项目概况',
+            title: '核心结论',
             content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-yellow-400 text-3xl">assessment</span>
-                            <h2 className="text-3xl font-bold">一、项目概况</h2>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-6 flex flex-col justify-center">
-                        {/* Main Content - Centered Grid */}
-                        <div className="w-full grid grid-cols-2 gap-8">
-                            {/* Left Column - Basic Info */}
-                            <div className="space-y-4">
-                                <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b-2 border-blue-200">
-                                    <span className="material-icons text-blue-500 text-2xl">business</span>
-                                    项目基本信息
-                                </h3>
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between py-3 px-4 bg-gradient-to-r from-slate-50 to-white rounded-xl border-2 border-slate-200 hover:border-blue-300 transition-all">
-                                        <span className="text-sm font-medium text-slate-600">项目名称</span>
-                                        <span className="text-lg font-bold text-slate-800">{projectBaseInfo?.name || '-'}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between py-3 px-4 bg-gradient-to-r from-slate-50 to-white rounded-xl border-2 border-slate-200 hover:border-blue-300 transition-all">
-                                        <span className="text-sm font-medium text-slate-600">所在地区</span>
-                                        <span className="text-lg font-bold text-slate-800">{projectBaseInfo?.province || ''} {projectBaseInfo?.city || ''}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between py-3 px-4 bg-gradient-to-r from-slate-50 to-white rounded-xl border-2 border-slate-200 hover:border-blue-300 transition-all">
-                                        <span className="text-sm font-medium text-slate-600">项目类型</span>
-                                        <span className="text-lg font-bold text-slate-800">{projectBaseInfo?.type || '-'}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between py-3 px-4 bg-gradient-to-r from-blue-50 to-white rounded-xl border-2 border-blue-300">
-                                        <span className="text-sm font-semibold text-blue-700">建筑数量</span>
-                                        <span className="text-3xl font-black text-blue-600">{projectBaseInfo?.buildings?.length || 0} <span className="text-base text-blue-600 ml-1">栋</span></span>
-                                    </div>
+                <CleanSlideBackground>
+                    <PremiumSlideHeader
+                        icon="verified"
+                        title={isReportEmcMode ? `核心结论：业主首年综合收益约 ${formatSafe(firstYearOwnerBenefit, 1)} 万元` : `核心结论：预计 ${formatSafe(effectivePaybackPeriod, 2)} 年回本`}
+                        tone="emerald"
+                    />
+                    <div className="relative z-10 flex-1 px-12 pb-8 grid grid-cols-[0.92fr_1.08fr] gap-8">
+                        <div className="rounded-[38px] bg-[#050816] text-white p-9 shadow-[0_32px_100px_rgba(15,23,42,0.20)] flex flex-col justify-between">
+                            <div>
+                                <p className="text-sm font-black tracking-[0.28em] text-emerald-300 uppercase">Main Takeaway</p>
+                                <div className={`inline-flex items-center gap-2 mt-5 px-4 py-2 rounded-full text-sm font-black ${isReportEmcMode ? 'bg-amber-300 text-slate-950' : 'bg-blue-500 text-white'}`}>
+                                    <span className="material-icons text-base">{isReportEmcMode ? 'handshake' : 'engineering'}</span>
+                                    {isReportEmcMode ? 'EMC合同能源管理' : 'EPC总承包'}
                                 </div>
+                                <h3 className="text-5xl font-black leading-tight mt-6">推荐推进<br />{recommendedSolutionName}</h3>
                             </div>
-
-                            {/* Right Column - Key Metrics */}
-                            <div className="space-y-4">
-                                <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b-2 border-green-200">
-                                    <span className="material-icons text-green-500 text-2xl">solar_power</span>
-                                    系统核心指标
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-white rounded-2xl p-4 text-center shadow-lg hover:shadow-xl transition-all">
-                                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                                            <span className="material-icons text-white text-2xl">bolt</span>
+                            <div className={`rounded-[28px] ${isReportEmcMode ? 'bg-emerald-300' : 'bg-amber-300'} text-slate-950 p-6`}>
+                                <p className="text-base font-black uppercase tracking-[0.22em]">{isReportEmcMode ? 'Owner Benefit' : 'Payback'}</p>
+                                {isReportEmcMode ? (
+                                    <>
+                                        <div className="mt-2 flex items-end gap-3">
+                                            <span className="text-[86px] leading-none font-black">{formatSafe(ownerTotalBenefit25, 1)}</span>
+                                            <span className="text-4xl font-black pb-3">万</span>
                                         </div>
-                                        <p className="text-xs text-blue-600 font-semibold mb-1">装机容量</p>
-                                        <p className="text-3xl font-black text-blue-700">{formatPower(params.simpleParams.capacity).value}</p>
-                                        <p className="text-sm text-blue-600 font-medium">{formatPower(params.simpleParams.capacity).unit}</p>
+                                        <p className="text-2xl font-black mt-2">业主25年综合收益</p>
+                                    </>
+                                ) : (
+                                    <div className="mt-2 flex items-end gap-3">
+                                        <span className="text-[120px] leading-none font-black">{formatSafe(effectivePaybackPeriod, 2)}</span>
+                                        <span className="text-4xl font-black pb-4">年</span>
                                     </div>
-                                    <div className="border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 text-center shadow-lg hover:shadow-xl transition-all">
-                                        <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                                            <span className="material-icons text-white text-2xl">square_foot</span>
-                                        </div>
-                                        <p className="text-xs text-emerald-600 font-semibold mb-1">安装面积</p>
-                                        <p className="text-3xl font-black text-emerald-700">{formatArea(params.simpleParams.area).value}</p>
-                                        <p className="text-sm text-emerald-600 font-medium">{formatArea(params.simpleParams.area).unit}</p>
-                                    </div>
-                                    <div className="border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-white rounded-2xl p-4 text-center shadow-lg hover:shadow-xl transition-all">
-                                        <div className="w-12 h-12 bg-amber-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                                            <span className="material-icons text-white text-2xl">wb_sunny</span>
-                                        </div>
-                                        <p className="text-xs text-amber-600 font-semibold mb-1">首年发电量</p>
-                                        <p className="text-3xl font-black text-amber-700">{formatEnergy(longTermMetrics.genYear1).value}</p>
-                                        <p className="text-sm text-amber-600 font-medium">{formatEnergy(longTermMetrics.genYear1).unit}</p>
-                                    </div>
-                                    <div className={`border-2 bg-gradient-to-br from-white rounded-2xl p-4 text-center shadow-lg hover:shadow-xl transition-all ${investMode.border} ${investMode.bg}`}>
-                                        <div className={`w-12 h-12 ${investMode.bg.replace('/50', '-600')} rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg`}>
-                                            <span className="material-icons text-white text-2xl">{investMode.icon}</span>
-                                        </div>
-                                        <p className="text-xs text-slate-600 font-semibold mb-1">投资模式</p>
-                                        <p className="text-xl font-black text-slate-800">{investMode.label}</p>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </div>
+                        <div className="grid grid-cols-2 gap-5 content-center">
+                            {proposalStatCards.map(card => (
+                                <div key={card.label} className="rounded-[30px] bg-white border border-slate-200 p-7 shadow-[0_20px_70px_rgba(15,23,42,0.07)] min-h-[168px]">
+                                    <p className="text-base font-bold text-slate-500">{card.label}</p>
+                                    <p className={`${card.label === '每度节省' ? 'text-4xl' : 'text-5xl'} font-black mt-5 tracking-tight leading-tight ${card.tone}`}>{card.value}</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">1/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
-                </div>
+                    <PremiumSlideFooter page={2} total={presentationTotalSlides} />
+                </CleanSlideBackground>
             )
         },
-        // Slide 2: Technical Solution
         {
-            title: '二、技术方案',
+            title: '光伏铺设图',
             content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
+                <div className="h-full flex flex-col bg-[#f4f6f8] relative overflow-hidden">
+                    <div className="relative z-10 px-9 py-4 bg-white border-b border-slate-200 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <span className="material-icons text-blue-400 text-3xl">settings</span>
-                            <h2 className="text-3xl font-bold">二、技术方案</h2>
+                            <span className="material-icons text-emerald-500 text-3xl">map</span>
+                            <div>
+                                <h2 className="text-3xl font-black text-slate-950">三、光伏铺设图</h2>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
+                        <div className="rounded-full bg-slate-950 text-white px-4 py-2 text-xs font-bold">{layoutFootnote}</div>
                     </div>
-
-                    <div className="flex-1 p-6 flex flex-col">
-                        {/* Technical Parameters Grid */}
-                        <div className="grid grid-cols-3 gap-4 mb-5">
-                            {/* Connection Scheme Card */}
-                            <div className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white rounded-2xl p-4 hover:shadow-xl transition-all">
-                                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-blue-200">
-                                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                                        <span className="material-icons text-white text-xl">electrical_services</span>
-                                    </div>
-                                    <h3 className="text-lg font-bold text-slate-800">接入方案</h3>
+                    <div className="flex-1 min-h-0 p-5">
+                        {hasPresentationLayoutImage ? (
+                            hasSinglePresentationLayoutImage ? (
+                                <div className="w-full h-full bg-white border border-slate-200 rounded-[26px] shadow-[0_22px_80px_rgba(15,23,42,0.10)] flex items-center justify-center p-4 overflow-hidden">
+                                    <img
+                                        src={presentationLayoutEntries[0].image}
+                                        alt="光伏铺设图"
+                                        className="block max-w-full max-h-full w-auto h-auto object-contain"
+                                    />
                                 </div>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center py-2 px-3 bg-white rounded-xl border-2 border-slate-200">
-                                        <span className="text-sm font-medium text-slate-600">接入方式</span>
-                                        <span className="text-base font-bold text-blue-700">{currentSolution?.connectionType === 'high' ? '10kV 高压' : '380V 低压'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 px-3 bg-white rounded-xl border-2 border-slate-200">
-                                        <span className="text-sm font-medium text-slate-600">线缆类型</span>
-                                        <span className="text-base font-bold text-orange-700">{currentSolution?.cableType === 'copper' ? '铜缆' : '铝缆'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 px-3 bg-white rounded-xl border-2 border-slate-200">
-                                        <span className="text-sm font-medium text-slate-600">组件品牌</span>
-                                        <span className="text-base font-bold text-purple-700">{currentSolution?.brand === 'longi' ? '隆基' : currentSolution?.brand === 'tongwei' ? '通威' : '通用'}</span>
-                                    </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-5 h-full">
+                                    {presentationLayoutEntries.slice(0, 4).map(({ solution, image }) => (
+                                        <div key={solution.id} className="bg-white border border-slate-200 rounded-[24px] p-4 flex flex-col min-h-0 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <p className="text-lg font-black text-slate-900">{solution.name}</p>
+                                                <span className="text-xs font-bold text-slate-500">{solution.connectionType === 'high' ? '10kV高压' : '380V低压'}</span>
+                                            </div>
+                                            <div className="flex-1 min-h-0 flex items-center justify-center">
+                                                <img src={image} alt={`${solution.name}铺设图`} className="block max-w-full max-h-full w-auto h-auto object-contain" />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            </div>
-
-                            {/* Degradation Card */}
-                            <div className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 hover:shadow-xl transition-all">
-                                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-emerald-200">
-                                    <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
-                                        <span className="material-icons text-white text-xl">trending_down</span>
-                                    </div>
-                                    <h3 className="text-lg font-bold text-slate-800">组件衰减</h3>
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center py-2 px-3 bg-white rounded-xl border-2 border-slate-200">
-                                        <span className="text-sm font-medium text-slate-600">首年衰减率</span>
-                                        <span className="text-base font-bold text-emerald-700">{params.advParams.degradationFirstYear}%</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 px-3 bg-white rounded-xl border-2 border-slate-200">
-                                        <span className="text-sm font-medium text-slate-600">次年开始衰减</span>
-                                        <span className="text-base font-bold text-emerald-700">{params.advParams.degradationLinear}%/年</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* System Parameters Card */}
-                            <div className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white rounded-2xl p-4 hover:shadow-xl transition-all">
-                                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-purple-200">
-                                    <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                                        <span className="material-icons text-white text-xl">tune</span>
-                                    </div>
-                                    <h3 className="text-lg font-bold text-slate-800">系统参数</h3>
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center py-2 px-3 bg-white rounded-xl border-2 border-slate-200">
-                                        <span className="text-sm font-medium text-slate-600">系统效率(PR)</span>
-                                        <span className="text-base font-bold text-purple-700">{params.advParams.prValue}%</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 px-3 bg-white rounded-xl border-2 border-slate-200">
-                                        <span className="text-sm font-medium text-slate-600">方位角效率</span>
-                                        <span className="text-base font-bold text-purple-700">{params.advParams.azimuthEfficiency}%</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 px-3 bg-white rounded-xl border-2 border-slate-200">
-                                        <span className="text-sm font-medium text-slate-600">年发电天数</span>
-                                        <span className="text-base font-bold text-purple-700">{params.advParams.generationDays}天</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Economic Parameters with Visual Display */}
-                        <div className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white rounded-2xl p-5">
-                            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-amber-200">
-                                <div className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center shadow-lg">
-                                    <span className="material-icons text-white text-xl">payments</span>
-                                </div>
-                                <h3 className="text-lg font-bold text-slate-800">经济参数</h3>
-                            </div>
-                            <div className="grid grid-cols-4 gap-4">
-                                <div className="text-center p-4 bg-gradient-to-br from-blue-100 to-blue-50 rounded-2xl border-2 border-blue-300 shadow-lg">
-                                    <p className="text-xs text-blue-700 font-semibold mb-1">上网电价</p>
-                                    <p className="text-2xl font-black text-blue-800">¥{params.advParams.feedInTariff}</p>
-                                    <p className="text-xs text-blue-600 mt-1">/度</p>
-                                </div>
-                                <div className="text-center p-4 bg-gradient-to-br from-emerald-100 to-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-lg">
-                                    <p className="text-xs text-emerald-700 font-semibold mb-1">用电电价</p>
-                                    <p className="text-2xl font-black text-emerald-800">¥{params.advParams.electricityPrice}</p>
-                                    <p className="text-xs text-emerald-600 mt-1">/度</p>
-                                </div>
-                                <div className="text-center p-4 bg-gradient-to-br from-orange-100 to-orange-50 rounded-2xl border-2 border-orange-300 shadow-lg">
-                                    <p className="text-xs text-orange-700 font-semibold mb-1">运维成本</p>
-                                    <p className="text-2xl font-black text-orange-800">{params.advParams.omCost}</p>
-                                    <p className="text-xs text-orange-600 mt-1">分/W/年</p>
-                                </div>
-                                <div className="text-center p-4 bg-gradient-to-br from-pink-100 to-pink-50 rounded-2xl border-2 border-pink-300 shadow-lg">
-                                    <p className="text-xs text-pink-700 font-semibold mb-1">保险费率</p>
-                                    <p className="text-2xl font-black text-pink-800">{params.advParams.insuranceRate}%</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">2/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
-                </div>
-            )
-        },
-        // Slide 3: Building Details
-        {
-            title: '三、建筑明细',
-            content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-emerald-400 text-3xl">apartment</span>
-                            <h2 className="text-3xl font-bold">三、建筑明细</h2>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-10 flex flex-col">
-                        {presentationBuildings.length > 0 ? (
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b-4 border-slate-300">
-                                        <th className="px-6 py-4 text-left text-lg font-bold text-slate-700">建筑名称</th>
-                                        <th className="px-6 py-4 text-right text-lg font-bold text-slate-700">屋顶面积 (㎡)</th>
-                                        <th className="px-6 py-4 text-right text-lg font-bold text-slate-700">装机容量 (kWp)</th>
-                                        <th className="px-6 py-4 text-right text-lg font-bold text-slate-700">容量占比</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {presentationBuildings.map((building: any, index: number) => {
-                                        const totalCapacity = presentationBuildings.reduce((sum: number, b: any) => sum + (b.manualCapacity || 0), 0);
-                                        const percentage = totalCapacity > 0 ? ((building.manualCapacity || 0) / totalCapacity * 100).toFixed(1) : 0;
-                                        return (
-                                            <tr key={index} className="border-b-2 border-slate-200 hover:bg-blue-50 transition-colors">
-                                                <td className="px-6 py-4 text-lg font-medium text-slate-800">{building.name}</td>
-                                                <td className="px-6 py-4 text-right text-lg text-slate-700">{building.area?.toLocaleString()}</td>
-                                                <td className="px-6 py-4 text-right text-xl font-bold text-blue-700">{building.manualCapacity}</td>
-                                                <td className="px-6 py-4 text-right text-lg text-slate-600">{percentage}%</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                            )
                         ) : (
-                            <div className="text-center py-24 text-slate-500">
-                                <span className="material-icons text-7xl text-slate-300 mb-4">domain</span>
-                                <p className="text-xl">暂无建筑明细数据</p>
+                            <div className="w-full h-full bg-white border border-dashed border-slate-300 rounded-[26px] flex flex-col items-center justify-center text-slate-400">
+                                <span className="material-icons text-6xl mb-4">image_search</span>
+                                <p className="text-2xl font-black">暂未上传铺设图</p>
                             </div>
                         )}
                     </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">3/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
+                    <PremiumSlideFooter page={3} total={presentationTotalSlides} />
                 </div>
             )
         },
-        // Slide 4: Generation & Environmental Analysis (Merged)
         {
-            title: '四、发电量与环境效益',
+            title: '推荐方案',
             content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-green-400 text-3xl">eco</span>
-                            <h2 className="text-3xl font-bold">四、发电量与环境效益</h2>
+                <CleanSlideBackground className="bg-white">
+                    <PremiumSlideHeader icon="recommend" title="推荐方案：把投资、容量和接入条件一次讲清" tone="sky" />
+                    <div className="relative z-10 flex-1 px-12 pb-8 grid grid-cols-[0.95fr_1.05fr] gap-8">
+                        <div className="rounded-[38px] overflow-hidden bg-slate-950 text-white shadow-[0_30px_100px_rgba(15,23,42,0.18)] relative">
+                            <PhotoBackground visual="panelWarm" overlay="bg-gradient-to-t from-slate-950 via-slate-950/72 to-slate-950/10" />
+                            <div className="relative z-10 h-full p-9 flex flex-col justify-end">
+                                <p className="text-sm font-black tracking-[0.28em] text-emerald-300 uppercase">Recommended</p>
+                                <div className={`inline-flex items-center gap-2 mt-5 px-4 py-2 rounded-full text-sm font-black w-fit ${isReportEmcMode ? 'bg-amber-300 text-slate-950' : 'bg-blue-500 text-white'}`}>
+                                    <span className="material-icons text-base">{isReportEmcMode ? 'handshake' : 'engineering'}</span>
+                                    {isReportEmcMode ? 'EMC合同能源管理' : 'EPC总承包'}
+                                </div>
+                                <h3 className="text-6xl font-black leading-tight mt-5">{recommendedSolutionName}</h3>
+                                <div className="mt-8 grid grid-cols-2 gap-4">
+                                    <div className="rounded-2xl bg-white p-5 text-slate-950">
+                                        <p className="text-sm font-bold text-slate-500">{isReportEmcMode ? '业主投入' : '回本周期'}</p>
+                                        <p className={`text-4xl font-black mt-2 ${isReportEmcMode ? 'text-slate-950' : 'text-orange-600'}`}>
+                                            {isReportEmcMode ? '¥0' : `${formatSafe(recommendedComparison?.paybackPeriod ?? effectivePaybackPeriod, 2)}年`}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-2xl bg-white p-5 text-slate-950">
+                                        <p className="text-sm font-bold text-slate-500">{isReportEmcMode ? '首年综合收益' : '25年净收益'}</p>
+                                        <p className="text-4xl font-black text-emerald-600 mt-2">
+                                            ¥{isReportEmcMode ? formatSafe(firstYearOwnerBenefit, 1) : formatSafe(recommendedComparison?.rev25Year ?? effectiveRev25Year, 1)}万
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
+                        <div className="grid grid-cols-2 gap-5 content-center">
+                            {solutionFacts.map(([label, value]) => (
+                                <div key={label} className="rounded-[28px] bg-white border border-slate-200 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.07)] min-h-[126px]">
+                                    <p className="text-base font-bold text-slate-500">{label}</p>
+                                    <p className="text-3xl font-black text-slate-950 mt-4 leading-tight">{value}</p>
+                                </div>
+                            ))}
                         </div>
                     </div>
-
-                    <div className="flex-1 p-5 flex flex-col">
-                        {/* Top Section - Generation Analysis */}
-                        <div className="mb-4">
-                            <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2 pb-2 border-b-2 border-amber-200">
-                                <span className="material-icons text-amber-500 text-xl">bolt</span>
-                                发电量分析
-                            </h3>
-                            {/* Generation Summary Cards */}
-                            <div className="grid grid-cols-2 gap-3 mb-3">
-                                <div className="border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-white rounded-2xl p-3 shadow-lg">
-                                    <p className="text-xs text-blue-700 font-semibold mb-1">首年总发电量</p>
-                                    <p className="text-2xl font-black text-blue-800">{formatEnergy(longTermMetrics.genYear1).value} <span className="text-sm text-blue-600">{formatEnergy(longTermMetrics.genYear1).unit}</span></p>
+                    <PremiumSlideFooter page={4} total={presentationTotalSlides} />
+                </CleanSlideBackground>
+            )
+        },
+        {
+            title: '方案对比',
+            content: (
+                <CleanSlideBackground>
+                    <PremiumSlideHeader icon="compare_arrows" title="方案对比：合作模式也是方案差异的一部分" tone="slate" />
+                    <div className="relative z-10 flex-1 px-10 pb-8">
+                        {compactComparisonData.length > 0 ? (
+                            <div className="h-full rounded-[32px] bg-white border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.08)] overflow-hidden flex flex-col">
+                                <div className="grid grid-cols-[1.28fr_0.78fr_0.72fr_0.82fr_0.9fr_0.92fr_0.98fr_0.82fr_0.62fr] bg-slate-950 text-white text-[13px] font-black">
+                                    {['方案', '合作模式', '容量', '业主投入', '业主首年收益', '业主25年收益', '收益方式', 'EPC回本/IRR', '推荐'].map(header => (
+                                        <div key={header} className="px-3 py-4">{header}</div>
+                                    ))}
                                 </div>
-                                <div className="border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-3 shadow-lg">
-                                    <p className="text-xs text-emerald-700 font-semibold mb-1">25年累计发电</p>
-                                    <p className="text-2xl font-black text-emerald-800">{formatEnergy(parseFloat(envImpact.totalGeneration)).value} <span className="text-sm text-emerald-600">{formatEnergy(parseFloat(envImpact.totalGeneration)).unit}</span></p>
+                                <div className="flex-1 divide-y divide-slate-100">
+                                    {compactComparisonData.map(solution => {
+                                        const rowIsEmc = solution.investmentMode === 'emc';
+                                        const isRecommended = solution.id === recommendedComparison?.id;
+                                        const ownerInvestment = rowIsEmc ? 0 : solution.investment;
+                                        const ownerYearOne = rowIsEmc ? solution.ownerBenefitYear1 : solution.netIncomeYear1;
+                                        const ownerYear25 = rowIsEmc ? solution.ownerBenefit25 : solution.rev25Year;
+                                        const settlement = rowIsEmc ? getEmcSettlementParts(solution) : null;
+                                        return (
+                                            <div
+                                                key={solution.id}
+                                                className={`grid grid-cols-[1.28fr_0.78fr_0.72fr_0.82fr_0.9fr_0.92fr_0.98fr_0.82fr_0.62fr] items-center text-[13px] ${isRecommended ? 'bg-emerald-50/75' : 'bg-white'}`}
+                                            >
+                                                <div className="px-3 py-3">
+                                                    <p className="font-black text-slate-950 text-sm leading-tight">{solution.name}</p>
+                                                    <p className="text-[11px] text-slate-500 mt-1">{`${solution.connectionType} / ${solution.cableType}`}</p>
+                                                </div>
+                                                <div className="px-3 py-3">
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black ${rowIsEmc ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                        {rowIsEmc ? 'EMC' : 'EPC'}
+                                                    </span>
+                                                </div>
+                                                <div className="px-3 py-3 font-black text-slate-800">{formatSafe(solution.capacity, 0)}kWp</div>
+                                                <div className="px-3 py-3 font-black text-slate-900">{ownerInvestment === 0 ? '¥0' : `¥${formatSafe(ownerInvestment, 1)}万`}</div>
+                                                <div className="px-3 py-3 font-black text-emerald-700">¥{formatSafe(ownerYearOne, 1)}万</div>
+                                                <div className="px-3 py-3 font-black text-emerald-700">¥{formatSafe(ownerYear25, 1)}万</div>
+                                                <div className="px-3 py-3">
+                                                    <p className="font-black text-slate-800 leading-tight">{rowIsEmc ? settlement?.modeText : '项目自投收益'}</p>
+                                                    <p className="text-[11px] font-bold text-slate-500 mt-1">{rowIsEmc ? settlement?.detailText : '按项目净收益测算'}</p>
+                                                </div>
+                                                <div className="px-3 py-3">
+                                                    {rowIsEmc ? (
+                                                        <p className="font-black text-slate-400">不适用</p>
+                                                    ) : (
+                                                        <>
+                                                            <p className="font-black text-orange-600">{formatSafe(solution.paybackPeriod, 2)}年</p>
+                                                            <p className="text-[11px] font-bold text-blue-600 mt-1">IRR {formatSafe(solution.irr, 2)}%</p>
+                                                        </>
+                                                    )}
+                                                </div>
+                                                <div className="px-3 py-3">
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-black ${isRecommended ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                                        {isRecommended ? '推荐' : '备选'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs font-semibold text-slate-500">
+                                    {hasAnyEmcComparison
+                                        ? 'EMC 方案仅展示业主投入与业主收益；EPC 方案按项目投资口径展示回本与 IRR。'
+                                        : 'EPC 方案按项目投资口径展示，收益为项目净收益。'}
                                 </div>
                             </div>
-                            {/* Monthly Chart */}
-                            <div className="border-2 border-slate-200 rounded-2xl p-2 bg-slate-50">
-                                <div className="h-28">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={chartData} barSize={28} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                            <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} height={30} />
-                                            <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={(value) => formatEnergy(value / 100).value} />
-                                            <Bar dataKey="retrofit" fill="#3b82f6" radius={[2, 2, 0, 0]}>
-                                                <LabelList dataKey="retrofit" position="top" formatter={(value: number) => formatEnergy(value / 100).value} fontSize={8} fill="#1e3a5f" />
-                                            </Bar>
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
+                        ) : (
+                            <div className="h-full rounded-[32px] bg-white border border-dashed border-slate-300 flex items-center justify-center text-slate-400">
+                                <p className="text-2xl font-black">暂无可对比方案</p>
                             </div>
-                        </div>
-
-                        {/* Bottom Section - Environmental Impact */}
-                        <div className="flex-1">
-                            <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2 pb-2 border-b-2 border-green-200">
-                                <span className="material-icons text-green-500 text-xl">nature</span>
-                                环境效益
-                            </h3>
+                        )}
+                    </div>
+                    <PremiumSlideFooter page={5} total={presentationTotalSlides} />
+                </CleanSlideBackground>
+            )
+        },
+        {
+            title: '投资回报',
+            content: (
+                <CleanSlideBackground>
+                    <PremiumSlideHeader
+                        icon="timer"
+                        title={isReportEmcMode ? '业主收益趋势：重点看每年能获得多少收益' : '投资回报：回本周期是核心决策指标'}
+                        tone="amber"
+                    />
+                    <div className="relative z-10 flex-1 px-12 pb-8 grid grid-cols-[0.78fr_1.22fr] gap-8">
+                        <div className="rounded-[38px] bg-[#050816] text-white p-8 shadow-[0_32px_100px_rgba(15,23,42,0.20)] flex flex-col justify-between">
+                            <div>
+                                <p className="text-sm font-black tracking-[0.26em] text-amber-300 uppercase">{isReportEmcMode ? 'Owner Benefit' : 'Payback'}</p>
+                                {isReportEmcMode ? (
+                                    <>
+                                        <div className="mt-8 flex items-end gap-3">
+                                            <span className="text-[118px] leading-none font-black text-emerald-300">{formatSafe(firstYearOwnerBenefit, 1)}</span>
+                                            <span className="text-4xl font-black pb-5">万/年</span>
+                                        </div>
+                                        <p className="text-2xl font-black text-white mt-4">业主首年综合收益</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="mt-8 flex items-end gap-3">
+                                            <span className="text-[132px] leading-none font-black text-amber-300">{formatSafe(effectivePaybackPeriod, 2)}</span>
+                                            <span className="text-4xl font-black pb-5">年</span>
+                                        </div>
+                                        <p className="text-2xl font-black text-white mt-4">预计回本周期</p>
+                                    </>
+                                )}
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 text-center shadow-xl">
-                                    <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-xl">
-                                        <span className="material-icons text-white text-2xl">cloud</span>
-                                    </div>
-                                    <p className="text-xs text-emerald-700 font-semibold mb-1">CO2减排量</p>
-                                    <p className="text-3xl font-black text-emerald-800">{envImpact.co2Reduction}</p>
-                                    <p className="text-sm text-emerald-600 font-bold mt-1">吨</p>
+                                <div className="rounded-2xl bg-white p-5 text-slate-950">
+                                    <p className="text-sm font-bold text-slate-500">{isReportEmcMode ? '25年综合收益' : 'IRR'}</p>
+                                    <p className="text-3xl font-black text-blue-600 mt-2">{isReportEmcMode ? `¥${formatSafe(ownerTotalBenefit25, 1)}万` : `${formatSafe(effectiveIrr, 2)}%`}</p>
                                 </div>
-                                <div className="border-2 border-green-300 bg-gradient-to-br from-green-50 to-white rounded-2xl p-4 text-center shadow-xl">
-                                    <div className="w-12 h-12 bg-green-600 rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-xl">
-                                        <span className="material-icons text-white text-2xl">park</span>
-                                    </div>
-                                    <p className="text-xs text-green-700 font-semibold mb-1">等效植树</p>
-                                    <p className="text-3xl font-black text-green-800">{envImpact.treesEquivalent}</p>
-                                    <p className="text-sm text-green-600 font-bold mt-1">棵</p>
+                                <div className="rounded-2xl bg-white p-5 text-slate-950">
+                                    <p className="text-sm font-bold text-slate-500">{isReportEmcMode ? '收益方式' : '首年净收益'}</p>
+                                    <p className="text-3xl font-black text-emerald-600 mt-2 leading-tight">{isReportEmcMode ? recommendedEmcSettlement.modeText : `¥${formatSafe(effectiveYearOneIncome, 1)}万`}</p>
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">4/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
-                </div>
-            )
-        },
-        // Slide 5: Investment Analysis
-        {
-            title: '五、投资收益分析',
-            content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-purple-400 text-3xl">trending_up</span>
-                            <h2 className="text-3xl font-bold">五、投资收益分析</h2>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-10 flex flex-col justify-center">
-                        {/* Key Metrics with Visual Enhancement */}
-                        <div className="grid grid-cols-2 gap-10 mb-10">
-                            <div className="border-2 border-slate-300 bg-gradient-to-br from-slate-50 to-white rounded-2xl p-8 hover:shadow-2xl transition-all">
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className="w-20 h-20 bg-slate-700 rounded-2xl flex items-center justify-center shadow-xl">
-                                        <span className="material-icons text-white text-4xl">account_balance_wallet</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-lg text-slate-600 font-bold">初始总投资</p>
-                                        <p className="text-sm text-slate-400">Initial Investment</p>
-                                    </div>
+                        <div className="rounded-[34px] bg-white border border-slate-200 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+                            <div className="flex items-start justify-between mb-5">
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-900">{isReportEmcMode ? '业主年度收益与累计收益' : '年度收益与累计现金流'}</h3>
+                                    <p className="text-sm font-semibold text-slate-500 mt-1">{isReportEmcMode ? '柱形为业主年度收益，折线为业主累计收益' : '柱形为年度净收益，折线为累计现金流'}</p>
                                 </div>
-                                <p className="text-6xl font-black text-slate-800">¥{solarModule.investment?.toFixed(2)}</p>
-                                <p className="text-xl text-slate-600 font-bold mt-3">万元</p>
+                                <span className={`rounded-full px-4 py-2 text-sm font-black ${isReportEmcMode ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                    {isReportEmcMode ? `25年约 ${formatSafe(ownerTotalBenefit25, 1)} 万元` : `第 ${formatSafe(effectivePaybackPeriod, 2)} 年附近回本`}
+                                </span>
                             </div>
-                            <div className="border-2 border-emerald-400 bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-8 hover:shadow-2xl transition-all">
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className="w-20 h-20 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-xl">
-                                        <span className="material-icons text-white text-4xl">payments</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-lg text-emerald-700 font-bold">首年税后收益</p>
-                                        <p className="text-sm text-slate-500">Year 1 Net Income</p>
-                                    </div>
-                                </div>
-                                <p className="text-6xl font-black text-emerald-700">¥{solarModule.yearlySaving?.toFixed(2)}</p>
-                                <p className="text-xl text-emerald-600 font-bold mt-3">万元</p>
-                            </div>
-                        </div>
-
-                        {/* IRR and Payback with Enhanced Styling */}
-                        <div className="grid grid-cols-2 gap-10">
-                            <div className={`border-2 ${irrRating.border} ${irrRating.bg} rounded-2xl p-8 hover:shadow-2xl transition-all`}>
-                                <div className="flex items-center justify-between mb-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-16 h-16 ${irrRating.bg.replace('/50', '-600')} rounded-2xl flex items-center justify-center shadow-lg`}>
-                                            <span className="material-icons text-white text-3xl">show_chart</span>
-                                        </div>
-                                        <div>
-                                            <p className="text-lg text-slate-700 font-bold">内部收益率 IRR</p>
-                                            <p className="text-sm text-slate-500">Internal Rate of Return</p>
-                                        </div>
-                                    </div>
-                                    <span className={`px-5 py-3 rounded-full text-lg font-bold ${irrRating.bg} ${irrRating.text} border-2 ${irrRating.border}`}>{irrRating.label}</span>
-                                </div>
-                                <div className="flex items-baseline gap-3">
-                                    <p className="text-6xl font-black text-slate-800">{longTermMetrics.irr.toFixed(2)}</p>
-                                    <p className="text-3xl text-slate-600 font-bold">%</p>
-                                </div>
-                            </div>
-                            <div className="border-2 border-purple-400 bg-gradient-to-br from-purple-50 to-white rounded-2xl p-8 hover:shadow-2xl transition-all">
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                                        <span className="material-icons text-white text-3xl">schedule</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-lg text-purple-700 font-bold">投资回本周期</p>
-                                        <p className="text-sm text-slate-500">Payback Period</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-baseline gap-3">
-                                    <p className="text-6xl font-black text-purple-800">{longTermMetrics.paybackPeriod.toFixed(2)}</p>
-                                    <p className="text-3xl text-purple-600 font-bold">年</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">5/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
-                </div>
-            )
-        },
-        // Slide 6: Consumption Rate Payback Analysis
-        {
-            title: '六、多消纳率回本周期分析',
-            content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-blue-400 text-3xl">timeline</span>
-                            <h2 className="text-3xl font-bold">六、多消纳率回本周期分析</h2>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-8 flex flex-col">
-                        <div className="grid grid-cols-4 gap-4 mb-6">
-                            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 text-center">
-                                <p className="text-xs text-blue-600 font-semibold mb-1">当前消纳率</p>
-                                <p className="text-4xl font-black text-blue-700">{Math.round(calculatedSelfConsumption)}%</p>
-                            </div>
-                            <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 text-center">
-                                <p className="text-xs text-slate-600 font-semibold mb-1">当前回本周期</p>
-                                <p className="text-4xl font-black text-slate-800">{baseConsumptionScenario.payback.toFixed(2)}<span className="text-lg ml-1">年</span></p>
-                            </div>
-                            <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-4 text-center">
-                                <p className="text-xs text-emerald-600 font-semibold mb-1">高消纳回本</p>
-                                <p className="text-4xl font-black text-emerald-700">{highConsumptionScenario.payback.toFixed(2)}<span className="text-lg ml-1">年</span></p>
-                            </div>
-                            <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 text-center">
-                                <p className="text-xs text-amber-600 font-semibold mb-1">高低档回本差</p>
-                                <p className="text-4xl font-black text-amber-700">{paybackRangeDiff.toFixed(2)}<span className="text-lg ml-1">年</span></p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-6 flex-1">
-                            <div className="border-2 border-slate-200 rounded-2xl p-5">
-                                <h3 className="text-lg font-bold text-slate-800 mb-4">回本周期与 IRR 曲线</h3>
-                                <ResponsiveContainer width="100%" height="85%">
-                                    <ComposedChart data={consumptionScenarioData}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                        <XAxis dataKey="rate" tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                        <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#2563eb' }} />
-                                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#64748b' }} />
-                                        <Tooltip formatter={(value: number, name: string) => [
-                                            name === 'payback' ? `${value.toFixed(2)} 年` : `${value.toFixed(2)}%`,
-                                            name === 'payback' ? '回本周期' : 'IRR'
-                                        ]} />
-                                        <Line yAxisId="left" type="monotone" dataKey="payback" name="回本周期" stroke="#2563eb" strokeWidth={4} dot={{ r: 4 }} />
-                                        <Line yAxisId="right" type="monotone" dataKey="irr" name="IRR" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} />
-                                    </ComposedChart>
-                                </ResponsiveContainer>
-                            </div>
-
-                            <div className="border-2 border-slate-200 rounded-2xl p-5">
-                                <h3 className="text-lg font-bold text-slate-800 mb-4">不同消纳率测算表</h3>
-                                <div className="overflow-hidden rounded-xl border border-slate-200">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-slate-100">
-                                            <tr>
-                                                <th className="px-3 py-2 text-left text-slate-700">消纳率</th>
-                                                <th className="px-3 py-2 text-right text-slate-700">回本周期</th>
-                                                <th className="px-3 py-2 text-right text-slate-700">IRR</th>
-                                                <th className="px-3 py-2 text-right text-slate-700">25年净收益</th>
-                                                {isEmcMode && <th className="px-3 py-2 text-right text-slate-700">业主收益</th>}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {consumptionScenarioData.map((item) => (
-                                                <tr key={item.rate} className={`border-t border-slate-100 ${item.isBase ? 'bg-blue-50' : 'bg-white'}`}>
-                                                    <td className="px-3 py-2 font-bold text-slate-800">{item.rate}%</td>
-                                                    <td className="px-3 py-2 text-right font-bold text-blue-700">{item.payback.toFixed(2)}年</td>
-                                                    <td className="px-3 py-2 text-right text-slate-700">{item.irr.toFixed(2)}%</td>
-                                                    <td className="px-3 py-2 text-right text-emerald-700">{item.rev25Year.toFixed(1)}万</td>
-                                                    {isEmcMode && <td className="px-3 py-2 text-right text-blue-700">{item.ownerBenefit.toFixed(1)}万</td>}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div className="mt-4 p-4 bg-slate-800 text-white rounded-xl text-sm">
-                                    在 {lowConsumptionScenario.rate}% 至 {highConsumptionScenario.rate}% 消纳率区间内，回本周期由 {lowConsumptionScenario.payback.toFixed(2)} 年优化至 {highConsumptionScenario.payback.toFixed(2)} 年；相对当前基准{baseToHighPaybackDiff > 0 ? `可少 ${baseToHighPaybackDiff.toFixed(2)} 年` : '暂无缩短'}。
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">6/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
-                </div>
-            )
-        },
-        // Slide 7: 25-Year Cash Flow & Lifecycle (Merged)
-        {
-            title: '七、25年现金流与生命周期',
-            content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-cyan-400 text-3xl">show_chart</span>
-                            <h2 className="text-3xl font-bold">七、25年现金流与生命周期</h2>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-10 flex flex-col">
-                        {/* Cash Flow Chart - 55% */}
-                        <div className="mb-6" style={{height: '52%'}}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <ComposedChart data={longTermMetrics.yearlyDetails}>
+                            <ResponsiveContainer width="100%" height={390}>
+                                <ComposedChart data={isReportEmcMode ? ownerBenefitChartData : cashFlowChartData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                    <XAxis dataKey="year" tickFormatter={(value) => `${value}年`} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                    <YAxis tickFormatter={(value) => `¥${value}`} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                    <Bar dataKey="netIncome" fill="#3b82f6" name="净收益" radius={[3, 3, 0, 0]}>
-                                        <LabelList dataKey="netIncome" position="top" formatter={(value: number) => value >= 0 ? `¥${value.toFixed(0)}` : ''} fontSize={10} fill="#1e3a5f" />
+                                    <XAxis dataKey="year" tick={{fontSize: 13}} />
+                                    <YAxis yAxisId="left" tick={{fontSize: 13}} />
+                                    <YAxis yAxisId="right" orientation="right" tick={{fontSize: 13}} />
+                                    {!isReportEmcMode && <ReferenceLine yAxisId="right" y={0} stroke="#f97316" strokeDasharray="5 5" />}
+                                    <Bar yAxisId="left" dataKey={isReportEmcMode ? 'ownerBenefit' : 'netIncome'} fill="#10b981" radius={[8, 8, 0, 0]} name={isReportEmcMode ? '业主年度收益' : '年度净收益'}>
+                                        <LabelList
+                                            dataKey={isReportEmcMode ? 'ownerBenefit' : 'netIncome'}
+                                            position="top"
+                                            formatter={(value: number) => `${Number(value).toFixed(0)}万`}
+                                            fontSize={11}
+                                            fill="#047857"
+                                        />
                                     </Bar>
-                                    <Line type="monotone" dataKey={(d) => longTermMetrics.cashFlows.slice(0, d.year + 1).reduce((a, b) => a + b, 0)} stroke="#10b981" strokeWidth={3} dot={false} name="累计净现值" />
-                                    <Tooltip formatter={(value, name) => [`¥${Number(value).toFixed(2)}万`, name === 'netIncome' ? '净收益' : '累计净现值']} contentStyle={{ backgroundColor: '#1e293b', borderRadius: '4px', border: 'none' }} labelStyle={{ color: '#f1f5f9' }} />
-                                    <Legend />
+                                    <Line yAxisId="right" type="monotone" dataKey={isReportEmcMode ? 'cumulativeOwnerBenefit' : 'cumulativeCashFlow'} stroke="#2563eb" strokeWidth={4} dot={{ r: 4 }} name={isReportEmcMode ? '业主累计收益' : '累计现金流'} />
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>
-
-                        {/* Key Years Cards - 45% */}
-                        <div className="flex-1">
-                            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b-2 border-blue-200">
-                                <span className="material-icons text-blue-500">calendar_today</span>
-                                关键年度财务指标
-                            </h3>
-                            <div className="grid grid-cols-6 gap-4">
-                                {[1, 5, 10, 15, 20, 25].map((year) => {
-                                    const item = longTermMetrics.yearlyDetails.find(d => d.year === year);
-                                    if (!item) return null;
-                                    const cumulativeNPV = longTermMetrics.cashFlows.slice(0, year + 1).reduce((sum, val) => sum + val, 0);
-                                    const isPaybackYear = cumulativeNPV >= 0 && longTermMetrics.cashFlows.slice(0, year).reduce((sum, val) => sum + val, 0) < 0;
-                                    return (
-                                        <div key={year} className={`border-2 rounded-xl p-3 text-center shadow-md ${isPaybackYear ? 'border-emerald-500 bg-emerald-100 shadow-emerald-200' : 'border-slate-300 bg-white hover:shadow-lg transition-all'}`}>
-                                            <p className="text-xs text-slate-700 font-bold mb-2">第{year}年</p>
-                                            <div className="space-y-2">
-                                                <div>
-                                                    <p className="text-[10px] text-slate-500">发电量</p>
-                                                    <p className="text-sm font-bold text-slate-800">{(item.generation || 0).toFixed(1)}万度</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] text-slate-500">净收益</p>
-                                                    <p className={`text-sm font-bold ${(item.netIncome || 0) >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>¥{(item.netIncome || 0).toFixed(1)}万</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] text-slate-500">累计NPV</p>
-                                                    <p className={`text-sm font-bold ${cumulativeNPV >= 0 ? 'text-blue-700' : 'text-red-700'}`}>¥{cumulativeNPV.toFixed(1)}万</p>
-                                                </div>
+                    </div>
+                    <PremiumSlideFooter page={6} total={presentationTotalSlides} />
+                </CleanSlideBackground>
+            )
+        },
+        {
+            title: '消纳率敏感性',
+            content: (
+                <CleanSlideBackground className="bg-[#f8fbff]">
+                    <PremiumSlideHeader
+                        icon="timeline"
+                        title={isReportEmcMode ? '消纳率敏感性：重点观察业主收益变化' : '消纳率敏感性：消纳越高，回本通常越快'}
+                        tone="sky"
+                    />
+                    <div className="relative z-10 flex-1 px-12 pb-8 grid grid-cols-[0.84fr_1.16fr] gap-8">
+                        <div className="rounded-[34px] bg-white border border-slate-200 p-7 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+                            <p className="text-base font-bold text-slate-500">当前消纳率</p>
+                            <p className="text-7xl font-black text-blue-600 mt-3">{baseConsumptionScenario.rate}%</p>
+                            <div className="mt-8 space-y-5">
+                                {(isReportEmcMode
+                                    ? [
+                                        ['当前业主25年收益', `¥${formatSafe(baseConsumptionScenario.ownerBenefit, 1)}万`, 'bg-emerald-50 text-emerald-700'],
+                                        ['高消纳业主收益', `¥${formatSafe(highConsumptionScenario.ownerBenefit, 1)}万`, 'bg-blue-50 text-blue-700'],
+                                        ['收益提升空间', `¥${formatSafe(Math.max(0, safeNumber(highConsumptionScenario.ownerBenefit) - safeNumber(lowConsumptionScenario.ownerBenefit)), 1)}万`, 'bg-amber-50 text-amber-700']
+                                    ]
+                                    : [
+                                        ['当前回本', `${formatSafe(baseConsumptionScenario.payback, 2)} 年`, 'bg-blue-50 text-blue-700'],
+                                        ['高消纳回本', `${formatSafe(highConsumptionScenario.payback, 2)} 年`, 'bg-emerald-50 text-emerald-700'],
+                                        ['高低档差值', `${formatSafe(Math.max(0, safeNumber(paybackRangeDiff)), 2)} 年`, 'bg-amber-50 text-amber-700']
+                                    ]
+                                ).map(([label, value, cls]) => (
+                                    <div key={label} className={`rounded-2xl p-5 ${cls}`}>
+                                        <p className="text-sm font-bold opacity-80">{label}</p>
+                                        <p className="text-4xl font-black mt-2">{value}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className={`grid ${isReportEmcMode && !isReportSharingEmcMode ? 'grid-rows-1' : 'grid-rows-[1fr_1fr]'} gap-5`}>
+                            <div className="rounded-[34px] bg-white border border-slate-200 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.07)]">
+                                <h3 className="text-xl font-black text-slate-900 mb-5">{isReportEmcMode ? '业主25年收益变化' : '回本周期变化'}</h3>
+                                <div className={`${isReportEmcMode && !isReportSharingEmcMode ? 'space-y-5 mt-8' : 'space-y-3'}`}>
+                                    {consumptionScenarioData.map(item => (
+                                        <div key={item.rate} className="grid grid-cols-[64px_1fr_86px] items-center gap-4">
+                                            <span className="text-sm font-black text-slate-500">{item.rate}%</span>
+                                            <div className={`${isReportEmcMode && !isReportSharingEmcMode ? 'h-5' : 'h-4'} rounded-full bg-slate-100 overflow-hidden`}>
+                                                <div
+                                                    className={`h-full rounded-full ${isReportEmcMode ? 'bg-emerald-500' : 'bg-orange-500'}`}
+                                                    style={{ width: `${Math.max(6, ((isReportEmcMode ? safeNumber(item.ownerBenefit) / maxOwnerBenefit : safeNumber(item.payback) / maxPayback)) * 100)}%` }}
+                                                ></div>
                                             </div>
+                                            <span className={`text-lg font-black text-right ${isReportEmcMode ? 'text-emerald-600' : 'text-orange-600'}`}>
+                                                {isReportEmcMode ? `¥${formatSafe(item.ownerBenefit, 0)}万` : `${formatSafe(item.payback, 2)}年`}
+                                            </span>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">7/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
-                </div>
-            )
-        },
-        // Slide 8: Investment Summary
-        {
-            title: '八、投资收益汇总',
-            content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-pink-400 text-3xl">summarize</span>
-                            <h2 className="text-3xl font-bold">八、投资收益汇总</h2>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-8 flex flex-col">
-                        {/* Summary Table */}
-                        <table className="w-full mb-8">
-                            <tbody>
-                                <tr className="border-b border-slate-200">
-                                    <td className="py-3 text-slate-600">装机容量</td>
-                                    <td className="py-3 text-right font-medium text-slate-800">{formatPower(params.simpleParams.capacity).value} {formatPower(params.simpleParams.capacity).unit}</td>
-                                </tr>
-                                <tr className="border-b border-slate-200 bg-slate-50">
-                                    <td className="py-3 text-slate-600">初始总投资</td>
-                                    <td className="py-3 text-right font-medium text-slate-800">¥{solarModule.investment?.toFixed(2)} 万元</td>
-                                </tr>
-                                <tr className="border-b border-slate-200">
-                                    <td className="py-3 text-slate-600">内部收益率 IRR</td>
-                                    <td className="py-3 text-right font-medium text-slate-800">{longTermMetrics.irr.toFixed(2)}%</td>
-                                </tr>
-                                <tr className="border-b border-slate-200 bg-slate-50">
-                                    <td className="py-3 text-slate-600">投资回本周期</td>
-                                    <td className="py-3 text-right font-medium text-slate-800">{longTermMetrics.paybackPeriod.toFixed(2)} 年</td>
-                                </tr>
-                                <tr className="border-b border-slate-200">
-                                    <td className="py-3 text-slate-600">25年累计收益</td>
-                                    <td className="py-3 text-right font-medium text-emerald-700">¥{longTermMetrics.rev25Year?.toFixed(2) || '-'} 万元</td>
-                                </tr>
-                                <tr>
-                                    <td className="py-3 text-slate-600">25年总净现值</td>
-                                    <td className="py-3 text-right font-medium text-blue-700">¥{longTermMetrics.cashFlows.slice(1).reduce((sum, val) => sum + val, 0).toFixed(2)} 万元</td>
-                                </tr>
-                            </tbody>
-                        </table>
-
-                        {/* Key Takeaway */}
-                        <div className="mt-auto p-5 bg-slate-800 text-white rounded-lg">
-                            <h3 className="font-bold mb-3 flex items-center gap-2">
-                                <span className="material-icons">insights</span>
-                                投资建议
-                            </h3>
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                                <p>• 项目内部收益率 <span className="font-semibold text-emerald-400">{longTermMetrics.irr.toFixed(2)}%</span></p>
-                                <p>• 预计 <span className="font-semibold text-amber-400">{longTermMetrics.paybackPeriod.toFixed(2)}年</span> 回本</p>
-                                <p>• 25年累计净收益 <span className="font-semibold text-blue-400">¥{longTermMetrics.cashFlows.slice(1).reduce((sum, val) => sum + val, 0).toFixed(2)}万</span></p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">8/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
-                </div>
-            )
-        },
-        // Slide 9: Solution Comparison
-        {
-            title: '九、方案对比分析',
-            content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-indigo-400 text-3xl">compare</span>
-                            <h2 className="text-3xl font-bold">九、方案对比分析</h2>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-8 flex flex-col">
-                        <div className="grid grid-cols-4 gap-4 mb-5">
-                            <div className="border border-emerald-200 bg-emerald-50 rounded-2xl p-4">
-                                <p className="text-xs text-slate-500 mb-1">最高IRR</p>
-                                <p className="text-2xl font-bold text-emerald-700">{bestComparisonIrr.toFixed(2)}%</p>
-                                <p className="text-xs text-emerald-700 mt-1 truncate">{bestIrrSolution?.name || '-'}</p>
-                            </div>
-                            <div className="border border-blue-200 bg-blue-50 rounded-2xl p-4">
-                                <p className="text-xs text-slate-500 mb-1">最短回本</p>
-                                <p className="text-2xl font-bold text-blue-700">{bestComparisonPayback.toFixed(2)}年</p>
-                                <p className="text-xs text-blue-700 mt-1 truncate">{bestPaybackSolution?.name || '-'}</p>
-                            </div>
-                            <div className="border border-purple-200 bg-purple-50 rounded-2xl p-4">
-                                <p className="text-xs text-slate-500 mb-1">最低投资</p>
-                                <p className="text-2xl font-bold text-purple-700">{lowestComparisonInvestment.toFixed(1)}万</p>
-                                <p className="text-xs text-purple-700 mt-1">建造成本口径</p>
-                            </div>
-                            <div className="border border-amber-200 bg-amber-50 rounded-2xl p-4">
-                                <p className="text-xs text-slate-500 mb-1">最高25年收益</p>
-                                <p className="text-2xl font-bold text-amber-700">{bestComparisonRevenue.toFixed(1)}万</p>
-                                <p className="text-xs text-amber-700 mt-1">投资方净收益</p>
-                            </div>
-                        </div>
-
-                        <div className="border border-slate-200 rounded-2xl overflow-hidden mb-5 shadow-sm">
-                            <table className="w-full text-xs">
-                                <thead>
-                                    <tr className="bg-slate-900 text-white">
-                                        <th className="px-3 py-3 text-left font-bold">方案名称</th>
-                                        <th className="px-3 py-3 text-center font-bold">商业模式</th>
-                                        <th className="px-3 py-3 text-center font-bold">接入/线缆</th>
-                                        <th className="px-3 py-3 text-right font-bold">容量</th>
-                                        <th className="px-3 py-3 text-center font-bold">组件</th>
-                                        <th className="px-3 py-3 text-right font-bold">成本单价</th>
-                                        <th className="px-3 py-3 text-right font-bold">总投资</th>
-                                        <th className="px-3 py-3 text-right font-bold">回本</th>
-                                        <th className="px-3 py-3 text-right font-bold">IRR</th>
-                                        <th className="px-3 py-3 text-right font-bold">投资方收益</th>
-                                        <th className="px-3 py-3 text-right font-bold">业主收益</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {solutionComparisonData.map((solution, index) => {
-                                        const isBestIRR = solution.irr === bestComparisonIrr;
-                                        const isBestPayback = solution.paybackPeriod === bestComparisonPayback;
-                                        const isSelected = solution.id === params.selectedSolutionId;
-                                        return (
-                                            <tr key={solution.id} className={`border-b border-slate-100 ${isSelected ? 'bg-blue-50 font-semibold' : index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                                                <td className="px-3 py-3">
-                                                    <div className="flex items-center gap-2">
-                                                        {isSelected && <span className="material-icons text-blue-600 text-sm">check_circle</span>}
-                                                        <span className={isSelected ? 'text-blue-800' : 'text-slate-800'}>{solution.name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-3 text-center">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${solution.investmentMode === 'emc' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                        {solution.investmentModeLabel}
-                                                    </span>
-                                                    {solution.investmentMode === 'emc' && <p className="text-[10px] text-slate-500 mt-1">{solution.emcSubModeLabel}</p>}
-                                                </td>
-                                                <td className="px-3 py-3 text-center text-slate-700">
-                                                    <p>{solution.connectionType}</p>
-                                                    <p className="text-[10px] text-slate-500">{solution.cableType}</p>
-                                                </td>
-                                                <td className="px-3 py-3 text-right text-slate-700">{solution.capacity.toFixed(0)}kWp</td>
-                                                <td className="px-3 py-3 text-center text-slate-700">{solution.brand}</td>
-                                                <td className="px-3 py-3 text-right text-slate-700">¥{solution.epcPrice.toFixed(2)}/Wp</td>
-                                                <td className="px-3 py-3 text-right text-slate-700">¥{solution.investment.toFixed(1)}万</td>
-                                                <td className={`px-3 py-3 text-right ${isBestPayback ? 'text-emerald-700 font-bold' : 'text-slate-700'}`}>
-                                                    {solution.paybackPeriod.toFixed(2)}年
-                                                    {isBestPayback && <span className="material-icons text-emerald-500 text-xs align-middle ml-1">star</span>}
-                                                </td>
-                                                <td className={`px-3 py-3 text-right ${isBestIRR ? 'text-emerald-700 font-bold' : 'text-slate-700'}`}>
-                                                    {solution.irr.toFixed(2)}%
-                                                    {isBestIRR && <span className="material-icons text-emerald-500 text-xs align-middle ml-1">star</span>}
-                                                </td>
-                                                <td className="px-3 py-3 text-right text-slate-700">¥{solution.rev25Year.toFixed(1)}万</td>
-                                                <td className="px-3 py-3 text-right text-blue-700">
-                                                    {solution.investmentMode === 'emc' ? `¥${solution.ownerBenefit25.toFixed(1)}万` : '-'}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div className="mt-auto p-4 bg-indigo-50 border-2 border-indigo-200 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                <span className="material-icons text-indigo-600 text-2xl">lightbulb</span>
-                                <div>
-                                    <p className="text-sm font-bold text-indigo-800">方案建议</p>
-                                    <p className="text-xs text-indigo-700">
-                                        当前回本最快为 {bestPaybackSolution?.name || '-'}，最高 IRR 为 {bestIrrSolution?.name || '-'}；EMC 方案同步展示业主侧 25 年收益，便于和投资方收益一起比选。
-                                    </p>
+                                    ))}
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">9/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
-                    </div>
-                </div>
-            )
-        },
-        // Slide: Layout Images (only show if at least one solution has a layout image)
-        ...(hasPresentationLayoutImage ? [{
-            title: '十、光伏铺设图',
-            content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-emerald-400 text-3xl">map</span>
-                            <h2 className="text-3xl font-bold">十、光伏铺设图</h2>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-6">
-                        <div className="grid grid-cols-2 gap-6 h-full">
-                            {params.solutions?.filter(s => s.layoutImage || s.useSameLayout).map((solution, index) => {
-                                // Get the actual layout image (might be from solution 1 if useSameLayout is true)
-                                const layoutImage = solution.useSameLayout
-                                    ? params.solutions?.[0]?.layoutImage
-                                    : solution.layoutImage;
-                                const sourceName = solution.useSameLayout
-                                    ? `${params.solutions?.[0]?.name} (共用)`
-                                    : solution.name;
-
-                                return (
-                                    <div key={solution.id} className="bg-slate-50 rounded-xl border-2 border-slate-200 overflow-hidden flex flex-col">
-                                        <div className="bg-white px-4 py-3 border-b border-slate-200">
-                                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                                <span className={`px-2 py-1 rounded text-xs ${
-                                                    solution.connectionType === 'high'
-                                                        ? 'bg-red-100 text-red-700'
-                                                        : 'bg-blue-100 text-blue-700'
-                                                }`}>
-                                                    {solution.connectionType === 'high' ? '10kV高压' : '380V低压'}
-                                                </span>
-                                                {solution.name}
-                                            </h3>
-                                            <p className="text-xs text-slate-500 mt-1">{solution.description}</p>
-                                            {solution.useSameLayout && (
-                                                <p className="text-xs text-blue-600 mt-1">使用方案一的铺设图</p>
-                                            )}
-                                        </div>
-                                        <div className="flex-1 p-4 bg-white">
-                                            {layoutImage ? (
-                                                <img
-                                                    src={layoutImage}
-                                                    alt={`${solution.name} 铺设图`}
-                                                    className="w-full h-full object-contain rounded-lg"
-                                                />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                                    <div className="text-center">
-                                                        <span className="material-icons text-5xl">image_not_supported</span>
-                                                        <p className="mt-2 text-sm">暂无铺设图</p>
-                                                    </div>
+                            {!(isReportEmcMode && !isReportSharingEmcMode) && (
+                            <div className="rounded-[34px] bg-white border border-slate-200 p-6 shadow-[0_20px_70px_rgba(15,23,42,0.07)]">
+                                <h3 className="text-xl font-black text-slate-900 mb-5">
+                                    {isReportSharingEmcMode ? '分成模式收益结构' : (isReportEmcMode ? '业主收益变化' : '项目净收益')}
+                                </h3>
+                                <div className="space-y-3">
+                                    {consumptionScenarioData.map(item => (
+                                        <div
+                                            key={item.rate}
+                                            className={`grid ${isReportSharingEmcMode ? 'grid-cols-[64px_1fr_1fr_96px]' : 'grid-cols-[64px_1fr_96px]'} items-center gap-3`}
+                                        >
+                                            <span className="text-sm font-black text-slate-500">{item.rate}%</span>
+                                            <div className="h-4 rounded-full bg-slate-100 overflow-hidden">
+                                                <div
+                                                    className="h-full rounded-full bg-blue-600"
+                                                    style={{ width: `${Math.max(6, (safeNumber(item.rev25Year) / maxScenarioRevenue) * 100)}%` }}
+                                                ></div>
+                                            </div>
+                                            {isReportSharingEmcMode && (
+                                                <div className="h-4 rounded-full bg-slate-100 overflow-hidden">
+                                                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(6, (safeNumber(item.ownerBenefit) / maxOwnerBenefit) * 100)}%` }}></div>
                                                 </div>
                                             )}
+                                            <span className="text-sm font-black text-slate-700 text-right">¥{formatSafe(item.rev25Year, 0)}万</span>
                                         </div>
-                                        <div className="bg-slate-100 px-4 py-2 text-xs text-slate-600 border-t border-slate-200">
-                                            <div className="flex justify-between">
-                                                <span>建造成本单价: ¥{solution.epcPrice.toFixed(2)}/Wp</span>
-                                                <span>组件: {solution.brand === 'longi' ? '隆基' : solution.brand === 'tongwei' ? '通威' : '通用'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                    ))}
+                                </div>
+                                <div className="mt-5 flex items-center gap-5 text-xs font-bold text-slate-500">
+                                    <span className="flex items-center gap-2"><i className="w-4 h-2 rounded-full bg-blue-600"></i>{revenueLabel}</span>
+                                    {isReportSharingEmcMode && <span className="flex items-center gap-2"><i className="w-4 h-2 rounded-full bg-emerald-500"></i>业主25年收益</span>}
+                                </div>
+                            </div>
+                            )}
                         </div>
                     </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">10/{presentationTotalSlides}</span>
-                        <span>零碳项目收益评估软件</span>
+                    <PremiumSlideFooter page={7} total={presentationTotalSlides} />
+                </CleanSlideBackground>
+            )
+        },
+        {
+            title: isReportEmcMode ? '业主价值' : '项目价值',
+            content: (
+                <div className="h-full relative overflow-hidden bg-slate-950 text-white">
+                    <PhotoBackground visual="panel" overlay="bg-gradient-to-r from-slate-950/88 via-slate-950/58 to-slate-950/42" />
+                    <div className="relative z-10 h-full flex flex-col">
+                        <PremiumSlideHeader
+                            icon="savings"
+                            title={isReportEmcMode ? '业主价值：节省电费，释放屋顶资产价值' : '项目价值：稳定发电，形成长期现金收益'}
+                            tone="emerald"
+                        />
+                        <div className="flex-1 px-12 pb-8 grid grid-cols-[1fr_1fr] gap-8 items-center">
+                            <div>
+                                <p className="text-lg font-bold text-emerald-300 mb-4">{isReportEmcMode ? '客户侧收益' : '项目综合价值'}</p>
+                                <h3 className="text-6xl font-black leading-tight">
+                                    {isReportEmcMode ? '看得见的节省，才是业主最关心的价值。' : '以屋顶资源换取长期、稳定、可测算的现金流。'}
+                                </h3>
+                            </div>
+                            <div className="grid grid-cols-2 gap-5">
+                                {(isReportEmcMode
+                                    ? [
+                                        ['首年业主收益', `¥${formatSafe(firstYearOwnerBenefit, 1)}万`],
+                                        ['25年业主收益', `¥${formatSafe(ownerTotalBenefit25, 1)}万`],
+                                        ['年CO₂减排量', `${formatSafe(envImpact.co2Reduction, 0)}吨`],
+                                        ['屋顶年租金参考', `¥${formatSafe(annualRoofRentValue, 1)}万`]
+                                    ]
+                                    : [
+                                        ['首年项目净收益', `¥${formatSafe(effectiveYearOneIncome, 1)}万`],
+                                        ['25年项目净收益', `¥${formatSafe(effectiveRev25Year, 1)}万`],
+                                        ['年CO₂减排量', `${formatSafe(envImpact.co2Reduction, 0)}吨`],
+                                        ['屋顶资源面积', `${formatSafe(params.simpleParams.area, 0)}㎡`]
+                                    ]
+                                ).map(([label, value]) => (
+                                    <div key={label} className="rounded-[30px] bg-white text-slate-950 p-7 shadow-[0_24px_80px_rgba(0,0,0,0.22)] min-h-[160px]">
+                                        <p className="text-base font-bold text-slate-500">{label}</p>
+                                        <p className="text-4xl font-black text-emerald-600 mt-5 leading-tight">{value}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <PremiumSlideFooter page={8} total={presentationTotalSlides} />
                     </div>
                 </div>
             )
-        }] : []),
-        // Slide 10/11: O&M Maintenance Plan
+        },
         {
-            title: (() => {
-                return hasPresentationLayoutImage ? '十一、光伏运维计划' : '十、光伏运维计划';
-            })(),
+            title: '测算依据与风险控制',
             content: (
-                <div className="h-full flex flex-col bg-white">
-                    <div className="bg-slate-800 text-white px-8 py-3 rounded-t-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-icons text-cyan-400 text-3xl">build</span>
-                            <h2 className="text-3xl font-bold">{(() => {
-                                return hasPresentationLayoutImage ? '十一、光伏运维计划' : '十、光伏运维计划';
-                            })()}</h2>
+                <CleanSlideBackground>
+                    <PremiumSlideHeader icon="shield" title="测算依据与风险控制：让收益更可解释" tone="slate" />
+                    <div className="relative z-10 flex-1 px-12 pb-8 grid grid-cols-[1.08fr_0.92fr] gap-8">
+                        <div className="rounded-[34px] bg-white border border-slate-200 p-7 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+                            <h3 className="text-2xl font-black text-slate-950 mb-5">关键测算假设</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                {assumptions.slice(0, 8).map(item => (
+                                    <div key={item.label} className="rounded-2xl bg-slate-50 border border-slate-200 p-4 min-h-[92px]">
+                                        <p className="text-sm font-bold text-slate-500">{item.label}</p>
+                                        <p className="text-2xl font-black text-slate-950 mt-2">{item.value}</p>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 opacity-50">
-                            <span className="material-icons text-sm">wb_sunny</span>
-                            <span className="text-xs">零碳评估</span>
+                        <div className="space-y-5">
+                            {[
+                                ['每季度清洁一次', '降低积灰损失，稳定发电效率', 'cleaning_services'],
+                                ['月度电气巡检', '排查接线、热斑和绝缘风险', 'electric_bolt'],
+                                ['逆变器与监控', '异常告警、发电量追踪、远程诊断', 'monitor_heart'],
+                                ['保险与备件', '覆盖自然灾害、设备故障与停机风险', 'verified_user']
+                            ].map(([title, desc, icon]) => (
+                                <div key={title} className="rounded-[26px] bg-white border border-slate-200 p-5 shadow-[0_16px_55px_rgba(15,23,42,0.06)] flex gap-4 items-start">
+                                    <span className="material-icons text-3xl text-blue-600">{icon}</span>
+                                    <div>
+                                        <h3 className="text-xl font-black text-slate-950">{title}</h3>
+                                        <p className="text-base font-semibold text-slate-500 mt-2">{desc}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-
-                    <div className="flex-1 p-8 flex flex-col">
-                        {/* Maintenance Plan Cards */}
-                        <div className="grid grid-cols-3 gap-6 mb-8">
-                            <div className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white rounded-xl p-6 hover:shadow-lg transition-all">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-                                        <span className="material-icons text-white text-2xl">today</span>
-                                    </div>
-                                    <h3 className="text-xl font-bold text-blue-800">日常巡检</h3>
-                                </div>
-                                <ul className="space-y-3">
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-blue-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">每日监控发电数据</span>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-blue-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">每月清洁组件表面</span>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-blue-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">每月检查电气连接</span>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white rounded-xl p-6 hover:shadow-lg transition-all">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center">
-                                        <span className="material-icons text-white text-2xl">event_repeat</span>
-                                    </div>
-                                    <h3 className="text-xl font-bold text-amber-800">季度维护</h3>
-                                </div>
-                                <ul className="space-y-3">
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-amber-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">逆变器性能检测</span>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-amber-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">电缆线路检查</span>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-amber-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">支架结构紧固</span>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white rounded-xl p-6 hover:shadow-lg transition-all">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center">
-                                        <span className="material-icons text-white text-2xl">calendar_month</span>
-                                    </div>
-                                    <h3 className="text-xl font-bold text-emerald-800">年度检修</h3>
-                                </div>
-                                <ul className="space-y-3">
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-emerald-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">系统效率全面评估</span>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-emerald-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">设备预防性试验</span>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="material-icons text-emerald-500 text-lg mt-0.5">check_circle</span>
-                                        <span className="text-slate-700">发电量衰减分析</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        {/* Key Metrics */}
-                        <div className="grid grid-cols-4 gap-4 mb-6">
-                            <div className="border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-white rounded-lg p-4 text-center">
-                                <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <span className="material-icons text-white text-lg">cleaning_services</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-1">清洁频率</p>
-                                <p className="text-lg font-bold text-slate-800">每月</p>
-                            </div>
-                            <div className="border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-white rounded-lg p-4 text-center">
-                                <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <span className="material-icons text-white text-lg">electric_bolt</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-1">电气检测</p>
-                                <p className="text-lg font-bold text-slate-800">每月</p>
-                            </div>
-                            <div className="border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-white rounded-lg p-4 text-center">
-                                <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <span className="material-icons text-white text-lg">settings</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-1">设备维护</p>
-                                <p className="text-lg font-bold text-slate-800">每季</p>
-                            </div>
-                            <div className="border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-white rounded-lg p-4 text-center">
-                                <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <span className="material-icons text-white text-lg">assessment</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-1">系统评估</p>
-                                <p className="text-lg font-bold text-slate-800">每年</p>
-                            </div>
-                        </div>
-
-                        {/* Footer Note */}
-                        <div className="mt-auto p-4 bg-cyan-50 border-2 border-cyan-200 rounded-xl">
+                    <PremiumSlideFooter page={9} total={presentationTotalSlides} />
+                </CleanSlideBackground>
+            )
+        },
+        {
+            title: '结束页',
+            content: (
+                <div className="h-full relative overflow-hidden bg-slate-950 text-white">
+                    <PhotoBackground visual="sunset" overlay="bg-gradient-to-r from-slate-950/92 via-slate-950/66 to-slate-950/20" />
+                    <div className="relative z-10 h-full px-16 py-12 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-white/75">
                             <div className="flex items-center gap-3">
-                                <span className="material-icons text-cyan-600 text-2xl">info</span>
-                                <div>
-                                    <p className="text-sm font-bold text-cyan-800">运维保障</p>
-                                    <p className="text-xs text-cyan-700">定期维护可确保系统稳定运行，最大化发电收益，延长设备使用寿命</p>
-                                </div>
+                                <span className="material-icons text-amber-300">wb_sunny</span>
+                                <span className="text-sm font-black tracking-[0.22em] uppercase">Solar Proposal</span>
                             </div>
+                            <span className="text-sm font-bold">{projectLocationDisplay}</span>
+                        </div>
+
+                        <div className="max-w-4xl">
+                            <p className="text-xl font-bold text-emerald-300 mb-6">{projectBaseInfo?.name || '分布式光伏项目'}</p>
+                            <h2 className="text-[86px] leading-none font-black tracking-tight">感谢观看</h2>
+                            <p className="text-3xl font-black text-white/90 mt-8">
+                                推荐推进：{recommendedSolutionName}
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-4">
+                            {[
+                                ['合作模式', isReportEmcMode ? 'EMC' : 'EPC'],
+                                ['装机容量', currentCapacityText],
+                                [isReportEmcMode ? '业主首年收益' : '预计回本', isReportEmcMode ? `¥${formatSafe(firstYearOwnerBenefit, 1)}万` : `${formatSafe(effectivePaybackPeriod, 2)}年`],
+                                [isReportEmcMode ? '业主25年收益' : '25年净收益', isReportEmcMode ? `¥${formatSafe(ownerTotalBenefit25, 1)}万` : `¥${formatSafe(effectiveRev25Year, 1)}万`]
+                            ].map(([label, value]) => (
+                                <div key={label} className="rounded-3xl bg-white text-slate-950 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
+                                    <p className="text-sm font-bold text-slate-500">{label}</p>
+                                    <p className="text-3xl font-black mt-3 leading-tight">{value}</p>
+                                </div>
+                            ))}
                         </div>
                     </div>
-
-                    <div className="px-8 py-4 border-t border-slate-200 flex justify-between items-center text-base text-slate-500 bg-slate-50">
-                        <span className="font-semibold">{(() => {
-                            return `${presentationTotalSlides}/${presentationTotalSlides}`;
-                        })()}</span>
+                    <div className="absolute bottom-5 left-8 right-8 z-10 flex justify-between text-white/60 text-base font-semibold">
+                        <span>10/{presentationTotalSlides}</span>
                         <span>零碳项目收益评估软件</span>
                     </div>
                 </div>
@@ -1868,11 +1527,11 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                         </div>
                         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 text-center">
                             <div className="text-xs text-purple-600 mb-1">内部收益率 IRR</div>
-                            <div className="text-2xl font-bold text-purple-700">{longTermMetrics.irr.toFixed(2)}%</div>
+                            <div className="text-2xl font-bold text-purple-700">{formatSafe(effectiveIrr, 2)}%</div>
                         </div>
                         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 text-center">
                             <div className="text-xs text-orange-600 mb-1">回本周期</div>
-                            <div className="text-2xl font-bold text-orange-700">{longTermMetrics.paybackPeriod.toFixed(2)}年</div>
+                            <div className="text-2xl font-bold text-orange-700">{formatSafe(effectivePaybackPeriod, 2)}年</div>
                         </div>
                     </div>
                 </section>
@@ -1888,13 +1547,13 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                             <div className="text-xs text-blue-600 mb-1">当前消纳率</div>
                             <div className="text-2xl font-bold text-blue-700">{Math.round(calculatedSelfConsumption)}%</div>
                         </div>
-                        <div className="bg-slate-50 rounded-lg p-4 text-center border border-slate-100">
+                        <div className="bg-slate-50 rounded-lg p-4 text-center border border-slate-200">
                             <div className="text-xs text-slate-500 mb-1">当前回本周期</div>
-                            <div className="text-2xl font-bold text-slate-800">{baseConsumptionScenario.payback.toFixed(2)}年</div>
+                            <div className="text-2xl font-bold text-slate-800">{formatSafe(baseConsumptionScenario?.payback, 2)}年</div>
                         </div>
                         <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-100">
                             <div className="text-xs text-emerald-600 mb-1">高消纳回本</div>
-                            <div className="text-2xl font-bold text-emerald-700">{highConsumptionScenario.payback.toFixed(2)}年</div>
+                            <div className="text-2xl font-bold text-emerald-700">{formatSafe(highConsumptionScenario?.payback, 2)}年</div>
                         </div>
                         <div className="bg-amber-50 rounded-lg p-4 text-center border border-amber-100">
                             <div className="text-xs text-amber-600 mb-1">高低档回本差</div>
@@ -1925,8 +1584,10 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                                     <th className="px-4 py-3 text-left font-semibold text-slate-700">消纳率</th>
                                     <th className="px-4 py-3 text-right font-semibold text-slate-700">回本周期</th>
                                     <th className="px-4 py-3 text-right font-semibold text-slate-700">IRR</th>
-                                    <th className="px-4 py-3 text-right font-semibold text-slate-700">25年投资方净收益</th>
-                                    {isEmcMode && <th className="px-4 py-3 text-right font-semibold text-slate-700">业主25年收益</th>}
+                                    <th className="px-4 py-3 text-right font-semibold text-slate-700">
+                                        {isReportSharingEmcMode ? '25年投资方收益' : (isReportEmcMode ? '业主25年收益' : '25年项目净收益')}
+                                    </th>
+                                    {isReportSharingEmcMode && <th className="px-4 py-3 text-right font-semibold text-slate-700">业主25年收益</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -1935,8 +1596,10 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                                         <td className="px-4 py-3 font-medium text-slate-800">{item.rate}%</td>
                                         <td className="px-4 py-3 text-right font-bold text-blue-700">{item.payback.toFixed(2)} 年</td>
                                         <td className="px-4 py-3 text-right text-slate-700">{item.irr.toFixed(2)}%</td>
-                                        <td className="px-4 py-3 text-right text-emerald-700">{item.rev25Year.toFixed(2)} 万元</td>
-                                        {isEmcMode && <td className="px-4 py-3 text-right text-blue-700">{item.ownerBenefit.toFixed(2)} 万元</td>}
+                                        <td className="px-4 py-3 text-right text-emerald-700">
+                                            {formatSafe(isReportEmcMode && !isReportSharingEmcMode ? item.ownerBenefit : item.rev25Year, 2)} 万元
+                                        </td>
+                                        {isReportSharingEmcMode && <td className="px-4 py-3 text-right text-blue-700">{item.ownerBenefit.toFixed(2)} 万元</td>}
                                     </tr>
                                 ))}
                             </tbody>
@@ -2143,11 +1806,11 @@ export default function SolarReport({ onClose, defaultToPresentationMode = true,
                                 </tr>
                                 <tr className="border-b border-slate-200">
                                     <td className="px-4 py-3 text-slate-600 bg-slate-50 font-medium">内部收益率 (IRR)</td>
-                                    <td className="px-4 py-3 text-slate-800 font-medium">{longTermMetrics.irr.toFixed(2)}%</td>
+                                    <td className="px-4 py-3 text-slate-800 font-medium">{formatSafe(effectiveIrr, 2)}%</td>
                                 </tr>
                                 <tr className="border-b border-slate-200">
                                     <td className="px-4 py-3 text-slate-600 bg-slate-50 font-medium">投资回本周期</td>
-                                    <td className="px-4 py-3 text-slate-800 font-medium">{longTermMetrics.paybackPeriod.toFixed(2)} 年</td>
+                                    <td className="px-4 py-3 text-slate-800 font-medium">{formatSafe(effectivePaybackPeriod, 2)} 年</td>
                                 </tr>
                                 <tr className="border-b border-slate-200">
                                     <td className="px-4 py-3 text-slate-600 bg-slate-50 font-medium">25年总净现值</td>

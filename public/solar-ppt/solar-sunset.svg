@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Solar sunset presentation background">
+  <defs>
+    <linearGradient id="sunset" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset=".48" stop-color="#153047"/>
+      <stop offset="1" stop-color="#064e3b"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbbf24" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#fbbf24" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sunset)"/>
+  <circle cx="1170" cy="240" r="150" fill="url(#glow)" opacity=".74"/>
+  <path d="M0 570 C260 500 450 540 670 485 C910 424 1100 460 1600 330 L1600 900 L0 900 Z" fill="#031827" opacity=".56"/>
+  <g transform="translate(120 585) rotate(-6)" opacity=".72">
+    <rect x="-80" y="0" width="1760" height="270" rx="26" fill="#102033"/>
+    <g fill="#1e5b77">
+      <rect x="0" y="30" width="250" height="86" rx="9"/>
+      <rect x="280" y="30" width="250" height="86" rx="9"/>
+      <rect x="560" y="30" width="250" height="86" rx="9"/>
+      <rect x="840" y="30" width="250" height="86" rx="9"/>
+      <rect x="1120" y="30" width="250" height="86" rx="9"/>
+      <rect x="1400" y="30" width="250" height="86" rx="9"/>
+      <rect x="0" y="144" width="250" height="86" rx="9"/>
+      <rect x="280" y="144" width="250" height="86" rx="9"/>
+      <rect x="560" y="144" width="250" height="86" rx="9"/>
+      <rect x="840" y="144" width="250" height="86" rx="9"/>
+      <rect x="1120" y="144" width="250" height="86" rx="9"/>
+      <rect x="1400" y="144" width="250" height="86" rx="9"/>
+    </g>
+  </g>
+  <rect width="1600" height="900" fill="#020617" opacity=".18"/>
+</svg>

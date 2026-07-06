@@ -25,6 +25,11 @@ export interface SolarAdvParams {
     feedInTariff: number;
     omCost: number;
     insuranceRate: number;
+    revenueVatRate: number;
+    costVatRate: number;
+    constructionVatRate: number;
+    vatSurchargeRate: number;
+    vatOffsetElectricityPrice: number;
     taxRate: number;
 
     // ===== EMC 专项参数 =====
@@ -57,22 +62,22 @@ export const MODULE_BRANDS: Record<SolarModuleBrand, ModuleBrandConfig> = {
         id: 'longi',
         name: '隆基',
         degradationFirstYear: 1.0,
-        degradationLinear: 0.035,
-        description: '首年衰减 1%，次年开始 0.035%'
+        degradationLinear: 0.35,
+        description: '首年衰减 1%，次年开始 0.35%'
     },
     tongwei: {
         id: 'tongwei',
         name: '通威',
         degradationFirstYear: 1.0,
-        degradationLinear: 0.04,
-        description: '首年衰减 1%，次年开始 0.04%'
+        degradationLinear: 0.4,
+        description: '首年衰减 1%，次年开始 0.4%'
     },
     generic: {
         id: 'generic',
         name: '通用组件',
-        degradationFirstYear: 2.0,
-        degradationLinear: 0.55,
-        description: '默认衰减率（首年 2%，次年开始 0.55%）'
+        degradationFirstYear: 1.0,
+        degradationLinear: 0.4,
+        description: 'EPC测算表口径（首年 1%，次年开始 0.4%）'
     }
 };
 
@@ -109,7 +114,7 @@ export const DEFAULT_SOLUTIONS: SolarSolution[] = [
         connectionType: 'low',
         brand: 'tongwei',
         cableType: 'aluminum',
-        epcPrice: 3.2,
+        epcPrice: 2.0,
         investmentMode: 'epc'
     },
     {
@@ -119,7 +124,7 @@ export const DEFAULT_SOLUTIONS: SolarSolution[] = [
         connectionType: 'low',
         brand: 'longi',
         cableType: 'copper',
-        epcPrice: 3.5,
+        epcPrice: 2.0,
         investmentMode: 'epc'
     },
     {
@@ -129,7 +134,7 @@ export const DEFAULT_SOLUTIONS: SolarSolution[] = [
         connectionType: 'high',
         brand: 'generic',
         cableType: 'aluminum',
-        epcPrice: 3.4,
+        epcPrice: 2.0,
         investmentMode: 'epc',
         voltageUpgradeCost: 15 // 升压设备成本（万元）
     }
@@ -139,8 +144,10 @@ export const DEFAULT_BRAND: SolarModuleBrand = 'generic';
 
 export interface SolarParamsState {
     mode: 'simple' | 'advanced';
+    selfUseMode?: 'auto' | 'manual';
     simpleParams: SolarSimpleParams;
     advParams: SolarAdvParams;
+    buildings?: BuildingData[];
     solutions?: SolarSolution[];
     selectedSolutionId?: string | null;
     showConsumptionRateAnalysis?: boolean;
@@ -150,31 +157,37 @@ export interface SolarParamsState {
 
 export const DEFAULTS: SolarParamsState = {
     mode: 'simple',
+    selfUseMode: 'manual',
     simpleParams: {
         connectionPoint: 0,
         area: 5000,
         capacity: 400,
-        epcPrice: 3.5,
+        epcPrice: 2.0,
         connectionType: 'low',
         investmentMode: 'epc',
         emcSubMode: 'sharing'
     },
     advParams: {
-        electricityPrice: 0.85,
-        dailySunHours: 3.8,
-        prValue: 82,
-        azimuthEfficiency: 98,
+        electricityPrice: 0.7579,
+        dailySunHours: 4.08,
+        prValue: 80,
+        azimuthEfficiency: 95,
         generationDays: 365,  // 固定365天，不可更改
-        degradationFirstYear: 2.0,
-        degradationLinear: 0.55,
-        feedInTariff: 0.35,
-        omCost: 0.05,
-        insuranceRate: 0.2,
+        degradationFirstYear: 1.0,
+        degradationLinear: 0.4,
+        feedInTariff: 0.3515,
+        omCost: 0.03,
+        insuranceRate: 0.35,
+        revenueVatRate: 13,
+        costVatRate: 6,
+        constructionVatRate: 9,
+        vatSurchargeRate: 6,
+        vatOffsetElectricityPrice: 0.7555,
         taxRate: 0, // 默认 0% (新能源享三免三减半）
         emcOwnerShareRate: 10,   // 业主获 10% 自用电费
         emcDiscountPrice: 0.65,  // 投资方售电 0.65 元/度
         emcFixedPrice: 0.6,
-        emcSouthernAveragePrice: 0.85,
+        emcSouthernAveragePrice: 0.7555,
         roofRent: 5              // 屋顶租金 5 元/㎡/年
     },
     solutions: DEFAULT_SOLUTIONS,

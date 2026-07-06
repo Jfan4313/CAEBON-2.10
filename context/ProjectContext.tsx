@@ -77,6 +77,7 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 // Core implementation that will be wrapped by all providers
 const ProjectCoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [projectBaseInfo, setProjectBaseInfo] = useState<ProjectBaseInfo>(initialProjectBaseInfo);
+    const [hasLoadedStoredProject, setHasLoadedStoredProject] = useState(false);
 
     const app = useApp();
     const mod = useModule();
@@ -85,18 +86,20 @@ const ProjectCoreProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Load from Storage
     useEffect(() => {
         const loadFromStorage = async () => {
-            const savedData = await storage.getItem('ZERO_CARBON_PROJECT_DATA');
-            if (savedData) {
-                try {
+            try {
+                const savedData = await storage.getItem('ZERO_CARBON_PROJECT_DATA');
+                if (savedData) {
                     const parsed = JSON.parse(savedData);
                     if (parsed.projectBaseInfo) setProjectBaseInfo(parsed.projectBaseInfo);
                     if (parsed.modules) mod.setModules({ ...initialModules, ...parsed.modules });
                     if (parsed.transformers) conf.setTransformers(parsed.transformers);
                     if (parsed.bills) conf.setBills(parsed.bills);
                     if (parsed.priceConfig) conf.setPriceConfig(parsed.priceConfig);
-                } catch (e) {
-                    console.error("Failed to load project data", e);
                 }
+            } catch (e) {
+                console.error("Failed to load project data", e);
+            } finally {
+                setHasLoadedStoredProject(true);
             }
         };
         loadFromStorage();
@@ -120,6 +123,18 @@ const ProjectCoreProvider: React.FC<{ children: React.ReactNode }> = ({ children
             app.setNotification({ message: '保存失败，请检查存储设置', type: 'error' });
         }
     }, [dataToSave, app]);
+
+    useEffect(() => {
+        if (!hasLoadedStoredProject) return;
+
+        const timer = window.setTimeout(() => {
+            storage.setItem('ZERO_CARBON_PROJECT_DATA', JSON.stringify(dataToSave)).catch((e) => {
+                console.error("Failed to auto save project data", e);
+            });
+        }, 600);
+
+        return () => window.clearTimeout(timer);
+    }, [hasLoadedStoredProject, dataToSave]);
 
     const value: ProjectContextType = {
         projectBaseInfo, setProjectBaseInfo, saveProject,

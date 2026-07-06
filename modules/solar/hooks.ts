@@ -78,13 +78,236 @@ const getOwnerBenchmarkPrice = (params: SolarParamsState) => {
     return params.advParams.emcSouthernAveragePrice || params.advParams.electricityPrice;
 };
 
+const normalizeLegacySolutionPrice = (solution: SolarSolution) => {
+    const legacyDefaultPrices: Record<string, number> = {
+        'solution-1': 3.2,
+        'solution-2': 3.5,
+        'solution-3': 3.4
+    };
+    return legacyDefaultPrices[solution.id] === solution.epcPrice
+        ? DEFAULT_SOLUTIONS.find(item => item.id === solution.id)?.epcPrice ?? solution.epcPrice
+        : solution.epcPrice;
+};
+
+const isClose = (value: unknown, target: number, tolerance = 0.0001) => (
+    typeof value === 'number' && Number.isFinite(value) && Math.abs(value - target) <= tolerance
+);
+
+const hasLegacyExcelMismatchDefaults = (advParams: Partial<SolarParamsState['advParams']>) => {
+    return isClose(advParams.electricityPrice, 0.85)
+        || isClose(advParams.prValue, 82)
+        || isClose(advParams.azimuthEfficiency, 98)
+        || isClose(advParams.degradationFirstYear, 2)
+        || isClose(advParams.degradationLinear, 0.55)
+        || isClose(advParams.omCost, 0.05)
+        || isClose(advParams.insuranceRate, 0.2);
+};
+
+const normalizeLegacyAdvParams = (advParams: Partial<SolarParamsState['advParams']>) => {
+    const normalized = { ...advParams };
+
+    if (normalized.electricityPrice === undefined || isClose(normalized.electricityPrice, 0.85)) {
+        normalized.electricityPrice = DEFAULTS.advParams.electricityPrice;
+    }
+    if (normalized.dailySunHours === undefined || isClose(normalized.dailySunHours, 3.8)) {
+        normalized.dailySunHours = DEFAULTS.advParams.dailySunHours;
+    }
+    if (normalized.prValue === undefined || isClose(normalized.prValue, 82)) {
+        normalized.prValue = DEFAULTS.advParams.prValue;
+    }
+    if (normalized.azimuthEfficiency === undefined || isClose(normalized.azimuthEfficiency, 98)) {
+        normalized.azimuthEfficiency = DEFAULTS.advParams.azimuthEfficiency;
+    }
+    if (normalized.degradationFirstYear === undefined || isClose(normalized.degradationFirstYear, 2)) {
+        normalized.degradationFirstYear = DEFAULTS.advParams.degradationFirstYear;
+    }
+    if (normalized.degradationLinear === undefined || isClose(normalized.degradationLinear, 0.55)) {
+        normalized.degradationLinear = DEFAULTS.advParams.degradationLinear;
+    }
+    if (normalized.feedInTariff === undefined || isClose(normalized.feedInTariff, 0.35)) {
+        normalized.feedInTariff = DEFAULTS.advParams.feedInTariff;
+    }
+    if (normalized.omCost === undefined || isClose(normalized.omCost, 0.05)) {
+        normalized.omCost = DEFAULTS.advParams.omCost;
+    }
+    if (normalized.insuranceRate === undefined || isClose(normalized.insuranceRate, 0.2)) {
+        normalized.insuranceRate = DEFAULTS.advParams.insuranceRate;
+    }
+
+    normalized.revenueVatRate = normalized.revenueVatRate ?? DEFAULTS.advParams.revenueVatRate;
+    normalized.costVatRate = normalized.costVatRate ?? DEFAULTS.advParams.costVatRate;
+    normalized.constructionVatRate = normalized.constructionVatRate ?? DEFAULTS.advParams.constructionVatRate;
+    normalized.vatSurchargeRate = normalized.vatSurchargeRate ?? DEFAULTS.advParams.vatSurchargeRate;
+    normalized.vatOffsetElectricityPrice = normalized.vatOffsetElectricityPrice ?? DEFAULTS.advParams.vatOffsetElectricityPrice;
+
+    return normalized;
+};
+
+const getSolarInvestment = (params: SolarParamsState) => {
+    const selectedSolution = (params.solutions || []).find(s => s.id === params.selectedSolutionId);
+    const capacity = selectedSolution?.capacity ?? params.simpleParams.capacity ?? 0;
+    const epcPrice = selectedSolution?.epcPrice ?? params.simpleParams.epcPrice;
+    const connectionType = selectedSolution?.connectionType || params.simpleParams.connectionType;
+    const voltageUpgradeCost = connectionType === 'high'
+        ? (selectedSolution?.voltageUpgradeCost || 15)
+        : 0;
+    const baseInvestment = capacity * epcPrice / 10;
+
+    return {
+        capacity,
+        selectedSolution,
+        epcPrice,
+        voltageUpgradeCost,
+        investment: parseFloat((baseInvestment + voltageUpgradeCost).toFixed(3))
+    };
+};
+
+const getDegradationFactor = (params: SolarParamsState, year: number) => {
+    const firstYearLoss = params.advParams.degradationFirstYear / 100;
+    const annualLinearLoss = params.advParams.degradationLinear / 100;
+    return Math.max(0, 1 - firstYearLoss - Math.max(0, year - 1) * annualLinearLoss);
+};
+
+const calculateIRRFromCashFlows = (cashFlows: number[]) => {
+    const hasPositive = cashFlows.some(v => v > 0);
+    const hasNegative = cashFlows.some(v => v < 0);
+    if (!hasPositive || !hasNegative) return 0;
+
+    const npv = (rate: number) => cashFlows.reduce((sum, flow, index) => sum + flow / Math.pow(1 + rate, index), 0);
+    let low = -0.99;
+    let high = 5;
+    let lowValue = npv(low);
+    let highValue = npv(high);
+
+    while (lowValue * highValue > 0 && high < 100) {
+        high *= 2;
+        highValue = npv(high);
+    }
+
+    if (lowValue * highValue > 0) return 0;
+
+    for (let i = 0; i < 100; i++) {
+        const mid = (low + high) / 2;
+        const midValue = npv(mid);
+        if (Math.abs(midValue) < 0.000001) return parseFloat((mid * 100).toFixed(2));
+        if (lowValue * midValue <= 0) {
+            high = mid;
+            highValue = midValue;
+        } else {
+            low = mid;
+            lowValue = midValue;
+        }
+    }
+
+    return parseFloat((((low + high) / 2) * 100).toFixed(2));
+};
+
+const calculateSolarYearResult = (
+    params: SolarParamsState,
+    selfRate: number,
+    year: number,
+    investment: number,
+    capacity: number
+) => {
+    const degradation = getDegradationFactor(params, year);
+    const generation = capacity * params.advParams.dailySunHours * params.advParams.generationDays
+        * (params.advParams.prValue / 100) * (params.advParams.azimuthEfficiency / 100) * degradation / 10000;
+
+    const selfUseGen = generation * (selfRate / 100);
+    const gridGen = generation * (1 - selfRate / 100);
+    const revenueTaxFactor = 1 + ((params.advParams.revenueVatRate ?? 0) / 100);
+    const costTaxFactor = 1 + ((params.advParams.costVatRate ?? 0) / 100);
+
+    const totalSelfUseRevenue = selfUseGen * params.advParams.electricityPrice / revenueTaxFactor;
+    const gridRevenue = gridGen * params.advParams.feedInTariff / revenueTaxFactor;
+    const roofRentIncome = params.simpleParams.area * params.advParams.roofRent / 10000;
+
+    let investorRevenue = 0;
+    let ownerBenefit = 0;
+
+    if (params.simpleParams.investmentMode === 'emc') {
+        if (params.simpleParams.emcSubMode === 'sharing') {
+            const ownerShare = params.advParams.emcOwnerShareRate / 100;
+            ownerBenefit = totalSelfUseRevenue * ownerShare + roofRentIncome;
+            investorRevenue = totalSelfUseRevenue * (1 - ownerShare) + gridRevenue - roofRentIncome;
+        } else {
+            const salePrice = getEffectiveEmcSalePrice(params);
+            const benchmarkPrice = getOwnerBenchmarkPrice(params);
+            const saleRevenue = selfUseGen * salePrice / revenueTaxFactor;
+            ownerBenefit = selfUseGen * (benchmarkPrice - salePrice) + roofRentIncome;
+            investorRevenue = saleRevenue + gridRevenue - roofRentIncome;
+        }
+    } else {
+        investorRevenue = totalSelfUseRevenue + gridRevenue;
+        ownerBenefit = investorRevenue;
+    }
+
+    const omCost = capacity * params.advParams.omCost / 10 / costTaxFactor;
+    const insuranceCost = investment * (params.advParams.insuranceRate / 100) / costTaxFactor;
+    const opex = omCost + insuranceCost;
+    const taxableIncome = investorRevenue - opex;
+    const tax = taxableIncome > 0 ? taxableIncome * (params.advParams.taxRate / 100) : 0;
+    const netIncome = investorRevenue - opex - tax;
+
+    return {
+        year,
+        generation: parseFloat(generation.toFixed(3)),
+        revenue: parseFloat(investorRevenue.toFixed(3)),
+        ownerBenefit: parseFloat(ownerBenefit.toFixed(3)),
+        opex: parseFloat(opex.toFixed(3)),
+        tax: parseFloat(tax.toFixed(3)),
+        netIncome: parseFloat(netIncome.toFixed(3)),
+        selfUseGen,
+        selfUseRevenueNet: totalSelfUseRevenue,
+        gridRevenueNet: gridRevenue,
+        costNet: opex
+    };
+};
+
+const calculateExcelStyleTax = (
+    params: SolarParamsState,
+    results: Array<{ selfUseGen: number; selfUseRevenueNet: number; gridRevenueNet: number; costNet: number }>,
+    investment: number,
+    year: number
+) => {
+    const revenueVatRate = (params.advParams.revenueVatRate ?? 0) / 100;
+    const costVatRate = (params.advParams.costVatRate ?? 0) / 100;
+    const constructionVatRate = (params.advParams.constructionVatRate ?? 0) / 100;
+    const vatSurchargeRate = (params.advParams.vatSurchargeRate ?? 0) / 100;
+    const constructionInputVat = constructionVatRate > 0
+        ? (investment / (1 + constructionVatRate)) * constructionVatRate
+        : 0;
+
+    const vatBasis = (item: { selfUseGen: number; selfUseRevenueNet: number; gridRevenueNet: number; costNet: number }) => {
+        const vatOffsetPrice = params.advParams.vatOffsetElectricityPrice ?? params.advParams.electricityPrice;
+        const selfUseVatOffset = revenueVatRate > 0
+            ? item.selfUseGen * vatOffsetPrice / (1 + revenueVatRate) * revenueVatRate
+            : 0;
+        const gridOutputVat = item.gridRevenueNet * revenueVatRate;
+        const outputVat = selfUseVatOffset + gridOutputVat;
+        const inputVat = item.costNet * costVatRate;
+        return outputVat - inputVat;
+    };
+
+    const taxableVat = year <= 2
+        ? results.slice(0, year).reduce((sum, item) => sum + vatBasis(item), -constructionInputVat)
+        : vatBasis(results[year - 1]);
+    const vatPayable = Math.max(0, taxableVat);
+    const surcharge = vatPayable * vatSurchargeRate;
+
+    return vatPayable + surcharge;
+};
+
 export const useSolarRetrofit = () => {
     const { modules, toggleModule, updateModule, saveProject, transformers, bills, projectBaseInfo, priceConfig } = useProject();
     const currentModule = modules['retrofit-solar'];
     const southernAveragePrice = parseFloat(getAverageElectricityPrice(priceConfig).toFixed(4));
-    const storedAdvParams = currentModule?.params?.advParams || {};
+    const rawStoredAdvParams = currentModule?.params?.advParams || {};
+    const shouldMigrateExcelDefaults = hasLegacyExcelMismatchDefaults(rawStoredAdvParams);
+    const storedAdvParams = normalizeLegacyAdvParams(rawStoredAdvParams);
     const normalizedSolutions: SolarSolution[] = (currentModule?.params?.solutions || DEFAULTS.solutions).map((solution: SolarSolution) => ({
         ...solution,
+        epcPrice: normalizeLegacySolutionPrice(solution),
         investmentMode: solution.investmentMode || 'epc',
         emcSubMode: solution.emcSubMode || DEFAULTS.simpleParams.emcSubMode,
         emcOwnerShareRate: solution.emcOwnerShareRate ?? currentModule?.params?.advParams?.emcOwnerShareRate ?? DEFAULTS.advParams.emcOwnerShareRate,
@@ -94,21 +317,38 @@ export const useSolarRetrofit = () => {
         roofRent: solution.roofRent ?? currentModule?.params?.advParams?.roofRent ?? DEFAULTS.advParams.roofRent
     }));
 
+    const selectedNormalizedSolutionId = currentModule?.params?.selectedSolutionId || DEFAULTS.selectedSolutionId;
+    const selectedNormalizedSolution = normalizedSolutions.find(s => s.id === selectedNormalizedSolutionId) || normalizedSolutions[0];
+
     // Fallback to defaults if params are not set
     const params: SolarParamsState = {
         mode: currentModule?.params?.mode || DEFAULTS.mode,
-        simpleParams: { ...DEFAULTS.simpleParams, ...currentModule?.params?.simpleParams },
+        selfUseMode: currentModule?.params?.selfUseMode || DEFAULTS.selfUseMode,
+        simpleParams: {
+            ...DEFAULTS.simpleParams,
+            ...currentModule?.params?.simpleParams,
+            ...(selectedNormalizedSolution ? {
+                capacity: selectedNormalizedSolution.capacity ?? currentModule?.params?.simpleParams?.capacity ?? DEFAULTS.simpleParams.capacity,
+                epcPrice: selectedNormalizedSolution.epcPrice,
+                connectionType: selectedNormalizedSolution.connectionType,
+                investmentMode: selectedNormalizedSolution.investmentMode || 'epc',
+                emcSubMode: selectedNormalizedSolution.emcSubMode || currentModule?.params?.simpleParams?.emcSubMode || DEFAULTS.simpleParams.emcSubMode
+            } : {})
+        },
         advParams: { ...DEFAULTS.advParams, ...storedAdvParams, emcSouthernAveragePrice: storedAdvParams.emcSouthernAveragePrice ?? southernAveragePrice },
+        buildings: currentModule?.params?.buildings,
         solutions: normalizedSolutions,
-        selectedSolutionId: currentModule?.params?.selectedSolutionId || DEFAULTS.selectedSolutionId,
+        selectedSolutionId: selectedNormalizedSolutionId,
         showConsumptionRateAnalysis: currentModule?.params?.showConsumptionRateAnalysis ?? DEFAULTS.showConsumptionRateAnalysis,
         consumptionRateScenarios: currentModule?.params?.consumptionRateScenarios ?? DEFAULTS.consumptionRateScenarios,
-        effectiveSelfConsumptionRate: currentModule?.params?.effectiveSelfConsumptionRate ?? DEFAULTS.effectiveSelfConsumptionRate,
+        effectiveSelfConsumptionRate: shouldMigrateExcelDefaults && isClose(currentModule?.params?.effectiveSelfConsumptionRate, 100, 0.01)
+            ? DEFAULTS.effectiveSelfConsumptionRate
+            : currentModule?.params?.effectiveSelfConsumptionRate ?? DEFAULTS.effectiveSelfConsumptionRate,
     };
 
     // UI Local State
-    const [selfUseMode, setSelfUseMode] = useState<'auto' | 'manual'>('auto');
-    const [calculatedSelfConsumption, setCalculatedSelfConsumption] = useState(85);
+    const [selfUseMode, setSelfUseModeState] = useState<'auto' | 'manual'>(params.selfUseMode || 'manual');
+    const [calculatedSelfConsumption, setCalculatedSelfConsumption] = useState(params.effectiveSelfConsumptionRate ?? DEFAULTS.effectiveSelfConsumptionRate ?? 85);
     const [consumptionResult, setConsumptionResult] = useState<ConsumptionResult | null>(null);
     const [sunHoursSource, setSunHoursSource] = useState<SunHoursResult>({
         value: params.advParams.dailySunHours,
@@ -190,84 +430,25 @@ export const useSolarRetrofit = () => {
 
     const lastLocation = useRef<string>('');
 
-    // Get O&M rate from global project context
-    const omRate = projectBaseInfo?.omRate ?? 0;
-
     // Financial Calculation Core
     // ========== 核心财务测算 ==========
     // 返回值中的 yearlySaving 为【投资方视角】的净收益（即系统汇总使用的指标）
     // ownerBenefit 为【业主视角】的收益（EMC 模式下业主侧收益）
     const calculateFinancials = useCallback((p: SolarParamsState, selfRate: number) => {
-        const capacity = p.simpleParams.capacity || 0;
-
-        // 根据方案确定建造成本单价，EPC/EMC 投资模型共用该成本。
-        let epcPrice = p.simpleParams.epcPrice;
-        const selectedSolution = (p.solutions || []).find(s => s.id === p.selectedSolutionId);
-        if (selectedSolution) {
-            epcPrice = selectedSolution.epcPrice;
-        }
-
-        // 如果是高压接入，增加升压设备成本
-        let voltageUpgradeCost = 0;
-        if ((selectedSolution?.connectionType || p.simpleParams.connectionType) === 'high') {
-            voltageUpgradeCost = selectedSolution?.voltageUpgradeCost || 15;
-        }
-
-        const baseInvestment = parseFloat((capacity * epcPrice / 10).toFixed(3));
-        const investment = parseFloat((baseInvestment + voltageUpgradeCost).toFixed(3)); // 万元
-
-        // 首年总发电量 (万度 = 万kWh)
-        const genYear1 = capacity * p.advParams.dailySunHours * p.advParams.generationDays
-            * (p.advParams.prValue / 100) * (p.advParams.azimuthEfficiency / 100) / 10000;
-
-        const selfUseGen = genYear1 * (selfRate / 100); // 自用电量 (万度)
-        const gridGen = genYear1 * (1 - selfRate / 100); // 上网电量 (万度)
-
-        // 总电费毛收益（无分成的情况下）
-        const totalSelfUseRevenue = selfUseGen * p.advParams.electricityPrice; // 自用部分总价值 (万元)
-        const gridRevenue = gridGen * p.advParams.feedInTariff; // 上网收入 (万元)
-        const roofRentIncome = p.simpleParams.area * p.advParams.roofRent / 10000; // 屋顶租金 (万元/年)
-
-        let investorRevenue = 0; // 投资方年收益
-        let ownerBenefit = 0;    // 业主年收益
-
-        if (p.simpleParams.investmentMode === 'emc') {
-            if (p.simpleParams.emcSubMode === 'sharing') {
-                // ===== 收益分成模式 =====
-                // 业主获得 ownerShareRate% 的自用电费收益 + 屋顶租金
-                // 投资方获得 (100 - ownerShareRate)% 的自用电费收益 + 全部上网收入, 需承担运维
-                const ownerShare = p.advParams.emcOwnerShareRate / 100;
-                ownerBenefit = totalSelfUseRevenue * ownerShare + roofRentIncome;
-                investorRevenue = totalSelfUseRevenue * (1 - ownerShare) + gridRevenue - roofRentIncome;
-            } else {
-                const salePrice = getEffectiveEmcSalePrice(p);
-                const benchmarkPrice = getOwnerBenchmarkPrice(p);
-                const saleRevenue = selfUseGen * salePrice;
-                ownerBenefit = selfUseGen * (benchmarkPrice - salePrice) + roofRentIncome;
-                investorRevenue = saleRevenue + gridRevenue - roofRentIncome;
-            }
-        } else {
-            // 自投 / 贷款 / EPC：全部收益归投资方(业主=投资方)
-            investorRevenue = totalSelfUseRevenue + gridRevenue;
-            ownerBenefit = investorRevenue; // 业主即投资方
-        }
-
-        // Use global O&M rate for precision consistency across modules, overriding local fixed omCost if needed.
-        // Solar module originally uses a fixed OM cost per W (e.g. 0.05 RMB/W), which equals `capacity * p.advParams.omCost / 10`
-        // We'll blend it or just rely on the standard percentage if the user set a global rate. For now we use the global percentage:
-        const opex = investment * (omRate / 100) + (investment * (p.advParams.insuranceRate / 100)); // 运维+保险 (万元)
-        const taxableIncome = investorRevenue - opex;
-        const tax = taxableIncome > 0 ? taxableIncome * ((projectBaseInfo?.taxRate || p.advParams.taxRate) / 100) : 0;
-        const yearlySaving = parseFloat((investorRevenue - opex - tax).toFixed(3)); // 投资方净收益
+        const { investment, capacity } = getSolarInvestment(p);
+        const yearOne = calculateSolarYearResult(p, selfRate, 1, investment, capacity);
+        const vatAndSurcharge = calculateExcelStyleTax(p, [yearOne], investment, 1);
+        const totalTax = parseFloat((yearOne.tax + vatAndSurcharge).toFixed(3));
+        const netIncome = parseFloat((yearOne.revenue - yearOne.opex - totalTax).toFixed(3));
 
         return {
             investment,
-            yearlySaving,
-            genYear1,
-            ownerBenefit: parseFloat(ownerBenefit.toFixed(3)),
-            investorRevenue: parseFloat(investorRevenue.toFixed(3))
+            yearlySaving: netIncome,
+            genYear1: yearOne.generation,
+            ownerBenefit: yearOne.ownerBenefit,
+            investorRevenue: yearOne.revenue
         };
-    }, [omRate, projectBaseInfo?.taxRate]);
+    }, []);
 
     const handleUpdate = useCallback((newParamsPart: Partial<SolarParamsState>) => {
         const newParams = { ...params, ...newParamsPart };
@@ -281,6 +462,16 @@ export const useSolarRetrofit = () => {
             params: newParams
         });
     }, [params, calculatedSelfConsumption, calculateFinancials, updateModule]);
+
+    const setSelfUseMode = useCallback((next: 'auto' | 'manual' | ((prev: 'auto' | 'manual') => 'auto' | 'manual')) => {
+        setSelfUseModeState(prev => {
+            const nextMode = typeof next === 'function' ? next(prev) : next;
+            if (nextMode !== params.selfUseMode) {
+                handleUpdate({ selfUseMode: nextMode });
+            }
+            return nextMode;
+        });
+    }, [handleUpdate, params.selfUseMode]);
 
     // Sync Daily Sun Hours from Location (优先使用精确坐标调用NASA)
     useEffect(() => {
@@ -330,45 +521,40 @@ export const useSolarRetrofit = () => {
         };
     }, [projectBaseInfo?.latitude, projectBaseInfo?.longitude, projectBaseInfo?.province, projectBaseInfo?.city, handleUpdate, params.advParams]);
 
-    // Sync Electricity Price
+    // Sync EMC benchmark price only. Solar EPC收益测算电价由本模块维护，避免被全局电价模型覆盖成旧口径。
     useEffect(() => {
-        if (params.mode === 'advanced') {
-            let newElectricityPrice = DEFAULTS.advParams.electricityPrice;
-
-            if (priceConfig.mode === 'fixed') {
-                newElectricityPrice = priceConfig.fixedPrice;
-            } else if (priceConfig.mode === 'tou') {
-                const totalDuration = priceConfig.touSegments.reduce((sum: number, seg: any) => sum + (seg.end - seg.start), 0);
-                const weightedSum = priceConfig.touSegments.reduce((sum: number, seg: any) => sum + seg.price * (seg.end - seg.start), 0);
-                newElectricityPrice = totalDuration > 0 ? weightedSum / totalDuration : DEFAULTS.advParams.electricityPrice;
-            } else if (priceConfig.mode === 'spot') {
-                const avgSpotPrice = priceConfig.spotPrices.reduce((sum: number, p: number) => sum + p, 0) / priceConfig.spotPrices.length;
-                newElectricityPrice = avgSpotPrice || DEFAULTS.advParams.electricityPrice;
-            }
-
-            if (Math.abs(params.advParams.electricityPrice - newElectricityPrice) > 0.0001) {
-                handleUpdate({ advParams: { ...params.advParams, electricityPrice: parseFloat(newElectricityPrice.toFixed(4)) } });
-            }
+        if (params.simpleParams.investmentMode === 'emc' && !params.advParams.emcSouthernAveragePrice) {
+            handleUpdate({ advParams: { ...params.advParams, emcSouthernAveragePrice: southernAveragePrice } });
         }
-    }, [priceConfig, params.mode, params.advParams, southernAveragePrice, handleUpdate]);
+    }, [params.simpleParams.investmentMode, params.advParams, southernAveragePrice, handleUpdate]);
 
-    // Sync Building Capacity to the default global parameter.
+    // Sync building list and default capacity into the persisted solar params.
     // If the selected solution has its own capacity, keep the active scheme independent.
     useEffect(() => {
         const totalBuildingCapacity = buildings.filter(b => b.active).reduce((sum, b) => sum + b.manualCapacity, 0);
         const selectedSolution = (params.solutions || []).find(s => s.id === params.selectedSolutionId);
         const shouldFollowBuildingCapacity = !selectedSolution?.capacity;
+        const activeArea = buildings.filter(b => b.active).reduce((sum, b) => sum + (Number(b.area) || 0), 0);
         const nextSimpleParams = {
             ...params.simpleParams,
-            area: buildings.filter(b => b.active).reduce((sum, b) => sum + (Number(b.area) || 0), 0) || params.simpleParams.area
+            area: activeArea || params.simpleParams.area
         };
+        const update: Partial<SolarParamsState> = {};
 
         if (totalBuildingCapacity > 0 && shouldFollowBuildingCapacity && totalBuildingCapacity !== params.simpleParams.capacity) {
-            handleUpdate({ simpleParams: { ...nextSimpleParams, capacity: totalBuildingCapacity } });
+            update.simpleParams = { ...nextSimpleParams, capacity: totalBuildingCapacity };
         } else if (nextSimpleParams.area !== params.simpleParams.area) {
-            handleUpdate({ simpleParams: nextSimpleParams });
+            update.simpleParams = nextSimpleParams;
         }
-    }, [buildings, params.simpleParams, params.solutions, params.selectedSolutionId, handleUpdate]);
+
+        if (JSON.stringify(params.buildings || []) !== JSON.stringify(buildings)) {
+            update.buildings = buildings;
+        }
+
+        if (Object.keys(update).length > 0) {
+            handleUpdate(update);
+        }
+    }, [buildings, params.buildings, params.simpleParams, params.solutions, params.selectedSolutionId, handleUpdate]);
 
     // Sync buildings from projectBaseInfo to solar module
     useEffect(() => {
@@ -476,14 +662,7 @@ const calculateSolarMetrics = (params: SolarParamsState, selfRate: number) => {
         retrofit: parseFloat((v * factor).toFixed(3))
     }));
 
-    const capacity = params.simpleParams.capacity || 0;
-    const selectedSolution = (params.solutions || []).find(s => s.id === params.selectedSolutionId);
-    const epcPrice = selectedSolution?.epcPrice ?? params.simpleParams.epcPrice;
-    const voltageUpgradeCost = (selectedSolution?.connectionType || params.simpleParams.connectionType) === 'high'
-        ? (selectedSolution?.voltageUpgradeCost || 15)
-        : 0;
-    const investment = capacity * epcPrice / 10 + voltageUpgradeCost;
-    const roofRentIncome = params.simpleParams.area * params.advParams.roofRent / 10000; // 万元/年
+    const { capacity, investment } = getSolarInvestment(params);
     const details: any[] = [];
     const cashFlows = [-investment];
 
@@ -491,64 +670,22 @@ const calculateSolarMetrics = (params: SolarParamsState, selfRate: number) => {
     let paybackYear = -1;
 
     for (let year = 1; year <= 25; year++) {
-        const degradation = year === 1 ?
-            (1 - params.advParams.degradationFirstYear / 100) :
-            (1 - params.advParams.degradationFirstYear / 100) * Math.pow(1 - params.advParams.degradationLinear / 100, year - 1);
+        const yearResult = calculateSolarYearResult(params, selfRate, year, investment, capacity);
+        const vatAndSurcharge = calculateExcelStyleTax(params, [...details, yearResult], investment, year);
+        yearResult.tax = parseFloat((yearResult.tax + vatAndSurcharge).toFixed(3));
+        yearResult.netIncome = parseFloat((yearResult.revenue - yearResult.opex - yearResult.tax).toFixed(3));
 
-        const generation = capacity * params.advParams.dailySunHours * params.advParams.generationDays
-            * (params.advParams.prValue / 100) * (params.advParams.azimuthEfficiency / 100) * degradation / 10000;
-
-        const selfUseGen = generation * (selfRate / 100);
-        const gridGen = generation * (1 - selfRate / 100);
-
-        const totalSelfUseRevenue = selfUseGen * params.advParams.electricityPrice;
-        const gridRevenue = gridGen * params.advParams.feedInTariff;
-
-        let investorRevenue = 0;
-        let ownerBenefit = 0;
-
-        if (params.simpleParams.investmentMode === 'emc') {
-            if (params.simpleParams.emcSubMode === 'sharing') {
-                const ownerShare = params.advParams.emcOwnerShareRate / 100;
-                ownerBenefit = totalSelfUseRevenue * ownerShare + roofRentIncome;
-                investorRevenue = totalSelfUseRevenue * (1 - ownerShare) + gridRevenue - roofRentIncome;
-            } else {
-                const salePrice = getEffectiveEmcSalePrice(params);
-                const benchmarkPrice = getOwnerBenchmarkPrice(params);
-                const saleRevenue = selfUseGen * salePrice;
-                ownerBenefit = selfUseGen * (benchmarkPrice - salePrice) + roofRentIncome;
-                investorRevenue = saleRevenue + gridRevenue - roofRentIncome;
-            }
-        } else {
-            investorRevenue = totalSelfUseRevenue + gridRevenue;
-            ownerBenefit = investorRevenue;
-        }
-
-        const opex = (capacity * params.advParams.omCost / 10) + (investment * (params.advParams.insuranceRate / 100));
-        const taxableIncome = investorRevenue - opex;
-        const tax = taxableIncome > 0 ? taxableIncome * (params.advParams.taxRate / 100) : 0;
-        const netIncome = investorRevenue - opex - tax;
-
-        details.push({
-            year,
-            generation: parseFloat(generation.toFixed(3)),
-            revenue: parseFloat(investorRevenue.toFixed(3)),
-            ownerBenefit: parseFloat(ownerBenefit.toFixed(3)),
-            opex: parseFloat(opex.toFixed(3)),
-            tax: parseFloat(tax.toFixed(3)),
-            netIncome: parseFloat(netIncome.toFixed(3))
-        });
-
-        cashFlows.push(parseFloat(netIncome.toFixed(3)));
-        cumulativeNet += netIncome;
-        if (paybackYear === -1 && cumulativeNet >= 0) {
-            paybackYear = year - (cumulativeNet / netIncome);
+        details.push(yearResult);
+        cashFlows.push(yearResult.netIncome);
+        cumulativeNet += yearResult.netIncome;
+        if (paybackYear === -1 && cumulativeNet >= 0 && yearResult.netIncome > 0) {
+            paybackYear = year - (cumulativeNet / yearResult.netIncome);
         }
     }
 
     const rev25Year = details.reduce((sum: number, d: any) => sum + d.netIncome, 0);
     const totalOwnerBenefit25 = details.reduce((sum: number, d: any) => sum + d.ownerBenefit, 0);
-    const irr = investment > 0 ? parseFloat(((rev25Year / 25 / investment) * 100).toFixed(2)) : 0;
+    const irr = investment > 0 ? calculateIRRFromCashFlows(cashFlows) : 0;
 
     return {
         genYear1: details.length > 0 ? details[0].generation : 0,
