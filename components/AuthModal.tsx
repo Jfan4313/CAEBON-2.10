@@ -11,7 +11,7 @@ interface AuthModalProps {
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'login' }) => {
   const [mode, setMode] = useState<AuthMode>(initialMode);
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,7 +24,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   React.useEffect(() => {
     if (isOpen) {
       setMode(initialMode);
-      setEmail('');
+      setIdentifier('');
       setPassword('');
       setFullName('');
       setError('');
@@ -34,7 +34,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
 
   // Reset form when mode changes
   React.useEffect(() => {
-    setEmail('');
+    setIdentifier('');
     setPassword('');
     setFullName('');
     setError('');
@@ -49,14 +49,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
 
     try {
       if (mode === 'login') {
-        const result = await login(email, password);
+        const result = await login(identifier, password);
         if (result.success) {
           onClose();
         } else {
           setError(result.error || '登录失败');
         }
       } else if (mode === 'register') {
-        const result = await register(email, password, fullName);
+        const result = await register(identifier, password, fullName);
         if (result.success) {
           if (result.error) {
             // Success with warning (e.g., email verification required)
@@ -72,7 +72,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
           setError(result.error || '注册失败');
         }
       } else if (mode === 'forgot') {
-        const result = await forgotPassword(email);
+        const result = await forgotPassword(identifier);
         if (result.success) {
           setSuccess('重置密码邮件已发送，请检查您的邮箱');
           setTimeout(() => {
@@ -179,17 +179,23 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                邮箱
+                {isLoginMode ? '邮箱或手机号' : '邮箱'}
               </label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type={isLoginMode ? 'text' : 'email'}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                placeholder="请输入您的邮箱"
+                placeholder={isLoginMode ? '请输入邮箱或手机号' : '请输入您的邮箱'}
+                autoComplete={isLoginMode ? 'username' : 'email'}
                 required
                 disabled={loading}
               />
+              {isLoginMode && (
+                <p className="text-xs text-slate-500 mt-1">
+                  支持中国大陆 11 位手机号，将自动使用 +86 区号登录
+                </p>
+              )}
             </div>
 
             {!isForgotMode && (

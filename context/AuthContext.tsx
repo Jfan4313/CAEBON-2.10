@@ -4,7 +4,8 @@ import { createClient, SupabaseClient, User, Session, AuthError } from '@supabas
 // 用户信息接口
 export interface AuthUser {
   id: string;
-  email: string;
+  email?: string;
+  phone?: string;
   emailVerified?: boolean;
   userMetadata?: {
     full_name?: string;
@@ -17,7 +18,7 @@ interface AuthContextType {
   currentUser: AuthUser | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string, fullName?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -67,10 +68,36 @@ function transformUser(user: User | null): AuthUser | null {
 
   return {
     id: user.id,
-    email: user.email || '',
+    email: user.email || undefined,
+    phone: user.phone || undefined,
     emailVerified: user.email_confirmed_at != null,
     userMetadata: user.user_metadata as AuthUser['userMetadata'],
   };
+}
+
+type PasswordLoginCredentials =
+  | { email: string; password: string }
+  | { phone: string; password: string };
+
+function getPasswordLoginCredentials(
+  identifier: string,
+  password: string
+): PasswordLoginCredentials | null {
+  const normalizedIdentifier = identifier.trim();
+
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedIdentifier)) {
+    return { email: normalizedIdentifier, password };
+  }
+
+  const compactPhone = normalizedIdentifier.replace(/[\s-]/g, '');
+  if (/^1[3-9]\d{9}$/.test(compactPhone)) {
+    return { phone: `+86${compactPhone}`, password };
+  }
+  if (/^\+861[3-9]\d{9}$/.test(compactPhone)) {
+    return { phone: compactPhone, password };
+  }
+
+  return null;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
@@ -138,21 +165,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   /**
    * 用户登录
    */
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (identifier: string, password: string): Promise<{ success: boolean; error?: string }> => {
     if (!supabase) {
       return { success: false, error: '云存储未配置' };
     }
 
+    const credentials = getPasswordLoginCredentials(identifier, password);
+    if (!credentials) {
+      return { success: false, error: '请输入有效的邮箱或中国大陆手机号' };
+    }
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await supabase.auth.signInWithPassword(credentials);
 
       if (error) {
         // 友好的错误消息
         if (error.message.includes('Invalid login credentials')) {
-          return { success: false, error: '邮箱或密码错误' };
+          return { success: false, error: '账号或密码错误' };
+        }
+        if (error.message.includes('Phone not confirmed')) {
+          return { success: false, error: '手机号尚未验证' };
         }
         return { success: false, error: error.message };
       }
