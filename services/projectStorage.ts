@@ -81,16 +81,16 @@ class ProjectStorageService {
     // Some older/local project indexes only contain project metadata. Hydrate
     // those entries from their dedicated project records before rendering or
     // loading them. This also keeps cloud-migrated indexes backwards compatible.
-    let list = (await Promise.all(storedList.map(async (project) => {
+    let list: ProjectTemplate[] = await Promise.all(storedList.map(async (project) => {
       if (project.data) return project as ProjectTemplate;
 
-      const projectJson = await storage.getItem(`${PROJECT_PREFIX}${project.id}`);
-      if (!projectJson) return null;
-
       try {
+        const projectJson = await storage.getItem(`${PROJECT_PREFIX}${project.id}`);
+        if (!projectJson) return project as ProjectTemplate;
+
         const storedProject = JSON.parse(projectJson);
         const data = storedProject?.data || storedProject;
-        if (!data?.projectBaseInfo) return null;
+        if (!data?.projectBaseInfo) return project as ProjectTemplate;
 
         return {
           ...project,
@@ -99,9 +99,11 @@ class ProjectStorageService {
         } as ProjectTemplate;
       } catch (error) {
         console.warn(`Failed to hydrate project ${project.id}:`, error);
-        return null;
+        // Keep the metadata entry visible even when a large/legacy project
+        // detail cannot be fetched. Loading/exporting retries that record.
+        return project as ProjectTemplate;
       }
-    }))).filter((project): project is ProjectTemplate => project !== null);
+    }));
 
     // 过滤模板
     if (options?.templatesOnly) {

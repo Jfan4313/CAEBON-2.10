@@ -49,7 +49,9 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   // 加载项目
   const handleLoadProject = async (project: ProjectTemplate) => {
     try {
-      await importProjectConfig(project.data);
+      const data = project.data || await projectStorageService.loadProjectData(project.id);
+      if (!data) throw new Error('Project detail is unavailable');
+      await importProjectConfig(data);
       setNotification?.({ message: `已加载项目：${project.name}`, type: 'success' });
       onClose();
     } catch (error) {
@@ -70,9 +72,12 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (!editingName.trim()) return;
 
     try {
+      const data = project.data || await projectStorageService.loadProjectData(project.id);
+      if (!data) throw new Error('Project detail is unavailable');
       const updatedProject: ProjectTemplate = {
         ...project,
-        name: editingName.trim()
+        name: editingName.trim(),
+        data,
       };
       await projectStorageService.saveProjectToStorage(updatedProject);
       setEditingId(null);
@@ -108,12 +113,19 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   // 导出项目
-  const handleExportProject = (project: ProjectTemplate) => {
-    projectStorageService.exportProjectConfig(project.data, {
-      filename: `${project.name}_config`,
-      formatted: true
-    });
-    setNotification?.({ message: '项目配置已导出', type: 'success' });
+  const handleExportProject = async (project: ProjectTemplate) => {
+    try {
+      const data = project.data || await projectStorageService.loadProjectData(project.id);
+      if (!data) throw new Error('Project detail is unavailable');
+      projectStorageService.exportProjectConfig(data, {
+        filename: `${project.name}_config`,
+        formatted: true
+      });
+      setNotification?.({ message: '项目配置已导出', type: 'success' });
+    } catch (error) {
+      console.error('Failed to export project:', error);
+      setNotification?.({ message: '导出项目失败', type: 'error' });
+    }
   };
 
   // 格式化日期
