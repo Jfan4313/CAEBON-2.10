@@ -256,7 +256,7 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <span className="material-symbols-outlined text-[16px]">calendar_today</span>
                       更新于 {formatDate(project.updatedAt)}
                     </span>
-                    {project.data.modules && (
+                    {project.data?.modules && (
                       <span className="flex items-center gap-1">
                         <span className="material-symbols-outlined text-[16px]">extension</span>
                         {Object.values(project.data.modules).filter(m => m.isActive).length} 个模块

@@ -76,7 +76,32 @@ class ProjectStorageService {
     const listJson = await storage.getItem(PROJECT_LIST_KEY);
     if (!listJson) return [];
 
-    let list: ProjectTemplate[] = JSON.parse(listJson);
+    const storedList: Array<Omit<ProjectTemplate, 'data'> & { data?: ProjectFullData }> = JSON.parse(listJson);
+
+    // Some older/local project indexes only contain project metadata. Hydrate
+    // those entries from their dedicated project records before rendering or
+    // loading them. This also keeps cloud-migrated indexes backwards compatible.
+    let list = (await Promise.all(storedList.map(async (project) => {
+      if (project.data) return project as ProjectTemplate;
+
+      const projectJson = await storage.getItem(`${PROJECT_PREFIX}${project.id}`);
+      if (!projectJson) return null;
+
+      try {
+        const storedProject = JSON.parse(projectJson);
+        const data = storedProject?.data || storedProject;
+        if (!data?.projectBaseInfo) return null;
+
+        return {
+          ...project,
+          ...(storedProject?.data ? storedProject : {}),
+          data,
+        } as ProjectTemplate;
+      } catch (error) {
+        console.warn(`Failed to hydrate project ${project.id}:`, error);
+        return null;
+      }
+    }))).filter((project): project is ProjectTemplate => project !== null);
 
     // 过滤模板
     if (options?.templatesOnly) {
