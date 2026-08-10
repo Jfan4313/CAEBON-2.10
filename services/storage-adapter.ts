@@ -3,11 +3,13 @@ const isElectron = () => {
     return typeof window !== 'undefined' && 'electronAPI' in window;
 };
 
-interface StorageAdapter {
+export interface StorageAdapter {
     getItem(key: string): Promise<string | null>;
     setItem(key: string, value: string): Promise<void>;
     removeItem(key: string): Promise<void>;
 }
+
+const STORAGE_MODE_KEY = 'carbon_storage_mode';
 
 // Electron 存储适配器
 class ElectronStorageAdapter implements StorageAdapter {
@@ -39,10 +41,37 @@ class BrowserStorageAdapter implements StorageAdapter {
     }
 }
 
-// 导出统一接口
-export const storage: StorageAdapter = isElectron()
+const localStorageAdapter: StorageAdapter = isElectron()
     ? new ElectronStorageAdapter()
     : new BrowserStorageAdapter();
+
+function shouldUseCloudStorage(): boolean {
+    return !isElectron() && localStorage.getItem(STORAGE_MODE_KEY) === 'cloud';
+}
+
+export const storage: StorageAdapter = {
+    async getItem(key) {
+        if (shouldUseCloudStorage()) {
+            const { aliyunStorage } = await import('./aliyun-storage-adapter');
+            return aliyunStorage.getItem(key);
+        }
+        return localStorageAdapter.getItem(key);
+    },
+    async setItem(key, value) {
+        if (shouldUseCloudStorage()) {
+            const { aliyunStorage } = await import('./aliyun-storage-adapter');
+            return aliyunStorage.setItem(key, value);
+        }
+        return localStorageAdapter.setItem(key, value);
+    },
+    async removeItem(key) {
+        if (shouldUseCloudStorage()) {
+            const { aliyunStorage } = await import('./aliyun-storage-adapter');
+            return aliyunStorage.removeItem(key);
+        }
+        return localStorageAdapter.removeItem(key);
+    }
+};
 
 // IndexedDB 适配器
 export class IndexedDBAdapter {
@@ -98,12 +127,9 @@ export const isDesktopApp = isElectron();
 // 导出 getStorage 和 getIndexedDB 函数供外部使用
 export function getStorage(mode: 'local' | 'cloud'): StorageAdapter {
     if (mode === 'cloud') {
-        // 云端模式使用 Supabase 适配器
-        const { getSupabaseAdapter } = require('./supabase-adapter');
-        return getSupabaseAdapter();
+        return storage;
     }
-    // 本地模式使用现有适配器
-    return storage;
+    return localStorageAdapter;
 }
 
 export function getIndexedDB(): IndexedDBAdapter {

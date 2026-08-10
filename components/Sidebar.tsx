@@ -305,14 +305,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-purple-500 flex items-center justify-center text-white shadow-md">
                 <span className="text-xs font-bold">
-                  {currentUser.email?.charAt(0).toUpperCase() || 'U'}
+                  {(currentUser.name || currentUser.username).charAt(0).toUpperCase() || 'U'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-slate-800 truncate">
                   {currentUser.userMetadata?.full_name || '用户'}
                 </p>
-                <p className="text-[10px] text-slate-500 truncate">{currentUser.email}</p>
+                <p className="text-[10px] text-slate-500 truncate">{currentUser.phone || currentUser.username}</p>
               </div>
             </div>
             <button
@@ -339,6 +339,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
+        onAuthenticated={() => {
+          localStorage.setItem('carbon_storage_mode', 'cloud');
+          setShowAuthModal(false);
+          window.location.reload();
+        }}
       />
     </aside>
   );

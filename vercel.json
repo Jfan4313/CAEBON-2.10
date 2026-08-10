@@ -1,5 +1,11 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "name": "CAEBON-2.10"
+  "name": "CAEBON-2.10",
+  "rewrites": [
+    {
+      "source": "/cloud-api/:path*",
+      "destination": "https://project.zero-carbon.online/api/:path*"
+    }
+  ]
 }
