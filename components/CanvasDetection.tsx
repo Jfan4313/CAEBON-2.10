@@ -324,6 +324,3 @@ const CanvasDetection: React.FC<CanvasDetectionProps> = ({
 };
 
 export default CanvasDetection;
-
-// 导出类型以供其他组件使用
-export type { CanvasElement };

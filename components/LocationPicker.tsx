@@ -22,8 +22,8 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
     const [searchError, setSearchError] = useState('');
 
     // 地图点击事件
-    const handleMapClick = useCallback((e: any) => {
-        const { lat, lng } = e;
+    const handleMapClick = useCallback(({ latLng }: { latLng: [number, number] }) => {
+        const [lat, lng] = latLng;
         setMarkerPosition([lat, lng]);
         onLocationChange(lat, lng, address || `位置: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
     }, [address, onLocationChange]);
@@ -122,11 +122,9 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
                         setZoom(zoom);
                     }}
                     onClick={handleMapClick}
-                    defaultTilt="0"
-                    bearing={0}
-                    mapUrl={`https://tile.openstreetmap.org/{z}/{x}/{y}.png`}
+                    provider={(x, y, z) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`}
                     attribution={false}
-                    className="w-full h-full"
+                    boxClassname="w-full h-full"
                 >
                     <Marker
                         width={40}

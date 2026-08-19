@@ -30,7 +30,7 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
         alphaMap: Uint8Array;
     }>>(new Map());
     const lastMousePosRef = useRef<{ x: number; y: number }>({ x: -1, y: -1 });
-    const rafIdRef = useRef<number>();
+    const rafIdRef = useRef<number | undefined>(undefined);
 
     const sortedConfigs = useMemo(() => {
         return [...configs]
@@ -273,7 +273,7 @@ const CanvasHotspotLayer: React.FC<CanvasHotspotLayerProps> = ({
             <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full"
-                style={{ imageRendering: 'optimizeSpeed', willChange: 'auto' }}
+                style={{ imageRendering: 'auto', willChange: 'auto' }}
                 onMouseMove={handleMouseMove}
                 onClick={handleClick}
                 onMouseLeave={handleMouseLeave}

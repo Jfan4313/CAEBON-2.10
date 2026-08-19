@@ -392,7 +392,7 @@ class MemoryService {
 
     // 清空IndexedDB
     if (this.db) {
-      const stores = ['projects', 'preferences', 'templates', 'learnings'];
+      const stores = ['projects', 'preferences', 'templates', 'learnings'] as const;
       for (const storeName of stores) {
         const tx = this.db.transaction(storeName, 'readwrite');
         await tx.store.clear();

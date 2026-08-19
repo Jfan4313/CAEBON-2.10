@@ -190,6 +190,33 @@ export function useHvacLogic() {
         { name: '11月', base: 60, retrofit: 45 }, { name: '12月', base: 50, retrofit: 38 }
     ], []);
 
+    const toggleBuilding = (id: number) => {
+        setHvacBuildings(prev => prev.map(building =>
+            building.id === id ? { ...building, active: !building.active } : building
+        ));
+    };
+
+    const updateBuildingRunHours = (id: number, runHours: number) => {
+        setHvacBuildings(prev => prev.map(building =>
+            building.id === id ? { ...building, runHours } : building
+        ));
+    };
+
+    const updateBuildingStrategy = (id: number, strategy: string) => {
+        if (!(strategy in STRATEGIES)) return;
+        setHvacBuildings(prev => prev.map(building =>
+            building.id === id ? { ...building, strategy } : building
+        ));
+    };
+
+    const updateBuildingSimpleField = (id: number, field: string, value: number | string) => {
+        const allowedFields = new Set(['customCOP', 'costMode', 'customUnitCost', 'area', 'customTotalInvest']);
+        if (!allowedFields.has(field)) return;
+        setHvacBuildings(prev => prev.map(building =>
+            building.id === id ? { ...building, [field]: value } : building
+        ));
+    };
+
     // Update Context
     useEffect(() => {
         const newParams = { mode, globalParams, schedule, hvacBuildings };
@@ -219,6 +246,10 @@ export function useHvacLogic() {
         chartData,
         currentModule,
         toggleModule,
-        saveProject
+        saveProject,
+        toggleBuilding,
+        updateBuildingRunHours,
+        updateBuildingStrategy,
+        updateBuildingSimpleField
     };
 }

@@ -333,7 +333,9 @@ const FormulaAdmin: React.FC = () => {
 
   // 简单的计算函数（仅用于演示）
   const calculate = (moduleId: string, paramValues: Record<string, number | string>): ModuleFormula['testResult'] => {
-    const p = paramValues;
+    const p = Object.fromEntries(
+      Object.entries(paramValues).map(([key, value]) => [key, Number(value)])
+    ) as Record<string, number>;
 
     switch (moduleId) {
       case 'solar': {

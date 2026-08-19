@@ -74,13 +74,13 @@ const hvacParams = {
   currentCOP: 2.8,       // 当前COP
   targetCOP: 4.5,        // 目标COP（改造后）
   annualCoolingHours: 1200, // 每年1200小时制冷
-  buildingType: 'office',
+  buildingType: 'standard' as const,
   freshAirEfficiency: 0.75,
-  controllerType: 'vrf',
+  controllerType: 'vrf' as const,
   vrfSystem: {
     outdoorUnitCount: 2,
     indoorUnitCount: 8,
-    refrigerantType: 'R410A',
+    refrigerantType: 'R410A' as const,
   },
   coolingCapacity: 500,
   humidityControl: true,
@@ -94,10 +94,10 @@ const oldHVACSystem = {
 };
 
 const buildingParams = {
-  type: 'office',
+  type: 'office' as const,
   area: 2000,
-  orientation: 'south',
-  insulationLevel: 'good',
+  orientation: 'south' as const,
+  insulationLevel: 'good' as const,
   glazingRatio: 0.3,
   floorHeight: 3.5,
   shadingCoefficient: 0.2,
@@ -147,7 +147,7 @@ const solarStorageParams = {
   roundTripEfficiency: 0.92,
   dod: 90,              // 90%放电深度
   cyclesPerDay: 1,        // 每天1次循环
-  batteryType: 'LFP',
+  batteryType: 'LFP' as const,
   batteryAge: 0,
   maintenanceRate: 0.5,
   scrapValue: 5,
@@ -263,7 +263,7 @@ console.log(`   衰减成本: ${batteryHealth.degradationCost.toFixed(2)} 元`);
 
 // 不同电池类型对比
 console.log('\n11. 不同电池类型衰减对比:');
-const batteryTypes = ['LFP', 'NCM', 'LeadAcid'];
+const batteryTypes = ['LFP', 'NCM', 'LeadAcid'] as const;
 batteryTypes.forEach(type => {
   const health = calculateBatteryDegradation(type, 2000, 90, 25, 3);
   console.log(`   ${type}: 健康${health.health.toFixed(1)}%, 容量${health.currentCapacity.toFixed(1)}kWh, 成本${health.degradationCost.toFixed(2)}元`);
@@ -358,13 +358,13 @@ for (let hour = 0; hour < 24; hour++) {
 console.log('\n=== 强化学习优化演示 ===\n');
 
 const rlConfig = {
-  algorithm: 'dqn',
+  algorithm: 'dqn' as const,
   learningRate: 0.1,
   discountFactor: 0.95,
   explorationRate: 0.2,
   batchSize: 32,
   trainingEpisodes: 100,
-  rewardFunction: 'cost',
+  rewardFunction: 'cost' as const,
 };
 
 // 生成模拟历史数据

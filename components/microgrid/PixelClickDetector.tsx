@@ -161,7 +161,8 @@ const PixelClickDetector: React.FC<PixelClickDetectorProps> = ({
     className = ''
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const { clear } = usePixelClickDetector(containerRef.current, onClick);
+    const imageElement = containerRef.current?.querySelector('img') ?? null;
+    const { clear } = usePixelClickDetector(imageElement, containerRef, onClick);
 
     useEffect(() => {
         return clear;

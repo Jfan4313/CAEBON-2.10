@@ -129,6 +129,7 @@ export interface ProjectSummary {
   version: string;
   metadata: Record<string, any>;
   data: Record<string, any>;
+  savedAt?: string;
 }
 
 export interface MemoryData {

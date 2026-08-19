@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, AreaChart, Area, ReferenceLine } from 'recharts';
+import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, AreaChart, Area, ReferenceLine, Cell } from 'recharts';
 import { useHvacLogic } from './hooks';
 import { HvacBuildingCard } from './components/HvacBuildingCard';
 
@@ -506,7 +506,7 @@ const RetrofitHVAC: React.FC = () => {
                                         <ReferenceLine y={0} stroke="#cbd5e1" />
                                         <Bar dataKey="value">
                                             {financials.cashFlows.map((entry, index) => (
-                                                <cell key={`cell-${index}`} fill={entry < 0 ? '#ef4444' : '#10b981'} />
+                                                <Cell key={`cell-${index}`} fill={entry < 0 ? '#ef4444' : '#10b981'} />
                                             ))}
                                         </Bar>
                                     </BarChart>

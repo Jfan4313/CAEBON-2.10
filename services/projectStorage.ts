@@ -153,7 +153,7 @@ class ProjectStorageService {
         const { data: _data, ...metadata } = project;
         return {
           ...metadata,
-          activeModuleCount: Object.values(data.modules ?? {}).filter(module => module.isActive).length
+          activeModuleCount: Object.values((data as ProjectFullData).modules ?? {}).filter(module => module.isActive).length
         };
       } catch (error) {
         console.warn(`Failed to hydrate project ${project.id}:`, error);

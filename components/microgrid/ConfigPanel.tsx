@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DeviceImageConfig, PanelState, Position, Size } from '../../../types';
+import { DeviceImageConfig, PanelState, Position, Size } from '../../types';
 import { useDeviceConfigs } from './hooks/useDeviceConfigs';
 
 interface ConfigPanelProps {
@@ -231,7 +231,14 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
                         {/* 新增配置按钮 */}
                         <div className="col-span-2 lg:col-span-1 flex items-center justify-center p-6 border-2 border-dashed border-slate-300 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
-                             onClick={onAdd}
+                             onClick={() => onAdd({
+                                 id: `config-${Date.now()}`,
+                                 name: '新配置',
+                                 imageSrc: '',
+                                 position: { top: 50, left: 50 },
+                                 size: { width: 10, height: 'auto' },
+                                 visible: true
+                             })}
                         >
                             <div className="text-center">
                                 <span className="material-icons text-4xl text-slate-400 mb-2">add</span>

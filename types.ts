@@ -210,6 +210,18 @@ export interface MicrogridVisualState {
   realtimeData: RealtimeData | null;
 }
 
+export interface MicrogridStateReturn {
+  timeOfDay: TimeOfDay;
+  setTimeOfDay: React.Dispatch<React.SetStateAction<TimeOfDay>>;
+  currentHour: number;
+  setCurrentHour: React.Dispatch<React.SetStateAction<number>>;
+  dataSourceMode: DataSourceMode;
+  setDataSourceMode: React.Dispatch<React.SetStateAction<DataSourceMode>>;
+  devices: MicrogridDevices;
+  energyFlow: MicrogridVisualState['energyFlow'];
+  toggleDevice: (device: string) => void;
+}
+
 /**
  * 小时级数据接口
  */

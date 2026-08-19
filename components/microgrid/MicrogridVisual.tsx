@@ -62,7 +62,7 @@ const MicrogridVisual: React.FC = () => {
 
     // 计算容器样式 - 使用明确的 16:9 宽高比
     const containerStyle = {
-        position: 'relative',
+        position: 'relative' as const,
         width: '100%',
         height: '0',
         paddingBottom: '56.25%' // 16:9 的宽高比 (1080/1920 = 0.5625)
@@ -118,6 +118,7 @@ const MicrogridVisual: React.FC = () => {
             {panelState.isOpen && (
                 <ConfigPanel
                     configs={panelState.configs}
+                    selectedId={selectedDeviceConfig?.id ?? null}
                     onAdd={addConfig}
                     onUpdate={updateConfig}
                     onDelete={deleteConfig}

@@ -1626,7 +1626,7 @@ export function generateDefaultPriceCurve(
  * 生成工作日人流量模式
  * @returns 每小时人流量比例（0-1）
  */
-export function generateDefaultTrafficPattern(): number[] {
+export function generateDefaultTrafficPattern(): TrafficPattern {
   const pattern = [];
 
   // 深夜/清晨 (0-6点): 低流量
@@ -1647,7 +1647,11 @@ export function generateDefaultTrafficPattern(): number[] {
   // 夜间 (22-24点): 低流量
   for (let i = 22; i < 24; i++) pattern.push(0.2);
 
-  return pattern;
+  return {
+    workdayPattern: pattern,
+    weekendPattern: pattern.map(value => value * 0.5),
+    holidayPattern: pattern.map(value => value * 0.3)
+  };
 }
 
 // ============================================================================
@@ -2200,7 +2204,7 @@ export class PriceForecastModule {
    * @param timestamp 时间戳
    * @returns 实时电价数据
    */
-  getCurrentPrice(timestamp?: number): RealTimePriceData {
+  async getCurrentPrice(timestamp?: number): Promise<RealTimePriceData> {
     const now = timestamp || Date.now();
     const cached = this.cacheManager.get('current_price');
 
@@ -2208,7 +2212,7 @@ export class PriceForecastModule {
       return cached.data as RealTimePriceData;
     }
 
-    const data = this.dataAdapter.fetchCurrentPrice();
+    const data = await this.dataAdapter.fetchCurrentPrice();
     this.cacheManager.set('current_price', data, 5 * 60 * 1000);
     return data;
   }
@@ -2366,17 +2370,19 @@ export class PriceForecastModule {
  * 电价数据适配器
  * 同时支持模拟数据和真实API
  */
+interface PriceDataAdapterConfig {
+  source: PriceDataSource;
+  apiEndpoint: string;
+  apiKey: string;
+  cacheValidity: number;
+  fallbackToSimulated: boolean;
+}
+
 export class PriceDataAdapter {
-  private sourceConfig: PriceDataSource;
+  private sourceConfig: PriceDataAdapterConfig;
   private fallbackToSimulated: boolean;
 
-  constructor(config?: Partial<{
-    source: PriceDataSource;
-    apiEndpoint: string;
-    apiKey: string;
-    cacheValidity: number;
-    fallbackToSimulated: boolean;
-  }>) {
+  constructor(config?: Partial<PriceDataAdapterConfig>) {
     this.sourceConfig = {
       source: PriceDataSource.SIMULATED,
       apiEndpoint: '',

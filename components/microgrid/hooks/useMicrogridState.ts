@@ -9,9 +9,9 @@ import {
     StreetLightState,
     PvDeviceState,
     EvCarState,
-    MicrogridStateReturn,
     EnergyFlow
 } from '../../../types';
+import type { MicrogridStateReturn } from '../../../types';
 
 /**
  * 微电网可视化状态管理 Hook
@@ -33,7 +33,7 @@ export const useMicrogridState = (): MicrogridStateReturn => {
         hvacIndoor: { status: DeviceStatus.IDLE, power: 0 },
         storage: { status: DeviceStatus.IDLE, soc: 50, power: 0 },
         streetLights: { status: DeviceStatus.OFF, count: 8, onCount: 0 },
-        pvPanels: { status: DeviceStatus.RUNNING, generation: 0 },
+        pvPanels: { status: DeviceStatus.RUNNING, power: 0, generation: 0 },
         evCars: [
             { id: 'car1', status: DeviceStatus.CHARGING, batteryLevel: 30 },
             { id: 'car2', status: DeviceStatus.IDLE, batteryLevel: 80 },

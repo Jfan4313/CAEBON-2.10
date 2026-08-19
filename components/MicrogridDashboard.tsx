@@ -250,7 +250,7 @@ export default function MicrogridDashboard() {
                                         margin={{ top: 5, right: 5, left: 0, bottom: 0 }}
                                         onMouseMove={(e) => {
                                             if (e.activeTooltipIndex !== undefined) {
-                                                setCurrentHour(e.activeTooltipIndex);
+                                                setCurrentHour(Number(e.activeTooltipIndex));
                                             }
                                         }}
                                     >

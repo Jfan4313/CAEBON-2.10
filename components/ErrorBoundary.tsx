@@ -53,7 +53,10 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, {}> {
       return (
         <ErrorBoundary
           FallbackComponent={({ error, resetErrorBoundary }) => (
-            <ErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} />
+            <ErrorFallback
+              error={error instanceof Error ? error : new Error(String(error))}
+              resetErrorBoundary={resetErrorBoundary}
+            />
           )}
           onReset={() => {
             this.setState({ hasError: false, error: null });

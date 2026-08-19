@@ -46,6 +46,7 @@ interface ProjectContextType {
 
     // Delegated from AppContext
     notification: any;
+    setNotification: (n: import('./AppContext').Notification | null) => void;
     isCalculating: any;
     apiAvailable: any;
     memory: any;

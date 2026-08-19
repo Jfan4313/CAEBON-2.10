@@ -1,5 +1,5 @@
-import React from 'react';
-import PixelClickDetector from './pixelClickDetector';
+import React, { useState } from 'react';
+import PixelClickDetector from './PixelClickDetector';
 
 /**
  * 像素级点击检测使用示例
@@ -9,7 +9,7 @@ import PixelClickDetector from './pixelClickDetector';
 const PixelClickDetectorDemo: React.FC = () => {
     const [clickLog, setClickLog] = useState<string[]>([]);
 
-    const handleDeviceClick = (x: number, y: number, deviceName: string) => {
+    const handleDeviceClick = (x: number, y: number, deviceName = '设备') => {
         const timestamp = new Date().toLocaleTimeString();
         setClickLog(prev => [`[${timestamp}] ${deviceName}: 点击坐标 (${x}, ${y})`, ...prev]);
     };
