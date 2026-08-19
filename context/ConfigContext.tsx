@@ -17,6 +17,20 @@ export interface Bill {
     kwh: number;
     cost: number;
     transformerId?: number;
+    /** 分时电量，均为可选字段，兼容历史项目的总电量账单。 */
+    sharpPeakKwh?: number;
+    peakKwh?: number;
+    flatKwh?: number;
+    valleyKwh?: number;
+    /** 当月电费单列示的分时电价；未填写时使用项目电价配置。 */
+    sharpPeakPrice?: number;
+    peakPrice?: number;
+    flatPrice?: number;
+    valleyPrice?: number;
+    billingMode?: 'tou' | 'fixed';
+    fixedUnitPrice?: number;
+    /** 正向无功总电量，仅用于功率因数与无功补偿分析，不计入有功用电量。 */
+    reactiveKvarh?: number;
 }
 
 export interface PriceConfigState {
@@ -71,8 +85,15 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setNotification({ message: '项目已成功保存到本地列表', type: 'success' });
             setTimeout(() => setNotification(null), 3000);
         } catch (error) {
-            setNotification({ message: '保存失败，请重试', type: 'error' });
+            console.error('Failed to save project:', error);
+            const isStorageFull = error instanceof DOMException &&
+                (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+            setNotification({
+                message: isStorageFull ? '本地存储空间不足，项目保存失败' : '保存失败，请重试',
+                type: 'error'
+            });
             setTimeout(() => setNotification(null), 3000);
+            throw error;
         }
     }, [setNotification]);
 

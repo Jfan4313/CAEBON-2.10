@@ -1,6 +1,7 @@
 import { calculateIRR, calculatePaybackPeriod } from '../../utils/financial';
 import type { PriceConfigState } from '../../context/ConfigContext';
 import type { ModuleData } from '../../context/ModuleContext';
+import { estimateAnnualLoad, type MonthlyEstimationOptions } from '../../shared/utils/monthlyLoadEstimation';
 import type {
   IntegratedScenario,
   IntegratedScenarioResult,
@@ -42,10 +43,11 @@ export const getHistoricalAveragePrice = (bills: Array<{ kwh?: number; cost?: nu
 };
 
 export const getAnnualDemandKwh = (
-  bills: Array<{ kwh?: number }>,
-  transformers: Array<{ capacity?: number }>
+  bills: Array<{ month?: string; kwh?: number; sharpPeakKwh?: number; peakKwh?: number; flatKwh?: number; valleyKwh?: number; billingMode?: 'tou' | 'fixed'; fixedUnitPrice?: number; reactiveKvarh?: number }>,
+  transformers: Array<{ capacity?: number }>,
+  estimationOptions: MonthlyEstimationOptions = {},
 ): number => {
-  const billDemand = bills.reduce((sum, bill) => sum + Number(bill.kwh || 0), 0);
+  const billDemand = estimateAnnualLoad(bills, estimationOptions).annualizedKwh;
   if (billDemand > 0) return billDemand;
   const transformerCapacity = transformers.reduce((sum, transformer) => sum + Number(transformer.capacity || 0), 0);
   return transformerCapacity > 0 ? transformerCapacity * 0.45 * 2000 : 1000000;

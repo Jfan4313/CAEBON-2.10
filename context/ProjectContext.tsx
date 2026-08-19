@@ -15,6 +15,8 @@ export interface ProjectBaseInfo {
     name: string;
     type: string;
     schoolType?: 'primary_middle' | 'high_school' | 'university' | 'vocational' | 'training';
+    /** 别墅户用全年平均日用电量，用于缩放24小时负荷曲线。 */
+    villaDailyKwh?: number;
     hasAirConditioning?: boolean;
     storageCapacity?: number;
     province: string;

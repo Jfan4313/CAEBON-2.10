@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, ResponsiveContainer, Cell, XAxis, YAxis, Tooltip, CartesianGrid, Brush } from 'recharts';
 import { useProject } from '../context/ProjectContext';
+import { EditableNumberInput } from '../shared/components/EditableNumberInput';
 
 type PriceMode = 'tou' | 'fixed' | 'spot';
 
@@ -25,10 +26,9 @@ const PriceConfig: React.FC = () => {
       setPriceConfig({ ...priceConfig, touSegments: newSegs });
   };
 
-  const handleSpotChange = (idx: number, val: string) => {
-      const numVal = parseFloat(val) || 0;
+  const handleSpotChange = (idx: number, val: number) => {
       const newSpots = [...(priceConfig.spotPrices || Array(24).fill(0.5))];
-      newSpots[idx] = numVal;
+      newSpots[idx] = val;
       setPriceConfig({ ...priceConfig, spotPrices: newSpots });
   };
 
@@ -202,11 +202,11 @@ const PriceConfig: React.FC = () => {
                                 <div className="space-y-4">
                                     <div className="bg-white p-4 rounded-lg border border-slate-200">
                                         <label className="block text-xs font-medium text-slate-500 mb-1">统一电价 (元/kWh)</label>
-                                        <input 
-                                            type="number" 
+                                        <EditableNumberInput
                                             step="0.01"
+                                            min={0}
                                             value={priceConfig.fixedPrice}
-                                            onChange={(e) => handleFixedPriceChange(parseFloat(e.target.value))}
+                                            onValueChange={handleFixedPriceChange}
                                             className="w-full text-lg font-bold text-slate-800 outline-none border-b border-slate-200 focus:border-primary py-1 bg-white"
                                         />
                                     </div>
@@ -232,11 +232,11 @@ const PriceConfig: React.FC = () => {
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-slate-400">价格:</span>
-                                                <input 
-                                                    type="number" 
+                                                <EditableNumberInput
                                                     step="0.01"
+                                                    min={0}
                                                     value={seg.price}
-                                                    onChange={(e) => handleTouChange(idx, 'price', parseFloat(e.target.value))}
+                                                    onValueChange={(value) => handleTouChange(idx, 'price', value)}
                                                     className="w-16 border border-slate-200 rounded px-2 py-1 outline-none focus:border-primary bg-white"
                                                 />
                                                 <span className="text-slate-400">元</span>
@@ -261,11 +261,11 @@ const PriceConfig: React.FC = () => {
                                         {(priceConfig.spotPrices || []).map((val, i) => (
                                             <div key={i} className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-slate-200">
                                                 <span className="text-[10px] text-slate-400 w-8">{i}:00</span>
-                                                <input 
-                                                    type="number"
+                                                <EditableNumberInput
                                                     step="0.01"
+                                                    min={0}
                                                     value={val}
-                                                    onChange={(e) => handleSpotChange(i, e.target.value)}
+                                                    onValueChange={(value) => handleSpotChange(i, value)}
                                                     className="w-full text-xs font-medium outline-none text-right bg-white"
                                                 />
                                             </div>

@@ -47,6 +47,7 @@ export const BuildingList: React.FC<BuildingListProps> = ({
                                         <option>办公楼 (Office)</option>
                                         <option>仓库 (Warehouse)</option>
                                         <option>商业 (Retail)</option>
+                                        <option>别墅住宅 (Villa)</option>
                                         <option>未定义</option>
                                     </select>
                                 </td>

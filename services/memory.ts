@@ -81,6 +81,16 @@ function remove(key: string): void {
   localStorage.removeItem(STORAGE_PREFIX + key);
 }
 
+function parseStored<T>(key: string, fallback: T): T {
+  const raw = get(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 // ========== 记忆服务类 ==========
 
 class MemoryService {
@@ -140,19 +150,21 @@ class MemoryService {
   // ========== 快速记忆 (localStorage) ==========
 
   getQuickMemory(): MemoryData {
+    const stored = parseStored<Partial<MemoryData>>('memory', {});
+    const storedPreferences: Partial<MemoryData['preferences']> = stored.preferences || {};
     return {
-      lastAccessedProject: get('lastAccessedProject'),
-      recentProjects: JSON.parse(get('recentProjects') || '[]'),
+      lastAccessedProject: get('lastAccessedProject') || stored.lastAccessedProject || null,
+      recentProjects: parseStored<string[]>('recentProjects', stored.recentProjects || []),
       preferences: {
-        defaultRegion: get('defaultRegion') || '广东省',
-        defaultBuildingType: get('defaultBuildingType') || 'factory',
-        calculationMode: (get('calculationMode') as 'simple' | 'advanced') || 'simple',
-        autoSaveInterval: parseInt(get('autoSaveInterval') || '300', 10),
+        defaultRegion: parseStored<string>('pref_defaultRegion', storedPreferences.defaultRegion || '广东省'),
+        defaultBuildingType: parseStored<string>('pref_defaultBuildingType', storedPreferences.defaultBuildingType || 'factory'),
+        calculationMode: parseStored<'simple' | 'advanced'>('pref_calculationMode', storedPreferences.calculationMode || 'simple'),
+        autoSaveInterval: parseStored<number>('pref_autoSaveInterval', storedPreferences.autoSaveInterval || 300),
       },
       templates: {
-        regionFactors: JSON.parse(get('regionFactors') || '{}'),
+        regionFactors: parseStored<Record<string, RegionFactor>>('regionFactors', stored.templates?.regionFactors || {}),
       },
-      learnings: JSON.parse(get('learnings') || '{}'),
+      learnings: parseStored<Record<string, any>>('learnings', stored.learnings || {}),
     };
   }
 
@@ -160,6 +172,13 @@ class MemoryService {
     const memory = this.getQuickMemory();
     memory[key] = value;
     set('memory', JSON.stringify(memory));
+    if (key === 'lastAccessedProject') {
+      set('lastAccessedProject', value || '');
+    } else if (key === 'recentProjects' || key === 'learnings') {
+      set(key, JSON.stringify(value));
+    } else if (key === 'templates') {
+      set('regionFactors', JSON.stringify(value?.regionFactors || {}));
+    }
   }
 
   // ========== 项目管理 ==========
@@ -206,7 +225,7 @@ class MemoryService {
 
     // 如果是当前项目，清空
     if (memory.lastAccessedProject === projectId) {
-      set('lastAccessedProject', '');
+      this.setQuickMemory('lastAccessedProject', null);
     }
   }
 
@@ -229,7 +248,7 @@ class MemoryService {
   }
 
   getLastAccessedProject(): string | null {
-    return get('lastAccessedProject');
+    return get('lastAccessedProject') || null;
   }
 
   // ========== 用户偏好 ==========

@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getSchoolTypeName } from '../../../services/campusConsumption';
-import { SolarParamsState, BuildingData, EmcSubMode, SolarSolution, MODULE_BRANDS } from '../types';
+import { SolarParamsState, BuildingData, EmcSubMode, SolarSolution, MODULE_BRANDS, SOLAR_CONSTRUCTION_METHODS, SolarConstructionMethod, CABLE_BRANDS, INVERTER_BRANDS, SolarCableBrand, SolarInverterBrand, buildDefaultSolarMaterialBill } from '../types';
 import { SunHoursResult } from '../../../services/solarData';
 import { SolutionSelector } from './SolutionSelector';
 import { ConsumptionRateAnalysis } from './ConsumptionRateAnalysis';
 import { ModuleBrandSelector } from './ModuleBrandSelector';
 import { LayoutImageUploader } from './LayoutImageUploader';
+import { MaterialBillEditor } from './MaterialBillEditor';
+import { EditableNumberInput } from '../../../shared/components/EditableNumberInput';
+import { getGenerationWeightedTariff } from '../utils/emcTariff';
 
 interface SolarFormProps {
     params: SolarParamsState;
@@ -86,17 +89,64 @@ export const SolarForm: React.FC<SolarFormProps> = ({
         }
     };
 
+    const monthlyEmcTariffs = params.advParams.emcMonthlyTariffs || [];
     const currentEmcSalePrice = params.simpleParams.emcSubMode === 'fixed'
         ? params.advParams.emcFixedPrice
-        : params.advParams.emcDiscountPrice;
-    const ownerBenchmarkPrice = params.advParams.emcSouthernAveragePrice || params.advParams.electricityPrice;
+        : getGenerationWeightedTariff(monthlyEmcTariffs, 'discountedPrice', params.advParams.emcDiscountPrice);
+    const ownerBenchmarkPrice = params.simpleParams.emcSubMode === 'discount'
+        ? getGenerationWeightedTariff(
+            monthlyEmcTariffs,
+            'benchmarkPrice',
+            params.advParams.emcSouthernAveragePrice ?? params.advParams.electricityPrice,
+        )
+        : params.advParams.emcSouthernAveragePrice ?? params.advParams.electricityPrice;
     const ownerSavingPerKwh = ownerBenchmarkPrice - currentEmcSalePrice;
     const activeBuildings = buildings.filter(b => b.active);
     const activeBuildingArea = activeBuildings.reduce((sum, b) => sum + (Number(b.area) || 0), 0);
     const activeBuildingCapacity = activeBuildings.reduce((sum, b) => sum + (Number(b.manualCapacity) || 0), 0);
+    const currentConstructionMethod = currentSolution?.constructionMethod || 'rooftop';
+    const isCanopyConstruction = ['color_steel_canopy', 'bipv_canopy', 'daylighting_canopy'].includes(currentConstructionMethod);
+    const defaultMaterialBillItems = useMemo(
+        () => buildDefaultSolarMaterialBill(
+            params.simpleParams.connectionType,
+            currentConstructionMethod,
+        ),
+        [params.simpleParams.connectionType, currentConstructionMethod]
+    );
+    const materialBillItems = params.materialBillItems?.length ? params.materialBillItems : defaultMaterialBillItems;
+    const businessTerms = params.businessTerms;
+    const updateBusinessTerms = (updates: Partial<NonNullable<SolarParamsState['businessTerms']>>) => {
+        handleUpdate({
+            businessTerms: {
+                ...businessTerms!,
+                ...updates
+            }
+        });
+    };
 
     return (
         <div className="solar-apple-shell max-w-6xl mx-auto flex flex-col gap-7">
+            <section style={{ order: 0 }} className="solar-apple-section p-6 md:p-8 animate-fade-in">
+                <h3 className="solar-apple-title text-base mb-4 flex items-center gap-3">
+                    <span className="solar-apple-icon material-icons text-[18px]">electrical_services</span> 光伏系统运行方式
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                        onClick={() => handleUpdate({ simpleParams: { ...params.simpleParams, operationMode: 'off_grid' } })}
+                        className={`p-4 rounded-xl border text-left transition-all ${params.simpleParams.operationMode === 'off_grid' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-200'}`}
+                    >
+                        <div className="font-black text-sm text-slate-800">离网光伏＋配套储能</div>
+                        <div className="text-[11px] text-slate-500 mt-1">余电不出售，储能充电不计上网机会成本；放电收益按替代购电计算。</div>
+                    </button>
+                    <button
+                        onClick={() => handleUpdate({ simpleParams: { ...params.simpleParams, operationMode: 'grid_connected' } })}
+                        className={`p-4 rounded-xl border text-left transition-all ${params.simpleParams.operationMode !== 'off_grid' ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200'}`}
+                    >
+                        <div className="font-black text-sm text-slate-800">并网自发自用＋余电上网</div>
+                        <div className="text-[11px] text-slate-500 mt-1">未被负荷和储能吸收的电量按上网电价结算。</div>
+                    </button>
+                </div>
+            </section>
             {/* --- 楼栋容量配置 --- */}
             <section style={{ order: 1 }} className="solar-apple-section p-6 md:p-8 animate-fade-in">
                 <h3 className="solar-apple-title text-base mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
@@ -191,6 +241,37 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                     onUpdateSolution={handleUpdateSolution}
                     onDeleteSolution={handleDeleteSolution}
                 />
+                {isCanopyConstruction && (
+                    <div className="mt-5 rounded-[22px] border border-amber-200 bg-amber-50/70 p-4">
+                        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                            <div>
+                                <h4 className="text-sm font-black text-amber-900 flex items-center gap-2">
+                                    <span className="material-icons text-[18px] text-amber-600">gavel</span>
+                                    光伏棚架商务专项
+                                </h4>
+                                <p className="text-[11px] text-amber-700/80 mt-1">
+                                    仅针对当前项目需要时开启，开启后会写入方案汇报的商务方案页。
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => handleUpdate({ canopyOverheightOwnerResponsibility: !(params.canopyOverheightOwnerResponsibility ?? false) })}
+                                className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${params.canopyOverheightOwnerResponsibility ? 'bg-amber-600 border-amber-600 text-white' : 'bg-white border-amber-200 text-amber-700'}`}
+                            >
+                                <span className="material-icons text-[15px]">{params.canopyOverheightOwnerResponsibility ? 'check_circle' : 'radio_button_unchecked'}</span>
+                                棚架超高，业主责任兜底
+                            </button>
+                        </div>
+                        {params.canopyOverheightOwnerResponsibility && (
+                            <textarea
+                                value={params.canopyOverheightResponsibilityNote || ''}
+                                onChange={(event) => handleUpdate({ canopyOverheightResponsibilityNote: event.target.value })}
+                                rows={3}
+                                className="mt-3 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-xs font-semibold text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
+                            />
+                        )}
+                    </div>
+                )}
             </section>
 
             {/* --- 消纳率配置 --- */}
@@ -249,12 +330,24 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                                             {showConsumptionDetail ? '隐藏详情' : '查看详情'}
                                         </button>
                                     </>
+                                ) : projectBaseInfo.type === 'villa' ? (
+                                    <>
+                                        <p className="flex items-center gap-1">
+                                            <span className="material-icons text-[12px] text-emerald-600">villa</span>
+                                            <span className="font-bold text-slate-700">别墅户用消纳率预估</span>
+                                        </p>
+                                        <p>按早晚居家双峰、白天低基荷、夏季空调负荷与当地光伏出力逐小时匹配。</p>
+                                        <p className="flex items-center gap-1">
+                                            <span className="material-icons text-[12px] text-[#0071e3]">info</span>
+                                            {bills.length > 0 ? '优先采用电费单并补齐全年' : '未录账单，按建筑面积与户用能耗强度估算'}
+                                        </p>
+                                    </>
                                 ) : (
                                     <>
                                         <p>基于<span className="font-bold text-slate-700">月度用电量</span>与<span className="font-bold text-slate-700">模拟发电量</span>匹配计算。</p>
                                         <p className="flex items-center gap-1">
                                             <span className="material-icons text-[12px] text-[#0071e3]">info</span>
-                                            {bills.length > 0 ? '已关联 12 个月电费单数据' : '未检测到电费单，默认100%'}
+                                            {bills.length > 0 ? '已关联电费单，已按季节模型补齐全年' : '未检测到电费单，将按典型负荷估算'}
                                         </p>
                                     </>
                                 )}
@@ -432,11 +525,12 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="space-y-1">
                                 <label className="text-xs text-slate-500">上网电价 (元/kWh)</label>
-                                <input type="number" value={params.advParams.feedInTariff} step="0.01" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, feedInTariff: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                                <EditableNumberInput value={params.advParams.feedInTariff} min={0} step="0.01" disabled={params.simpleParams.operationMode === 'off_grid'} onValueChange={(value) => handleUpdate({ advParams: { ...params.advParams, feedInTariff: value } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary disabled:bg-slate-100 disabled:text-slate-400" />
+                                {params.simpleParams.operationMode === 'off_grid' && <span className="text-[10px] text-emerald-600">离网模式不计算余电上网收入</span>}
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs text-slate-500">基准电价 (元/kWh)</label>
-                                <input type="number" value={params.advParams.electricityPrice} step="0.01" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, electricityPrice: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                                <EditableNumberInput value={params.advParams.electricityPrice} min={0} step="0.01" onValueChange={(value) => handleUpdate({ advParams: { ...params.advParams, electricityPrice: value } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs text-slate-500">运维费 (元/W/年)</label>
@@ -447,16 +541,91 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                                 <input type="number" value={params.advParams.insuranceRate} step="0.01" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, insuranceRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs text-slate-500">收入增值税 (%)</label>
-                                <input type="number" value={params.advParams.revenueVatRate} step="0.1" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, revenueVatRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                                <label className="text-xs text-slate-500">增值税纳税人类型</label>
+                                <select
+                                    value={params.advParams.vatTaxpayerType}
+                                    onChange={(e) => handleUpdate({
+                                        advParams: {
+                                            ...params.advParams,
+                                            vatTaxpayerType: e.target.value as 'small_scale' | 'general'
+                                        }
+                                    })}
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary font-bold text-slate-700"
+                                >
+                                    <option value="small_scale">小规模纳税人（默认）</option>
+                                    <option value="general">一般纳税人</option>
+                                </select>
+                                <span className="text-[10px] text-slate-400">按项目月均销售额折算：年销售额≤120万元免征，超过时按1%测算</span>
                             </div>
+                            {params.advParams.vatTaxpayerType === 'general' && (
+                                <>
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-500">收入增值税 (%)</label>
+                                        <input type="number" value={params.advParams.revenueVatRate} step="0.1" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, revenueVatRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-500">成本进项税 (%)</label>
+                                        <input type="number" value={params.advParams.costVatRate} step="0.1" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, costVatRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                                    </div>
+                                </>
+                            )}
                             <div className="space-y-1">
-                                <label className="text-xs text-slate-500">成本进项税 (%)</label>
-                                <input type="number" value={params.advParams.costVatRate} step="0.1" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, costVatRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" />
+                                <label className="text-xs text-slate-500">企业所得税口径</label>
+                                <select
+                                    value={params.advParams.incomeTaxMode}
+                                    onChange={(e) => handleUpdate({
+                                        advParams: {
+                                            ...params.advParams,
+                                            incomeTaxMode: e.target.value as 'exempt' | 'small_micro' | 'custom'
+                                        }
+                                    })}
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary font-bold text-slate-700"
+                                >
+                                    <option value="exempt">免计所得税（离网/户用默认）</option>
+                                    <option value="small_micro">小型微利企业（有效税率5%）</option>
+                                    <option value="custom">自定义所得税率</option>
+                                </select>
+                                <span className="text-[10px] text-slate-400">
+                                    {params.advParams.incomeTaxMode === 'exempt'
+                                        ? '当前收益模型不扣企业所得税；如实际由公司投资并形成应税利润，可切换为小微企业或自定义税率'
+                                        : '实际税务资格以投资主体、交易方式及当地执行口径为准'}
+                                </span>
                             </div>
+                            {params.advParams.incomeTaxMode === 'custom' && (
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">自定义所得税率 (%)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={params.advParams.taxRate}
+                                        step="0.1"
+                                        onChange={(e) => handleUpdate({ advParams: { ...params.advParams, taxRate: parseFloat(e.target.value) || 0 } })}
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary font-bold text-slate-700"
+                                    />
+                                </div>
+                            )}
                             <div className="space-y-1">
-                                <label className="text-xs text-slate-500">综合税率 (%)</label>
-                                <input type="number" value={params.advParams.taxRate} step="0.1" onChange={(e) => handleUpdate({ advParams: { ...params.advParams, taxRate: parseFloat(e.target.value) } })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-primary font-bold text-slate-700" />
+                                <label className="text-xs text-slate-500">项目剩余周期 (年)</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="30"
+                                    step="1"
+                                    value={params.advParams.projectLifeYears}
+                                    onChange={(e) => {
+                                        const projectLifeYears = Math.min(30, Math.max(1, Math.round(parseFloat(e.target.value) || 1)));
+                                        handleUpdate({
+                                            advParams: {
+                                                ...params.advParams,
+                                                projectLifeYears,
+                                                financingTermYears: Math.min(params.advParams.financingTermYears, projectLifeYears),
+                                                coBuildTermYears: Math.min(params.advParams.coBuildTermYears, projectLifeYears)
+                                            }
+                                        });
+                                    }}
+                                    className="w-full px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm outline-none focus:border-amber-400 font-bold text-amber-800"
+                                />
+                                <span className="text-[10px] text-amber-600">收益、现金流和发电量均按剩余周期计算</span>
                             </div>
                         </div>
                     </div>
@@ -471,6 +640,37 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                 </h3>
                 {currentSolution && (
                     <div className="space-y-6">
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">建设方式与效果图</label>
+                                <p className="text-[11px] text-slate-400 mt-1">每个方案可独立选择，报告将增加对应的建设效果图页面。</p>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                                {(Object.keys(SOLAR_CONSTRUCTION_METHODS) as SolarConstructionMethod[]).map(methodId => {
+                                    const method = SOLAR_CONSTRUCTION_METHODS[methodId];
+                                    const active = (currentSolution.constructionMethod || 'rooftop') === methodId;
+                                    return (
+                                        <button
+                                            key={methodId}
+                                            type="button"
+                                            onClick={() => handleUpdateSolution(currentSolution.id, { constructionMethod: methodId })}
+                                            className={`overflow-hidden rounded-[20px] border text-left transition-all ${active ? 'border-[#0071e3] ring-2 ring-[#0071e3]/15 shadow-lg' : 'border-slate-200 hover:border-slate-300'}`}
+                                        >
+                                            <div className="h-28 bg-slate-100 overflow-hidden">
+                                                <img src={method.image} alt={method.name} className="w-full h-full object-cover" />
+                                            </div>
+                                            <div className="p-3 bg-white">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-sm font-bold text-slate-900">{method.name}</span>
+                                                    {active && <span className="material-icons text-[#0071e3] text-[18px]">check_circle</span>}
+                                                </div>
+                                                <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">{method.description}</p>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <label className="text-xs font-semibold text-slate-500">接入电压等级</label>
@@ -514,6 +714,55 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                             onSelect={(brand) => handleUpdateSolution(currentSolution.id, { brand })}
                         />
 
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-sm font-bold text-slate-700">电缆品牌</label>
+                                    <p className="text-[10px] text-slate-400 mt-1">与上方铜芯/铝芯材质共同组成电缆配置</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(Object.keys(CABLE_BRANDS) as SolarCableBrand[]).map(brandId => {
+                                        const cableBrand = CABLE_BRANDS[brandId];
+                                        const active = (currentSolution.cableBrand || 'generic') === brandId;
+                                        return (
+                                            <button
+                                                key={brandId}
+                                                type="button"
+                                                onClick={() => handleUpdateSolution(currentSolution.id, { cableBrand: brandId })}
+                                                className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all ${active ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                                            >
+                                                {cableBrand.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-sm font-bold text-slate-700">逆变器品牌</label>
+                                    <p className="text-[10px] text-slate-400 mt-1">每个方案独立保存逆变器选型</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(Object.keys(INVERTER_BRANDS) as SolarInverterBrand[]).map(brandId => {
+                                        const inverterBrand = INVERTER_BRANDS[brandId];
+                                        const active = (currentSolution.inverterBrand || 'generic') === brandId;
+                                        return (
+                                            <button
+                                                key={brandId}
+                                                type="button"
+                                                onClick={() => handleUpdateSolution(currentSolution.id, { inverterBrand: brandId })}
+                                                className={`px-3 py-2.5 rounded-xl border text-left transition-all ${active ? 'bg-emerald-50 border-emerald-400 text-emerald-800 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                                            >
+                                                <span className="block text-xs font-bold">{inverterBrand.name}</span>
+                                                <span className="block text-[9px] mt-1 opacity-70">{inverterBrand.description}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="pt-4 border-t border-slate-100">
                             <div className="flex items-center gap-2 mb-3">
                                 <span className="material-icons text-[18px] text-primary">map</span>
@@ -532,6 +781,52 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                         </div>
                     </div>
                 )}
+            </section>
+
+            <MaterialBillEditor
+                items={materialBillItems}
+                onChange={(items) => handleUpdate({ materialBillItems: items })}
+                onReset={() => handleUpdate({ materialBillItems: defaultMaterialBillItems })}
+                showInReport={params.showMaterialBillInReport ?? false}
+                onToggleReport={(show) => handleUpdate({ showMaterialBillInReport: show })}
+            />
+
+            <section style={{ order: 9 }} className="solar-apple-section p-6 md:p-8 animate-fade-in">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-slate-100 pb-4 mb-5">
+                    <div>
+                        <h3 className="solar-apple-title text-base flex items-center gap-3">
+                            <span className="solar-apple-icon material-icons text-[18px]">contract</span> 商务条件
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-2">用于向业主说明签约年限、结算方式、双方责任和特殊兜底条款。</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => updateBusinessTerms({ showInReport: !(businessTerms?.showInReport ?? true) })}
+                        className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${(businessTerms?.showInReport ?? true) ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        <span className="material-icons text-[15px]">{(businessTerms?.showInReport ?? true) ? 'check_circle' : 'radio_button_unchecked'}</span>
+                        {(businessTerms?.showInReport ?? true) ? '已加入方案汇报' : '加入方案汇报'}
+                    </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                        ['contractYears', '签约年限'],
+                        ['settlementTerms', '商务结算条件'],
+                        ['ownerResponsibilities', '业主责任'],
+                        ['investorResponsibilities', '我方/投资方责任'],
+                        ['specialTerms', '特殊条款与兜底责任']
+                    ].map(([key, label]) => (
+                        <div key={key} className={key === 'specialTerms' ? 'md:col-span-2' : ''}>
+                            <label className="text-xs font-bold text-slate-500">{label}</label>
+                            <textarea
+                                rows={key === 'specialTerms' ? 3 : 2}
+                                value={String(businessTerms?.[key as keyof typeof businessTerms] || '')}
+                                onChange={(event) => updateBusinessTerms({ [key]: event.target.value } as Partial<NonNullable<SolarParamsState['businessTerms']>>)}
+                                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-700 outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10"
+                            />
+                        </div>
+                    ))}
+                </div>
             </section>
 
             {/* --- 当前方案投资测算 --- */}
@@ -609,47 +904,58 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                                         />
                                         <p className="text-[10px] text-slate-400">业主获得自用电费收益的 {params.advParams.emcOwnerShareRate}%，投资方获 {100 - params.advParams.emcOwnerShareRate}%</p>
                                     </div>
-                                ) : (
-                                    /* 售电价模式参数 */
+                                ) : params.simpleParams.emcSubMode === 'discount' ? (
+                                    /* 月度南网分时折扣模式 */
                                     <div className="space-y-1">
                                         <label className="text-xs text-slate-500 flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-[#0071e3]"></span>
-                                            {params.simpleParams.emcSubMode === 'fixed' ? '固定售电价' : '投资方售电价'} (元/kWh)
+                                            南网电价折扣 (%)
                                         </label>
-                                        <input
-                                            type="number" step="0.01"
-                                            value={params.simpleParams.emcSubMode === 'fixed' ? params.advParams.emcFixedPrice : params.advParams.emcDiscountPrice}
-                                            onChange={(e) => {
-                                                const value = parseFloat(e.target.value) || 0;
-                                                if (params.simpleParams.emcSubMode === 'fixed') {
-                                                    updateCurrentSolution({ emcFixedPrice: value });
-                                                } else {
-                                                    updateCurrentSolution({ emcDiscountPrice: value });
-                                                }
+                                        <EditableNumberInput
+                                            step="1"
+                                            min={0}
+                                            max={100}
+                                            value={params.advParams.emcDiscountRate}
+                                            onValueChange={(value) => {
+                                                updateCurrentSolution({ emcDiscountRate: Math.min(100, Math.max(0, value)) });
                                             }}
                                             className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold"
                                         />
                                         <p className="text-[10px] text-slate-400">
-                                            业主每度省{' '}
-                                            <span className="font-bold text-[#0071e3]">
-                                                {ownerSavingPerKwh.toFixed(2)}
-                                            </span> 元
+                                            年加权基准 {ownerBenchmarkPrice.toFixed(4)} 元/度，
+                                            折后约 <span className="font-bold text-[#0071e3]">{currentEmcSalePrice.toFixed(4)}</span> 元/度
+                                        </p>
+                                    </div>
+                                ) : (
+                                    /* 固定售电价模式参数 */
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-500 flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-[#0071e3]"></span>
+                                            固定售电价 (元/kWh)
+                                        </label>
+                                        <EditableNumberInput
+                                            step="0.01"
+                                            min={0}
+                                            value={params.advParams.emcFixedPrice}
+                                            onValueChange={(value) => updateCurrentSolution({ emcFixedPrice: value })}
+                                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold"
+                                        />
+                                        <p className="text-[10px] text-slate-400">
+                                            业主每度省 <span className="font-bold text-[#0071e3]">{ownerSavingPerKwh.toFixed(2)}</span> 元
                                         </p>
                                     </div>
                                 )}
-                                {params.simpleParams.emcSubMode !== 'sharing' && (
+                                {params.simpleParams.emcSubMode === 'fixed' && (
                                     <div className="space-y-1">
                                         <label className="text-xs text-slate-500 flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                                             业主对标电价 (元/kWh)
                                         </label>
-                                        <input
-                                            type="number" step="0.0001"
+                                        <EditableNumberInput
+                                            step="0.0001"
+                                            min={0}
                                             value={params.advParams.emcSouthernAveragePrice}
-                                            onChange={(e) => {
-                                                const value = parseFloat(e.target.value) || 0;
-                                                updateCurrentSolution({ emcSouthernAveragePrice: value });
-                                            }}
+                                            onValueChange={(value) => updateCurrentSolution({ emcSouthernAveragePrice: value })}
                                             className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold"
                                         />
                                         <p className="text-[10px] text-slate-400">用于衡量业主省电费，不作为投资方售电收入</p>
@@ -689,11 +995,132 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                                     </div>
                                 </div>
                             </div>
+                            {params.simpleParams.emcSubMode === 'discount' && (
+                                <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/40 overflow-hidden">
+                                    <div className="px-3 py-2 border-b border-blue-100 flex flex-wrap items-center justify-between gap-2">
+                                        <p className="text-[10px] font-bold text-slate-600">每月南网分时加权折扣电价</p>
+                                        <p className="text-[9px] text-slate-400">尖峰/峰/平/谷电量 × 当月单价；缺失月份按负荷模型补齐</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-px bg-blue-100">
+                                        {monthlyEmcTariffs.map(item => (
+                                            <div key={item.month} className="bg-white px-3 py-2">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-[10px] font-bold text-slate-600">{item.month}月</span>
+                                                    <span className={`text-[8px] px-1 py-0.5 rounded ${item.source === 'bill' ? 'bg-green-100 text-green-700' : item.source === 'config' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {item.source === 'bill' ? '账单价' : item.source === 'config' ? '配置价' : '估算'}
+                                                    </span>
+                                                </div>
+                                                <p className="mt-1 text-[10px] text-slate-400">
+                                                    {item.benchmarkPrice.toFixed(4)} → <span className="font-bold text-[#0071e3]">{item.discountedPrice.toFixed(4)}</span>
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {params.simpleParams.investmentMode === 'financing' && (
+                        <div className="lg:col-span-4 p-5 solar-apple-panel">
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="solar-apple-icon material-icons text-[18px]">payments</span>
+                                <div>
+                                    <h4 className="text-sm font-black text-[#1d1d1f]">当前方案融资共建配置</h4>
+                                    <p className="text-[10px] text-slate-400 mt-1">业主投入自有资金，融资方提供其余建设资金；运营现金流按等额本息偿还融资。</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">融资比例 (%)</label>
+                                    <input type="number" min="0" max="100" step="1" value={params.advParams.financingRatio}
+                                        onChange={(e) => updateCurrentSolution({ financingRatio: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold" />
+                                    <p className="text-[10px] text-slate-400">业主自有资金比例为 {100 - params.advParams.financingRatio}%</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">融资年利率 (%)</label>
+                                    <input type="number" min="0" step="0.1" value={params.advParams.financingAnnualRate}
+                                        onChange={(e) => updateCurrentSolution({ financingAnnualRate: Math.max(0, parseFloat(e.target.value) || 0) })}
+                                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold" />
+                                    <p className="text-[10px] text-slate-400">用于计算年度等额本息还款额</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">融资期限 (年)</label>
+                                    <input type="number" min="1" max={params.advParams.projectLifeYears} step="1" value={params.advParams.financingTermYears}
+                                        onChange={(e) => updateCurrentSolution({ financingTermYears: Math.min(params.advParams.projectLifeYears, Math.max(1, Math.round(parseFloat(e.target.value) || 1))) })}
+                                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold" />
+                                    <p className="text-[10px] text-slate-400">融资期满后不再扣除还本付息</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="p-3 bg-white rounded-xl border border-slate-200/70">
+                                    <p className="text-[10px] text-slate-400">业主初始投入</p>
+                                    <p className="text-base font-black text-slate-900">¥ {((currentModule?.investment || 0) * (1 - params.advParams.financingRatio / 100)).toFixed(3)} 万元</p>
+                                </div>
+                                <div className="p-3 bg-purple-50 rounded-xl border border-purple-100">
+                                    <p className="text-[10px] text-purple-500">融资金额</p>
+                                    <p className="text-base font-black text-purple-700">¥ {((currentModule?.investment || 0) * params.advParams.financingRatio / 100).toFixed(3)} 万元</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {params.simpleParams.investmentMode === 'co_build' && (
+                        <div className="lg:col-span-4 p-5 solar-apple-panel">
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="solar-apple-icon material-icons text-[18px]">account_balance</span>
+                                <div>
+                                    <h4 className="text-sm font-black text-[#1d1d1f]">当前方案股权共建配置</h4>
+                                    <p className="text-[10px] text-slate-400 mt-1">双方按持股比例共同出资、同股同酬；合作期内项目按约定电价向业主售电。</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">我方持股比例 (%)</label>
+                                    <input
+                                        type="number" min="0" max="100" step="1"
+                                        value={params.advParams.coBuildInvestorShareRate}
+                                        onChange={(e) => updateCurrentSolution({ coBuildInvestorShareRate: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold"
+                                    />
+                                    <p className="text-[10px] text-slate-400">业主持股 {100 - params.advParams.coBuildInvestorShareRate}%，项目利润按相同比例分配</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">合作售电价 (元/kWh)</label>
+                                    <EditableNumberInput
+                                        min={0} step="0.01"
+                                        value={params.advParams.coBuildSalePrice}
+                                        onValueChange={(value) => updateCurrentSolution({ coBuildSalePrice: value })}
+                                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold"
+                                    />
+                                    <p className="text-[10px] text-slate-400">业主每度电较基准电价节省 {Math.max(0, params.advParams.electricityPrice - params.advParams.coBuildSalePrice).toFixed(4)} 元</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">合作期限 (年)</label>
+                                    <input
+                                        type="number" min="1" step="1"
+                                        value={params.advParams.coBuildTermYears}
+                                        max={params.advParams.projectLifeYears}
+                                        onChange={(e) => updateCurrentSolution({ coBuildTermYears: Math.min(params.advParams.projectLifeYears, Math.max(1, Math.round(parseFloat(e.target.value) || 1))) })}
+                                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/10 font-bold"
+                                    />
+                                    <p className="text-[10px] text-slate-400">合作期限不超过项目剩余周期；本项目按到期终止测算</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="p-3 bg-white rounded-xl border border-slate-200/70">
+                                    <p className="text-[10px] text-slate-400">我方初始投入（{params.advParams.coBuildInvestorShareRate}%）</p>
+                                    <p className="text-base font-black text-slate-900">¥ {((currentModule?.investment || 0) * params.advParams.coBuildInvestorShareRate / 100).toFixed(3)} 万元</p>
+                                </div>
+                                <div className="p-3 bg-purple-50 rounded-xl border border-purple-100">
+                                    <p className="text-[10px] text-purple-500">业主初始投入（{100 - params.advParams.coBuildInvestorShareRate}%）</p>
+                                    <p className="text-base font-black text-purple-700">¥ {((currentModule?.investment || 0) * (1 - params.advParams.coBuildInvestorShareRate / 100)).toFixed(3)} 万元</p>
+                                </div>
+                            </div>
                         </div>
                     )}
                     <div className="space-y-1.5 lg:col-span-2">
                         <label className="text-xs font-semibold text-slate-500 flex justify-between">
-                            建造成本单价 <span className="text-[10px] text-slate-400 font-normal">用于 EPC/EMC 投资模型，参考范围: 2.5-4.0 元/Wp</span>
+                            建造成本单价 <span className="text-[10px] text-slate-400 font-normal">用于 EPC/EMC/融资共建/股权共建投资模型，参考范围: 2.5-4.0 元/Wp</span>
                         </label>
                         <div className="relative">
                             <input

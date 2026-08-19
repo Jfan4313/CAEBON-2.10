@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, CartesianGrid, Brush } from 'recharts';
 import { useProject } from '../context/ProjectContext';
 import { projectStorageService } from '../services/projectStorage';
 import { ProjectFullData } from '../types/projectStorage';
@@ -27,10 +26,10 @@ const Dashboard: React.FC = () => {
   const [showProjectManager, setShowProjectManager] = useState(false);
   const [projectNameInput, setProjectNameInput] = useState('');
   const [projectDescriptionInput, setProjectDescriptionInput] = useState('');
+  const [isQuickSaving, setIsQuickSaving] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleLegendClick = useCallback((e: any) => {
-    const { dataKey } = e;
+  const toggleSeries = useCallback((dataKey: 'base' | 'current') => {
     setVisibleSeries(prev => ({ ...prev, [dataKey]: !prev[dataKey] }));
   }, []);
 
@@ -67,8 +66,15 @@ const Dashboard: React.FC = () => {
 
   const handleQuickSaveConfirm = useCallback(async () => {
     const name = projectNameInput.trim() || '未命名项目';
-    await quickSaveProject(name, projectDescriptionInput.trim() || undefined);
-    setShowQuickSaveDialog(false);
+    setIsQuickSaving(true);
+    try {
+      await quickSaveProject(name, projectDescriptionInput.trim() || undefined);
+      setShowQuickSaveDialog(false);
+    } catch {
+      // 保存失败时保留弹窗和用户输入，便于直接重试。
+    } finally {
+      setIsQuickSaving(false);
+    }
   }, [projectNameInput, projectDescriptionInput, quickSaveProject]);
 
   // Memoize metrics data to prevent recreation on each render
@@ -123,11 +129,11 @@ const Dashboard: React.FC = () => {
 
   // Memoize table data to prevent recreation on each render
   const tableData = useMemo(() => [
-    {type: '光伏组件', code: 'PV', codeColor: 'bg-green-100 text-green-600', loc: '屋顶A区', date: '2023.05', status: '可行性高', statusColor: 'bg-green-100 text-green-700', save: '￥2,100'},
-    {type: 'AI 平台', code: 'AI', codeColor: 'bg-blue-100 text-blue-600', loc: '控制中心', date: '2023.06', status: '可行性高', statusColor: 'bg-green-100 text-green-700', save: '￥850'},
-    {type: '照明改造', code: 'L', codeColor: 'bg-yellow-100 text-yellow-600', loc: '全园区', date: '2023.03', status: '可行性高', statusColor: 'bg-green-100 text-green-700', save: '￥540'},
-    {type: '空调优化', code: 'AC', codeColor: 'bg-cyan-100 text-cyan-600', loc: '办公楼', date: '2023.04', status: '可行性高', statusColor: 'bg-green-100 text-green-700', save: '￥1,200'},
-    {type: '储能系统', code: 'ES', codeColor: 'bg-purple-100 text-purple-600', loc: '地下室', date: '2023.08', status: '评估中', statusColor: 'bg-blue-100 text-blue-700', save: '￥900'},
+    {type: '光伏组件', code: 'PV', codeColor: 'bg-green-100 text-green-600', loc: '1号厂房屋顶', date: '2026.08', status: '已测算', statusColor: 'bg-green-100 text-green-700', save: '￥2,100'},
+    {type: '储能系统', code: 'ES', codeColor: 'bg-purple-100 text-purple-600', loc: '配电房', date: '2026.08', status: '已测算', statusColor: 'bg-green-100 text-green-700', save: '￥900'},
+    {type: '照明改造', code: 'L', codeColor: 'bg-yellow-100 text-yellow-600', loc: '园区公共区', date: '2026.08', status: '已测算', statusColor: 'bg-green-100 text-green-700', save: '￥540'},
+    {type: '空调优化', code: 'AC', codeColor: 'bg-cyan-100 text-cyan-600', loc: '综合办公楼', date: '2026.08', status: '已测算', statusColor: 'bg-green-100 text-green-700', save: '￥1,200'},
+    {type: '充电设施', code: 'EV', codeColor: 'bg-blue-100 text-blue-600', loc: '园区停车区', date: '2026.08', status: '已测算', statusColor: 'bg-green-100 text-green-700', save: '￥680'},
   ], []);
 
   return (
@@ -214,9 +220,10 @@ const Dashboard: React.FC = () => {
               </button>
               <button
                 onClick={handleQuickSaveConfirm}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                disabled={isQuickSaving}
+                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                保存
+                {isQuickSaving ? '保存中…' : '保存'}
               </button>
             </div>
           </div>
@@ -252,40 +259,66 @@ const Dashboard: React.FC = () => {
 
       {/* Main Chart Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto lg:h-96">
-        <div className="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col h-full">
+        <div className="lg:col-span-2 min-w-0 min-h-0 bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col h-full">
           <div className="flex items-center justify-between mb-4">
              <div>
                  <h3 className="text-base font-bold text-slate-800">能源节省预测分析</h3>
-                 <p className="text-xs text-slate-400">点击图例隐藏/显示系列，拖动滑块缩放查看</p>
+                 <p className="text-xs text-slate-400">点击图例可隐藏或显示系列</p>
              </div>
              <button className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg text-xs font-medium text-slate-600">
                 年度 <span className="material-symbols-outlined text-[14px]">expand_more</span>
              </button>
           </div>
-          <div className="flex-1 w-full min-h-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} barSize={14} barGap={4} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                <YAxis tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                <Tooltip 
-                    cursor={{fill: 'rgba(241, 245, 249, 0.5)'}} 
-                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', padding: '12px'}}
-                    itemStyle={{fontSize: '12px', fontWeight: 500}}
-                    labelStyle={{fontSize: '12px', color: '#64748b', marginBottom: '8px'}}
-                />
-                <Legend 
-                    verticalAlign="top" 
-                    height={36} 
-                    iconType="circle" 
-                    wrapperStyle={{fontSize: '12px', fontWeight: 500, cursor: 'pointer'}} 
-                    onClick={handleLegendClick}
-                />
-                <Bar name="基准能耗 (Baseline)" dataKey="base" fill="#cbd5e1" radius={[4, 4, 0, 0]} hide={!visibleSeries.base} />
-                <Bar name="改造后能耗 (Predicted)" dataKey="current" fill="#4f46e5" radius={[4, 4, 0, 0]} hide={!visibleSeries.current} />
-                <Brush dataKey="name" height={20} stroke="#cbd5e1" travellerWidth={10} tickFormatter={() => ''} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="flex items-center justify-center gap-5 mb-3 text-[11px] font-medium">
+            <button
+              type="button"
+              onClick={() => toggleSeries('base')}
+              className={`flex items-center gap-1.5 ${visibleSeries.base ? 'text-slate-600' : 'text-slate-300'}`}
+            >
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+              基准能耗 (Baseline)
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleSeries('current')}
+              className={`flex items-center gap-1.5 ${visibleSeries.current ? 'text-slate-600' : 'text-slate-300'}`}
+            >
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+              改造后能耗 (Predicted)
+            </button>
+          </div>
+          <div className="relative flex-1 w-full min-w-0 min-h-[220px] border-b border-slate-200">
+            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+              {[100, 75, 50, 25, 0].map(value => (
+                <div key={value} className="flex items-center gap-2">
+                  <span className="w-6 text-right text-[9px] text-slate-400">{value}</span>
+                  <span className="flex-1 border-t border-dashed border-slate-100" />
+                </div>
+              ))}
+            </div>
+            <div className="absolute inset-y-0 left-8 right-0 flex items-end justify-around gap-1 pt-3">
+              {data.map(item => (
+                <div key={item.name} className="group flex-1 h-full min-w-0 flex flex-col items-center justify-end">
+                  <div className="relative flex-1 w-full flex items-end justify-center gap-0.5">
+                    {visibleSeries.base && (
+                      <div
+                        className="w-[34%] max-w-4 rounded-t bg-slate-300 transition-all"
+                        style={{ height: `${item.base}%` }}
+                        title={`${item.name} 基准能耗：${item.base}`}
+                      />
+                    )}
+                    {visibleSeries.current && (
+                      <div
+                        className="w-[34%] max-w-4 rounded-t bg-indigo-500 transition-all"
+                        style={{ height: `${item.current}%` }}
+                        title={`${item.name} 改造后能耗：${item.current}`}
+                      />
+                    )}
+                  </div>
+                  <span className="h-5 mt-1 text-[9px] text-slate-400 whitespace-nowrap">{item.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

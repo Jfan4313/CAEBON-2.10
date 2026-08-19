@@ -1,5 +1,5 @@
 import React from 'react';
-import { EmcSubMode, InvestmentMode, SolarSolution } from '../types';
+import { EmcSubMode, InvestmentMode, SolarSolution, SOLAR_CONSTRUCTION_METHODS, CABLE_BRANDS, INVERTER_BRANDS } from '../types';
 
 interface SolutionSelectorProps {
     solutions: SolarSolution[];
@@ -20,6 +20,13 @@ const getEmcModeLabel = (mode?: EmcSubMode) => {
         case 'discount':
         default: return '折扣电价';
     }
+};
+
+const getInvestmentModeLabel = (mode?: InvestmentMode) => {
+    if (mode === 'emc') return 'EMC';
+    if (mode === 'financing') return '融资共建';
+    if (mode === 'co_build') return '股权共建';
+    return 'EPC';
 };
 
 export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
@@ -53,7 +60,7 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
                     <h3 className="text-lg font-semibold text-[#1d1d1f]">
                         {solutions.length > 1 ? '接入方案与配置' : '接入方案配置'}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1">每个方案独立保存合作模式、线缆、组件和投资口径</p>
+                    <p className="text-xs text-slate-400 mt-1">每个方案独立保存建设方式、合作模式、线缆、组件和投资口径</p>
                 </div>
                 {solutions.length > 0 && (
                     <button
@@ -95,9 +102,13 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
                                     <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                                         (solution.investmentMode || 'epc') === 'emc'
                                             ? 'bg-[#0071e3]/10 text-[#0071e3]'
+                                            : (solution.investmentMode || 'epc') === 'financing'
+                                                ? 'bg-purple-100 text-purple-700'
+                                                : (solution.investmentMode || 'epc') === 'co_build'
+                                                    ? 'bg-cyan-100 text-cyan-700'
                                             : 'bg-slate-100 text-slate-700'
                                     }`}>
-                                        {(solution.investmentMode || 'epc').toUpperCase()}
+                                        {getInvestmentModeLabel(solution.investmentMode)}
                                     </span>
                                 </div>
                                 <button
@@ -124,6 +135,18 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
                                 <span className="text-xs text-slate-600">
                                     {solution.brand === 'longi' ? '隆基组件' : solution.brand === 'tongwei' ? '通威组件' : '通用组件'}
                                     {(solution.investmentMode || 'epc') === 'emc' ? ` · ${getEmcModeLabel(solution.emcSubMode)}` : ''}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-3">
+                                <span className="material-icons text-[14px] text-slate-400">electrical_services</span>
+                                <span className="text-xs text-slate-600">
+                                    {CABLE_BRANDS[solution.cableBrand || 'generic'].name} · {INVERTER_BRANDS[solution.inverterBrand || 'generic'].name}逆变器
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-3">
+                                <span className="material-icons text-[14px] text-slate-400">foundation</span>
+                                <span className="text-xs text-slate-600">
+                                    {SOLAR_CONSTRUCTION_METHODS[solution.constructionMethod || 'rooftop'].name}
                                 </span>
                             </div>
 
@@ -204,10 +227,12 @@ export const SolutionSelector: React.FC<SolutionSelectorProps> = ({
 
                     <div className="p-4 rounded-[18px] border border-white bg-white/90 shadow-sm">
                         <label className="text-xs font-semibold text-slate-500 mb-2 block">当前方案合作模式</label>
-                        <div className="solar-apple-segment grid grid-cols-2 gap-2">
+                        <div className="solar-apple-segment grid grid-cols-1 md:grid-cols-4 gap-2">
                             {[
                                 { id: 'emc', label: 'EMC 节能分成', icon: 'handshake' },
-                                { id: 'epc', label: 'EPC 工程总包', icon: 'construction' }
+                                { id: 'epc', label: 'EPC 工程总包', icon: 'construction' },
+                                { id: 'financing', label: '融资共建', icon: 'payments' },
+                                { id: 'co_build', label: '股权共建', icon: 'group_work' }
                             ].map((mode) => (
                                 <button
                                     key={mode.id}

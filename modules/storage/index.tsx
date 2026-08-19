@@ -3,12 +3,17 @@ import { useStorageLogic } from './hooks';
 import { StorageSimulationChart } from './components/StorageSimulationChart';
 import { useProject } from '../../context/ProjectContext';
 import { isModuleTakenOver } from '../../utils/moduleAggregation';
+import { requestReportForModules } from '../../shared/reporting';
+import { PvConsumptionChart } from '../../shared/components/PvConsumptionChart';
+import { getSolarProfileBasis } from '../../shared/utils/solarGenerationProfile';
+import { COPYRIGHT_RELEASE_FEATURES } from '../../shared/config/productIdentity';
 
 const RetrofitStorage: React.FC = () => {
-    const { modules } = useProject();
+    const { modules, projectBaseInfo } = useProject();
     const isTakenOver = isModuleTakenOver('retrofit-storage', modules);
     const {
         mode, setMode,
+        dispatchMode, setDispatchMode,
         isChartExpanded, setIsChartExpanded,
         basicParams, setBasicParams,
         advParams, setAdvParams,
@@ -19,10 +24,15 @@ const RetrofitStorage: React.FC = () => {
         marketPriceModel, setMarketPriceModel,
         totalTransformerCap,
         maxHistoricalLoad,
+        billedEnergy,
+        storageRecommendation,
+        pvConsumptionData,
         remainingCap,
         isOverloadRisk,
         simulationData,
         financials,
+        jointRecommendation,
+        isOffGridSolar,
         solarModule,
         saveProject,
         toggleModule,
@@ -53,9 +63,19 @@ const RetrofitStorage: React.FC = () => {
                         </div>
                         {isTakenOver && <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full">已纳入综合能源管理</span>}
                     </div>
-                    <button className="flex items-center gap-2 text-sm text-primary font-medium hover:underline">
-                        <span className="material-icons text-base">history</span> 加载历史方案
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => requestReportForModules(['retrofit-storage'])} className="flex items-center gap-2 text-sm text-primary font-bold px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10">
+                            <span className="material-icons text-base">summarize</span> 储能独立汇报
+                        </button>
+                        <button
+                            onClick={() => requestReportForModules(['retrofit-solar', 'retrofit-storage'])}
+                            disabled={!solarModule?.isActive}
+                            title={solarModule?.isActive ? '生成光伏与储能联合方案汇报' : '请先启用光伏板块'}
+                            className="flex items-center gap-2 text-sm text-white font-bold px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                        >
+                            <span className="material-icons text-base">account_tree</span> 光储联合汇报
+                        </button>
+                    </div>
                 </header>
 
                 <div className={`flex-1 overflow-y-auto p-8 pb-32 transition-opacity duration-300 ${currentModule.isActive ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
@@ -181,6 +201,110 @@ const RetrofitStorage: React.FC = () => {
                                 </div>
                             </div>
 
+                            <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div>
+                                        <div className="text-sm font-bold text-emerald-900">运行策略</div>
+                                        <div className="text-xs text-emerald-700 mt-1">当前项目采用光伏配储，储能仅吸收无法直接消纳的光伏余电。</div>
+                                    </div>
+                                    <div className="flex bg-white rounded-lg border border-emerald-200 p-1 shrink-0">
+                                        <button onClick={() => setDispatchMode('pv_surplus')} className={`px-3 py-2 rounded-md text-xs font-bold ${dispatchMode === 'pv_surplus' ? 'bg-emerald-600 text-white' : 'text-slate-500'}`}>光伏余电专用</button>
+                                        <button
+                                            onClick={() => setDispatchMode('hybrid')}
+                                            disabled={isOffGridSolar}
+                                            title={isOffGridSolar ? '离网光伏配套储能禁止电网充电' : '允许结合峰谷电价进行综合套利'}
+                                            className={`px-3 py-2 rounded-md text-xs font-bold ${dispatchMode === 'hybrid' ? 'bg-slate-700 text-white' : 'text-slate-500'} disabled:text-slate-300 disabled:cursor-not-allowed`}
+                                        >
+                                            综合套利
+                                        </button>
+                                    </div>
+                                </div>
+                                {dispatchMode === 'pv_surplus' && (
+                                    <div className="mt-3 text-[11px] text-emerald-800">
+                                        {isOffGridSolar
+                                            ? '离网光伏配套储能：禁止电网充电，余电不出售；储能收益按放电替代购电成本计算。'
+                                            : '禁止电网充电；放电仅用于后续园区负荷，收益按减少购电与放弃上网电价的差额计算。'}
+                                    </div>
+                                )}
+                            </div>
+
+                            {isOffGridSolar && (
+                                <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div>
+                                            <div className="flex items-center gap-2 text-sm font-black text-emerald-900">
+                                                <span className="material-icons text-emerald-600 text-lg">battery_charging_full</span>
+                                                联合建议中的储能结论
+                                            </div>
+                                            <p className="mt-1 text-[10px] text-emerald-700">完整的光伏容量、投资收益、净现值及一键应用功能请在“分布式光伏”板块查看。</p>
+                                        </div>
+                                        <div className="flex items-center gap-5 rounded-xl border border-emerald-200 bg-white px-4 py-3">
+                                            <div>
+                                                <div className="text-[9px] text-emerald-500">建议光伏</div>
+                                                <div className="text-sm font-black text-emerald-900">{jointRecommendation.pvCapacityKw.toFixed(1)} kWp</div>
+                                            </div>
+                                            <div className="h-8 w-px bg-emerald-100" />
+                                            <div>
+                                                <div className="text-[9px] text-emerald-500">建议储能</div>
+                                                <div className="text-sm font-black text-emerald-900">{jointRecommendation.storageRecommended ? `${jointRecommendation.storagePowerKw.toFixed(0)}kW/${jointRecommendation.storageCapacityKwh.toFixed(1)}kWh` : '暂不配置'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {dispatchMode === 'pv_surplus' && (
+                                <div className="mb-6 rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-4">
+                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                        <div className="flex-1">
+                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                                <div className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                                                    <span className="material-icons text-indigo-600 text-lg">recommend</span>
+                                                    全量余电消纳上限（技术校核）
+                                                </div>
+                                                <div className="flex rounded-lg border border-indigo-200 bg-white p-1">
+                                                    <button
+                                                        onClick={() => setBaselineMode('1c1d')}
+                                                        className={`px-3 py-1.5 rounded-md text-[11px] font-bold ${baselineMode === '1c1d' ? 'bg-indigo-600 text-white' : 'text-indigo-500'}`}
+                                                    >
+                                                        一充一放
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setBaselineMode('2c2d')}
+                                                        className={`px-3 py-1.5 rounded-md text-[11px] font-bold ${baselineMode === '2c2d' ? 'bg-indigo-600 text-white' : 'text-indigo-500'}`}
+                                                    >
+                                                        两充两放
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {storageRecommendation.available ? (
+                                                <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3">
+                                                    <div><div className="text-[10px] text-indigo-500">建议额定功率</div><div className="text-lg font-black text-indigo-900">{storageRecommendation.power} kW</div></div>
+                                                    <div><div className="text-[10px] text-indigo-500">建议系统容量</div><div className="text-lg font-black text-indigo-900">{storageRecommendation.capacity} kWh</div></div>
+                                                    <div><div className="text-[10px] text-indigo-500">典型日原始余电</div><div className="text-lg font-black text-indigo-900">{storageRecommendation.dailySurplusKwh.toFixed(1)} kWh</div></div>
+                                                    <div><div className="text-[10px] text-indigo-500">可循环吸收电量</div><div className="text-lg font-black text-indigo-900">{storageRecommendation.usableShiftKwh.toFixed(1)} kWh</div></div>
+                                                    <div><div className="text-[10px] text-indigo-500">当前配置覆盖率</div><div className="text-lg font-black text-indigo-900">{storageRecommendation.currentCaptureRate.toFixed(1)}%</div></div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-indigo-700 mt-2">当前账单重构负荷与光伏曲线下未形成余电，暂不能给出有效配储建议。</p>
+                                            )}
+                                            <p className={`text-[10px] mt-2 ${storageRecommendation.requestedCycles === 2 && storageRecommendation.effectiveCycles < 2 ? 'text-amber-700 font-bold' : 'text-indigo-600'}`}>
+                                                当前按{storageRecommendation.effectiveCycles || 0}次有效循环测算：{storageRecommendation.cycleModeReason}
+                                            </p>
+                                            <p className="text-[10px] text-indigo-500 mt-2">这是吸收可用余电的技术容量上限，不代表最佳投资方案；投资决策以上方“光储联合投资建议”为准。正式设计仍需使用15分钟负荷和光伏数据复核。</p>
+                                        </div>
+                                        {storageRecommendation.available && (
+                                            <button
+                                                onClick={() => setBasicParams({ ...basicParams, power: storageRecommendation.power, capacity: storageRecommendation.capacity })}
+                                                className="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-sm"
+                                            >
+                                                应用技术上限配置
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Advanced Physics Params (Advanced Only) */}
                             {mode === 'advanced' && (
                                 <div className="border-t border-slate-100 pt-6 mt-2 grid grid-cols-2 md:grid-cols-5 gap-4 animate-fade-in">
@@ -252,7 +376,7 @@ const RetrofitStorage: React.FC = () => {
                                 {investmentConfig.mode === 'emc' && (
                                     <div className="p-5 bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-200">
                                         <h4 className="text-xs font-bold text-orange-800 uppercase mb-4 flex items-center gap-1">
-                                            <span className="material-icons text-[14px]">handshake</span> EMC 储能套利分成配置
+                                            <span className="material-icons text-[14px]">handshake</span> EMC 储能收益分成配置
                                         </h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div className="space-y-1">
@@ -266,7 +390,7 @@ const RetrofitStorage: React.FC = () => {
                                                     onChange={(e) => setInvestmentConfig({ ...investmentConfig, emcOwnerShareRate: parseFloat(e.target.value) })}
                                                     className="w-full px-3 py-2 bg-white border border-orange-200 rounded-lg text-sm outline-none focus:border-orange-400 font-bold"
                                                 />
-                                                <p className="text-[10px] text-orange-400">业主获得峰谷套利及需量收益的 {investmentConfig.emcOwnerShareRate}%</p>
+                                                <p className="text-[10px] text-orange-400">业主获得储能合同净收益的 {investmentConfig.emcOwnerShareRate}%</p>
                                             </div>
                                         </div>
                                     </div>
@@ -275,7 +399,7 @@ const RetrofitStorage: React.FC = () => {
                         </section>
 
                         {/* 1.5 Market Pricing Mechanism */}
-                        {mode === 'advanced' && (
+                        {mode === 'advanced' && dispatchMode === 'hybrid' && (
                             <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-fade-in">
                                 <h3 className="text-base font-bold text-slate-800 mb-6 flex items-center gap-2 border-b border-slate-100 pb-3">
                                     <span className="material-icons text-orange-500">price_change</span>
@@ -304,7 +428,7 @@ const RetrofitStorage: React.FC = () => {
                         )}
 
                         {/* 2. Strategy Comparison */}
-                        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-fade-in">
+                        {dispatchMode === 'hybrid' && <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-fade-in">
                             <h3 className="text-base font-bold text-slate-800 mb-6 flex items-center gap-2">
                                 <span className="material-icons text-purple-600">calculate</span>
                                 调度策略配置
@@ -320,7 +444,7 @@ const RetrofitStorage: React.FC = () => {
                                         <p className="text-xs text-slate-500">快速测算模式下，系统默认采用标准的“两充两放”逻辑估算峰谷价差收益。</p>
                                     </div>
                                     <div className="ml-auto">
-                                        <button onClick={() => setMode('advanced')} className="text-xs text-primary font-medium hover:underline">切换至精确估值以解锁 AI 策略 &rarr;</button>
+                                        <button onClick={() => setMode('advanced')} className="text-xs text-primary font-medium hover:underline">切换至精确估值与分时策略 &rarr;</button>
                                     </div>
                                 </div>
                             ) : (
@@ -349,7 +473,7 @@ const RetrofitStorage: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div
+                                    {COPYRIGHT_RELEASE_FEATURES.artificialIntelligencePlatform && <div
                                         onClick={() => setStrategyType('ai')}
                                         className={`relative border-2 rounded-xl p-5 cursor-pointer transition-all ${strategyType === 'ai' ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-200' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`}
                                     >
@@ -396,10 +520,10 @@ const RetrofitStorage: React.FC = () => {
                                                 <span className="text-xs font-medium text-slate-700">光伏余电消纳优先</span>
                                             </label>
                                         </div>
-                                    </div>
+                                    </div>}
                                 </div>
                             )}
-                        </section>
+                        </section>}
 
                         {/* 3. Visualization Chart */}
                         <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-fade-in">
@@ -407,18 +531,26 @@ const RetrofitStorage: React.FC = () => {
                                 <div>
                                     <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
                                         <span className="material-icons text-blue-500">monitoring</span>
-                                        24小时源网荷储运行模拟
+                                        24小时光储充放电策略
                                     </h3>
-                                    <p className="text-xs text-slate-500 mt-1">展示储能动作与电价、负荷的耦合关系</p>
-                                </div>
-                                <div className="flex items-center gap-4 text-xs">
-                                    <div className="flex items-center gap-1"><span className="w-3 h-3 bg-red-400 rounded-sm"></span> 电价</div>
-                                    {mode === 'advanced' && aiFeatures.pvSelfConsumption && <div className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-400 rounded-sm"></span> 光伏</div>}
-                                    <div className="flex items-center gap-1"><span className="w-3 h-3 bg-primary rounded-sm"></span> 储能动作</div>
+                                    <p className="text-xs text-slate-500 mt-1">蓝色表示充电、橙色表示放电，绿色曲线表示储能SOC。</p>
+                                    <p className="text-[10px] text-indigo-600 mt-1.5">
+                                        {billedEnergy.monthCount > 0
+                                            ? `负荷曲线由${billedEnergy.monthCount}个月用电账单归一化重构：账单确定总电量，项目类型确定24小时形状。`
+                                            : '尚无有效用电账单，当前曲线按变压器容量与项目类型进行估算。'}
+                                    </p>
                                 </div>
                             </div>
                             <StorageSimulationChart data={simulationData} mode={mode} hasPvSelfConsumption={aiFeatures.pvSelfConsumption} />
                         </section>
+
+                        <PvConsumptionChart
+                            data={pvConsumptionData}
+                            title="光伏消纳曲线（含储能吸收）"
+                            dataBasis={`${billedEnergy.monthCount > 0
+                                ? `总用电量来自${billedEnergy.monthCount}个月真实账单并补齐全年，负荷形状按项目类型重构。`
+                                : '当前总用电量按变压器容量估算，取得账单后将自动重算。'} 光伏曲线依据：${getSolarProfileBasis(projectBaseInfo)}及当地等效日照小时。`}
+                        />
                     </div>
                 </div>
 
@@ -483,7 +615,7 @@ const RetrofitStorage: React.FC = () => {
                         <div className="space-y-3">
                             <div>
                                 <div className="flex justify-between text-xs text-slate-500 mb-1">
-                                    <span>峰谷套利</span>
+                                    <span>{isOffGridSolar ? '离网光伏替代购电收益' : '峰谷套利'}</span>
                                     <span>¥ {financials.arbitrage.toFixed(1)} 万</span>
                                 </div>
                                 <div className="w-full bg-slate-100 rounded-full h-1.5">
@@ -548,7 +680,7 @@ const RetrofitStorage: React.FC = () => {
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                                     <span className="p-2 bg-purple-100 text-purple-600 rounded-lg"><span className="material-icons">bar_chart</span></span>
-                                    24小时源网荷储详细仿真
+                                    24小时光储充放电详细仿真
                                 </h2>
                             </div>
                             <button onClick={() => setIsChartExpanded(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
@@ -556,7 +688,7 @@ const RetrofitStorage: React.FC = () => {
                             </button>
                         </div>
                         <div className="flex-1 w-full min-h-0 bg-slate-50 rounded-xl border border-slate-100 p-6">
-                            <StorageSimulationChart data={simulationData} mode={mode} hasPvSelfConsumption={aiFeatures.pvSelfConsumption} />
+                            <StorageSimulationChart data={simulationData} mode={mode} hasPvSelfConsumption={aiFeatures.pvSelfConsumption} expanded />
                         </div>
                     </div>
                 </div>

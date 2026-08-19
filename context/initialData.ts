@@ -15,11 +15,22 @@ export const initialModules: Record<string, ModuleData> = {
         id: 'retrofit-storage',
         name: '工商业储能',
         isActive: true,
-        strategy: 'arbitrage',
-        investment: 300.0,
-        yearlySaving: 88.5,
-        kpiPrimary: { label: '配置容量', value: '2 MWh' },
-        kpiSecondary: { label: '回收期', value: '3.4 年' }
+        strategy: '光伏余电消纳',
+        investment: 62.64,
+        yearlySaving: 0,
+        kpiPrimary: { label: '装机规模', value: '261kW/522kWh' },
+        kpiSecondary: { label: '运行策略', value: '仅光伏余电充电' },
+        params: {
+            mode: 'advanced',
+            dispatchMode: 'pv_surplus',
+            basicParams: { power: 261, capacity: 522, unitCost: 1200 },
+            advParams: { dod: 90, rte: 88, cycles: 6000, degradation: 1.5, auxPower: 1.5 },
+            strategyType: 'baseline',
+            baselineMode: '1c1d',
+            aiFeatures: { dynamicPricing: false, demandManagement: false, pvSelfConsumption: true },
+            investmentConfig: { mode: 'self', emcOwnerShareRate: 15 },
+            marketPriceModel: 'tou'
+        }
     },
     'retrofit-hvac': {
         id: 'retrofit-hvac',
@@ -94,7 +105,7 @@ export const initialModules: Record<string, ModuleData> = {
     'retrofit-ai': {
         id: 'retrofit-ai',
         name: 'AI 智控平台',
-        isActive: true,
+        isActive: false,
         strategy: 'ai',
         investment: 35.0,
         yearlySaving: 20.0,
@@ -104,7 +115,7 @@ export const initialModules: Record<string, ModuleData> = {
     'retrofit-carbon': {
         id: 'retrofit-carbon',
         name: '碳资产管理',
-        isActive: true,
+        isActive: false,
         strategy: 'trade',
         investment: 0,
         yearlySaving: 4.9,
@@ -129,10 +140,11 @@ export const initialPriceConfig: PriceConfigState = {
 };
 
 export const initialProjectBaseInfo: ProjectBaseInfo = {
-    name: '上海浦东新区工业园节能改造项目',
+    name: '广东工业园标准项目（匿名）',
     type: 'factory',
-    province: 'Shanghai',
-    city: 'Pudong',
+    villaDailyKwh: 35,
+    province: 'Guangdong',
+    city: 'Guangzhou',
     // 新增: 精确位置信息 (默认为空)
     latitude: undefined,
     longitude: undefined,

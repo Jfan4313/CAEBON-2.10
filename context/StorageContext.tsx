@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { isSupabaseConfigured } from '../services/supabase-adapter';
 
 export type StorageMode = 'local' | 'cloud';
 
@@ -29,15 +28,8 @@ export const StorageProvider: React.FC<StorageProviderProps> = ({ children }) =>
       setModeState(savedMode);
     }
 
-    // 检查 Supabase 是否已配置
-    const configured = isSupabaseConfigured();
-    setIsCloudEnabled(configured);
-
-    // 如果 Supabase 未配置，强制使用本地模式
-    if (!configured) {
-      setModeState('local');
-      localStorage.setItem(STORAGE_MODE_KEY, 'local');
-    }
+    // 公网版通过同源代理连接阿里云，云存储始终可用。
+    setIsCloudEnabled(true);
   }, []);
 
   const toggleMode = () => {
@@ -45,7 +37,7 @@ export const StorageProvider: React.FC<StorageProviderProps> = ({ children }) =>
 
     // 如果切换到云端但未配置，阻止切换
     if (newMode === 'cloud' && !isCloudEnabled) {
-      alert('云存储未配置。请设置 Supabase 环境变量后再试。');
+      alert('阿里云服务暂不可用，请稍后重试。');
       return;
     }
 

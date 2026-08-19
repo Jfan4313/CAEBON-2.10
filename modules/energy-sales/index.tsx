@@ -15,7 +15,7 @@ import { isModuleTakenOver } from '../../utils/moduleAggregation';
 const MODULE_ID = 'retrofit-energy-sales';
 
 const EnergySales: React.FC = () => {
-  const { modules, updateModule, bills, transformers, priceConfig, saveProject } = useProject();
+  const { modules, updateModule, bills, transformers, priceConfig, saveProject, projectBaseInfo } = useProject();
   const currentModule = modules[MODULE_ID];
   const legacyConfig = modules['retrofit-microgrid']?.params?.salesService;
   const storedConfig = currentModule?.params?.salesService || legacyConfig;
@@ -30,7 +30,11 @@ const EnergySales: React.FC = () => {
   const projectWeightedPrice = useMemo(() => getWeightedElectricityPrice(priceConfig), [priceConfig]);
   const marketSpotPrice = useMemo(() => getMarketSpotPrice(priceConfig), [priceConfig]);
   const historicalAveragePrice = useMemo(() => getHistoricalAveragePrice(bills, projectWeightedPrice), [bills, projectWeightedPrice]);
-  const annualDemandKwh = useMemo(() => getAnnualDemandKwh(bills, transformers), [bills, transformers]);
+  const annualDemandKwh = useMemo(() => getAnnualDemandKwh(bills, transformers, {
+    projectType: projectBaseInfo.type,
+    province: projectBaseInfo.province,
+    hasAirConditioning: projectBaseInfo.hasAirConditioning,
+  }), [bills, transformers, projectBaseInfo.type, projectBaseInfo.province, projectBaseInfo.hasAirConditioning]);
   const solarContext = useMemo(() => getSolarSalesContext(modules['retrofit-solar']), [modules]);
   const calculationContext = useMemo(() => ({
     annualDemandKwh,

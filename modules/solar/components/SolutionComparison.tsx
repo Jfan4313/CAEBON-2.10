@@ -1,5 +1,5 @@
 import React from 'react';
-import { SolarSolution, SolarParamsState } from '../types';
+import { SolarSolution, SolarParamsState, MODULE_BRANDS, CABLE_BRANDS, INVERTER_BRANDS } from '../types';
 import { calculateSolarMetrics } from '../hooks';
 
 interface SolutionComparisonProps {
@@ -13,6 +13,7 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
     params,
     selfConsumptionRate
 }) => {
+    const projectLifeYears = Math.max(1, Math.round(params.advParams.projectLifeYears || 11));
     if (solutions.length === 0) {
         return (
             <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-4">
@@ -37,9 +38,16 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                 ...params.advParams,
                 emcOwnerShareRate: solution.emcOwnerShareRate ?? params.advParams.emcOwnerShareRate,
                 emcDiscountPrice: solution.emcDiscountPrice ?? params.advParams.emcDiscountPrice,
+                emcDiscountRate: solution.emcDiscountRate ?? params.advParams.emcDiscountRate,
                 emcFixedPrice: solution.emcFixedPrice ?? params.advParams.emcFixedPrice,
                 emcSouthernAveragePrice: solution.emcSouthernAveragePrice ?? params.advParams.emcSouthernAveragePrice,
-                roofRent: solution.roofRent ?? params.advParams.roofRent
+                roofRent: solution.roofRent ?? params.advParams.roofRent,
+                financingRatio: solution.financingRatio ?? params.advParams.financingRatio,
+                financingAnnualRate: solution.financingAnnualRate ?? params.advParams.financingAnnualRate,
+                financingTermYears: solution.financingTermYears ?? params.advParams.financingTermYears,
+                coBuildInvestorShareRate: solution.coBuildInvestorShareRate ?? params.advParams.coBuildInvestorShareRate,
+                coBuildSalePrice: solution.coBuildSalePrice ?? params.advParams.coBuildSalePrice,
+                coBuildTermYears: solution.coBuildTermYears ?? params.advParams.coBuildTermYears
             },
             selectedSolutionId: solution.id,
             solutions
@@ -88,9 +96,19 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                                     r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
                                 }`}>
                                     <span className={`px-2 py-1 rounded text-white text-xs ${
-                                        (r.solution.investmentMode || 'epc') === 'emc' ? 'bg-amber-500' : 'bg-emerald-500'
+                                        (r.solution.investmentMode || 'epc') === 'emc'
+                                            ? 'bg-amber-500'
+                                            : (r.solution.investmentMode || 'epc') === 'financing'
+                                                ? 'bg-purple-500'
+                                                : (r.solution.investmentMode || 'epc') === 'co_build'
+                                                    ? 'bg-cyan-600'
+                                                : 'bg-emerald-500'
                                     }`}>
-                                        {(r.solution.investmentMode || 'epc').toUpperCase()}
+                                        {(r.solution.investmentMode || 'epc') === 'financing'
+                                            ? '融资共建'
+                                            : (r.solution.investmentMode || 'epc') === 'co_build'
+                                                ? '股权共建'
+                                                : (r.solution.investmentMode || 'epc').toUpperCase()}
                                     </span>
                                 </td>
                             ))}
@@ -118,6 +136,30 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                                     r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
                                 }`}>
                                     {(r.solution.capacity ?? params.simpleParams.capacity).toFixed(2)} kWp
+                                </td>
+                            ))}
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                            <td className="px-4 py-3 font-medium">组件品牌</td>
+                            {solutionResults.map((r, i) => (
+                                <td key={i} className={`px-4 py-3 text-center ${r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''}`}>
+                                    {MODULE_BRANDS[r.solution.brand].name}
+                                </td>
+                            ))}
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                            <td className="px-4 py-3 font-medium">电缆品牌 / 材质</td>
+                            {solutionResults.map((r, i) => (
+                                <td key={i} className={`px-4 py-3 text-center ${r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''}`}>
+                                    {CABLE_BRANDS[r.solution.cableBrand || 'generic'].name} · {r.solution.cableType === 'copper' ? '铜芯' : '铝芯'}
+                                </td>
+                            ))}
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                            <td className="px-4 py-3 font-medium">逆变器品牌</td>
+                            {solutionResults.map((r, i) => (
+                                <td key={i} className={`px-4 py-3 text-center ${r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''}`}>
+                                    {INVERTER_BRANDS[r.solution.inverterBrand || 'generic'].name}
                                 </td>
                             ))}
                         </tr>
@@ -186,7 +228,7 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                             ))}
                         </tr>
                         <tr>
-                            <td className="px-4 py-3 font-medium">25年累计收益</td>
+                            <td className="px-4 py-3 font-medium">{projectLifeYears}年累计收益</td>
                             {solutionResults.map((r, i) => (
                                 <td key={i} className={`px-4 py-3 text-center ${
                                     r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
@@ -196,7 +238,7 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                             ))}
                         </tr>
                         <tr>
-                            <td className="px-4 py-3 font-medium">业主25年收益</td>
+                            <td className="px-4 py-3 font-medium">业主{projectLifeYears}年收益</td>
                             {solutionResults.map((r, i) => (
                                 <td key={i} className={`px-4 py-3 text-center ${
                                     r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''

@@ -29,7 +29,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             webSecurity: true
         },
-        title: '零碳项目收益评估软件'
+        title: '园区综合能源项目投资收益测算与辅助决策系统V2.14'
     });
 
     // 开发模式加载 Vite 服务器，生产模式加载打包文件

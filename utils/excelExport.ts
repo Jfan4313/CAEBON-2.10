@@ -5,6 +5,10 @@
 
 import * as XLSX from 'xlsx';
 
+function formatLocalDateCompact(date = new Date()): string {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('');
+}
+
 // ==================== 类型定义 ====================
 
 export interface FinancialSummaryData {
@@ -19,6 +23,23 @@ export interface FinancialSummaryData {
   discountRate: number;
   modules: ModuleExportData[];
   annualData: AnnualCashFlowData[];
+  interactions?: Array<{ label: string; annualValue: number }>;
+  participants?: Array<{ name: string; investment: number; firstYearNetBenefit: number; npv: number; irr: number; payback: number }>;
+  assumptions?: string[];
+  moduleDetails?: Array<{
+    moduleId: string;
+    name: string;
+    investmentMode: string;
+    investment: number;
+    firstYearNetBenefit: number;
+    npv: number;
+    irr: number;
+    payback: number;
+    cashFlows: number[];
+    technicalMetrics: Array<{ label: string; value: string }>;
+    assumptions: string[];
+    warnings: string[];
+  }>;
 }
 
 export interface ModuleExportData {
@@ -66,10 +87,10 @@ export function exportFinancialSheet(data: FinancialSummaryData, filename: strin
     [''],
     ['核心财务指标 (精度: 0.001)'],
     ['初始总投资 (CAPEX)', `${data.totalInvestment.toFixed(3)} 万元`],
-    ['首年净节省', `${data.totalFirstYearSaving.toFixed(3)} 万元`],
+    ['联合首年净收益', `${data.totalFirstYearSaving.toFixed(3)} 万元`],
     ['净现值 (NPV)', `${data.npv.toFixed(3)} 万元`],
     ['内部收益率 (IRR)', `${data.irr.toFixed(3)} %`],
-    ['静态回本周期', `${data.payback > data.period ? `>${data.period}` : data.payback.toFixed(3)} 年`],
+    ['动态回本周期', `${data.payback > data.period ? `>${data.period}` : data.payback.toFixed(3)} 年`],
     ['折现率', `${data.discountRate} %`],
   ];
   const wsOverview = XLSX.utils.aoa_to_sheet(overviewData);
@@ -124,7 +145,7 @@ export function exportFinancialSheet(data: FinancialSummaryData, filename: strin
   ]);
   setColumnWidths(wsCashflow, [{ wch: 12 }, { wch: 25 }, { wch: 25 }]);
 
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const dateStr = formatLocalDateCompact();
   XLSX.writeFile(wb, `${filename}_${dateStr}.xlsx`);
 }
 
@@ -186,9 +207,9 @@ export function exportProjectReport(
       ['综合财务评估'],
       ['指标名称', '数值', '单位', '备注'],
       ['初始总投资', financialData.totalInvestment.toFixed(3), '万元', 'CapEx'],
-      ['平均年节省收益', financialData.totalFirstYearSaving.toFixed(3), '万元', 'OpEx Reduction'],
+      ['联合首年净收益', financialData.totalFirstYearSaving.toFixed(3), '万元', '含反事实场景识别的协同增量'],
       ['内部收益率(IRR)', financialData.irr.toFixed(3), '%', '全投资内部收益率'],
-      ['静态回本周期', financialData.payback.toFixed(3), '年', 'Static Payback'],
+      ['动态回本周期', financialData.payback.toFixed(3), '年', 'Discounted Payback'],
       ['净现值(NPV)', financialData.npv.toFixed(3), '万元', '折现收益'],
     ];
 
@@ -205,10 +226,67 @@ export function exportProjectReport(
     });
     const wsCashflow = XLSX.utils.aoa_to_sheet(cashflowData);
     XLSX.utils.book_append_sheet(wb, wsCashflow, '年度现金流明细');
+
+    if (financialData.interactions?.length) {
+      const interactionRows: any[][] = [
+        ['板块协同收益分析'],
+        ['协同项目', '年增量价值(万元)'],
+        ...financialData.interactions.map(item => [item.label, item.annualValue.toFixed(3)])
+      ];
+      const wsInteractions = XLSX.utils.aoa_to_sheet(interactionRows);
+      setColumnWidths(wsInteractions, [{ wch: 38 }, { wch: 20 }]);
+      XLSX.utils.book_append_sheet(wb, wsInteractions, '协同收益');
+    }
+
+    if (financialData.participants?.length) {
+      const participantRows: any[][] = [
+        ['参与方财务账本'],
+        ['参与方', '承担投资(万元)', '首年净收益(万元)', 'NPV(万元)', 'IRR(%)', '回收期(年)'],
+        ...financialData.participants.map(item => [item.name, item.investment.toFixed(3), item.firstYearNetBenefit.toFixed(3), item.npv.toFixed(3), item.irr.toFixed(3), item.payback.toFixed(3)])
+      ];
+      const wsParticipants = XLSX.utils.aoa_to_sheet(participantRows);
+      setColumnWidths(wsParticipants, [{ wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 14 }, { wch: 16 }]);
+      XLSX.utils.book_append_sheet(wb, wsParticipants, '参与方账本');
+    }
+
+    financialData.moduleDetails?.filter(item => ['retrofit-solar', 'retrofit-storage'].includes(item.moduleId)).forEach(item => {
+      let cumulative = 0;
+      const rows: any[][] = [
+        [`${item.name}完整方案`],
+        ['投资方式', item.investmentMode],
+        ['专项投资(万元)', item.investment.toFixed(3)],
+        ['独立首年净收益(万元)', item.firstYearNetBenefit.toFixed(3)],
+        ['NPV(万元)', item.npv.toFixed(3)],
+        ['IRR(%)', item.irr.toFixed(3)],
+        ['动态回收期(年)', item.payback.toFixed(3)],
+        [],
+        ['技术参数', '数值'],
+        ...item.technicalMetrics.map(metric => [metric.label, metric.value]),
+        [],
+        ['年份', '年度净现金流(万元)', '累计现金流(万元)'],
+        ...item.cashFlows.map((value, year) => {
+          cumulative += value;
+          return [year, value.toFixed(3), cumulative.toFixed(3)];
+        }),
+        [],
+        ['假设与风险'],
+        ...[...item.assumptions, ...item.warnings].map((text, index) => [index + 1, text]),
+      ];
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      setColumnWidths(worksheet, [{ wch: 28 }, { wch: 70 }, { wch: 24 }]);
+      XLSX.utils.book_append_sheet(wb, worksheet, item.moduleId === 'retrofit-solar' ? '光伏完整方案' : '储能完整方案');
+    });
+
+    if (financialData.assumptions?.length) {
+      const assumptionRows: any[][] = [['计算假设与口径'], ['序号', '假设说明'], ...financialData.assumptions.map((item, index) => [index + 1, item])];
+      const wsAssumptions = XLSX.utils.aoa_to_sheet(assumptionRows);
+      setColumnWidths(wsAssumptions, [{ wch: 8 }, { wch: 90 }]);
+      XLSX.utils.book_append_sheet(wb, wsAssumptions, '计算假设');
+    }
   }
 
   const safeProjectName = (projectData.name || '项目').replace(/[\\/:*?"<>|]/g, '_');
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const dateStr = formatLocalDateCompact();
   XLSX.writeFile(wb, `${safeProjectName}_详细评估报告_${dateStr}.xlsx`);
 }
 
@@ -236,7 +314,7 @@ export function exportSimplifiedReport(
   const ws = XLSX.utils.aoa_to_sheet(data);
   XLSX.utils.book_append_sheet(wb, ws, '概览报告');
 
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const dateStr = formatLocalDateCompact();
   XLSX.writeFile(wb, `${projectName}_快速概览_${dateStr}.xlsx`);
 }
 

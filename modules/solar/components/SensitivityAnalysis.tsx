@@ -11,9 +11,10 @@ export const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({
     params,
     selfConsumptionRate
 }) => {
+    const projectLifeYears = Math.max(1, Math.round(params.advParams.projectLifeYears || 11));
     // 基础 IRR
     const baseResult = useSolarMetrics(params, selfConsumptionRate);
-    const baseIrr = baseResult.irr;
+    const baseIrr = baseResult.longTermMetrics.irr;
 
     // 电价敏感性
     const electricitySensitivity = useMemo(() => {
@@ -97,7 +98,7 @@ export const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({
                                         </span>
                                     </td>
                                     <td className="px-4 py-2 text-center">
-                                        ¥{params.advParams.electricityPrice * (1 + s.variation / 100).toFixed(4)}/度
+                                        ¥{(params.advParams.electricityPrice * (1 + s.variation / 100)).toFixed(4)}/度
                                     </td>
                                     <td className="px-4 py-2 text-center font-bold">{s.irr.toFixed(2)}%</td>
                                     <td className="px-4 py-2 text-center">
@@ -116,7 +117,7 @@ export const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({
             <div className="bg-white rounded-xl border border-slate-200 p-6">
                 <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
                     <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
-                    年衰减率对25年发电量的影响
+                    年衰减率对{projectLifeYears}年发电量的影响
                 </h4>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -124,7 +125,7 @@ export const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({
                             <tr className="bg-amber-50">
                                 <th className="px-4 py-2">衰减率变化</th>
                                 <th className="px-4 py-2">调整后衰减率</th>
-                                <th className="px-4 py-2">25年累计发电</th>
+                                <th className="px-4 py-2">{projectLifeYears}年累计发电</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -198,7 +199,7 @@ export const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({
                     <li>• <strong>{mostSensitive}</strong> 是对收益率影响最敏感的因素</li>
                     <li>• 电价每变化 10%，IRR 变化约 {(electricityMaxDelta / 2).toFixed(2)}%</li>
                     <li>• 建议密切关注电价政策变化，必要时通过长期购电协议锁定电价</li>
-                    <li>• 组件衰减率选择优质品牌可显著提升25年累计收益</li>
+                    <li>• 组件衰减率选择优质品牌可提升{projectLifeYears}年累计收益</li>
                 </ul>
             </div>
         </div>

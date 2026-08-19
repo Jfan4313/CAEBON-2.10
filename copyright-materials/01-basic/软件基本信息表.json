@@ -1,0 +1,15 @@
+{
+  "software_full_name": "园区综合能源项目投资收益测算与辅助决策系统",
+  "software_short_name": "零碳项目辅助决策系统",
+  "version": "V2.14",
+  "package_version": "2.14.0",
+  "development_year": 2026,
+  "applicant": null,
+  "applicant_status": "待权利人根据真实开发与权属事实确认",
+  "repository_internal_name": "CAEBON-2.10",
+  "repository_internal_name_is_application_name": false,
+  "software_type": "桌面应用软件",
+  "architecture": ["Electron", "React", "TypeScript", "Vite", "IndexedDB/localStorage", "可选Supabase"],
+  "copyright_scope_note": "第三方框架、SDK、依赖、构建产物和自动生成代码不作为自主源程序提交",
+  "excluded_features": ["真实AI模型自动决策", "真实碳交易", "省级虚拟电厂实时调度", "物联网实时控制", "完整数字孪生控制", "实时微电网硬件接入", "尚未完成的云端多人协同"]
+}

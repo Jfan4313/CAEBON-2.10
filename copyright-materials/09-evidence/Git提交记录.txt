@@ -1,0 +1,31 @@
+园区综合能源项目投资收益测算与辅助决策系统 V2.14
+Git提交记录（按时间正序）
+导出时间：2026-08-01T17:05:33.749Z
+125bab36fd932b194e652f4b2d0a6faac8144fc0	2026-02-16T22:03:13+08:00	苏	su@192.168.5.20	Phase 3 开始前的检查点
+8ea82606d5dab1458c58cc6268161bbad6a4f250	2026-02-16T23:46:06+08:00	苏	su@192.168.5.20	跨板块联通算法：添加ThermalEconomicOptimizer和相关接口
+48a1872ffc69693ebbfd481efb3177ce053e2f00	2026-02-23T13:18:40+08:00	苏	su@sudeMacBook-Pro.local	feat: 使用 Canvas 像素检测实现微电网精确交互
+ffdab477ad1d645842ea251ae7f7808635eb6fc2	2026-02-23T13:20:05+08:00	苏	su@sudeMacBook-Pro.local	perf: 优化 Canvas 像素检测性能
+c102ca2b61ea35ee5205032ded38f03bc223db70	2026-02-23T14:03:07+08:00	苏	su@sudeMacBook-Pro.local	feat: 重新设计微电网可视化页面布局
+24215f5b092b554307570665a614000cf825c1ff	2026-02-23T16:57:05+08:00	苏	su@sudeMacBook-Pro.local	fix: 提高 Canvas 画布分辨率以优化画面清晰度
+cf0b8a3d60e6be67f95e447726300877190f89c4	2026-02-23T16:59:01+08:00	苏	su@sudeMacBook-Pro.local	perf: 优化 Canvas 性能，减少高分辨率下的卡顿
+c41d5ece73d0ed00572ba23b052d9e0e98a83a18	2026-02-23T17:13:57+08:00	苏	su@sudeMacBook-Pro.local	perf: 优化图像加载策略，只计算可交互设备Alpha映射
+ce2c728cb885d45fc34fa1f38faf9ad1806a4cba	2026-02-26T18:46:09+08:00	苏	su@sudeMacBook-Pro.local	feat: 添加项目导入导出功能
+9eb1b6c91e1530cc6c401d0ae7848249e95007ad	2026-02-26T18:48:58+08:00	苏	su@sudeMacBook-Pro.local	fix: 修复 RevenueAnalysis 组件中 simulation 初始化顺序错误
+1ca6b425002e6319e97ab6a995a3c0f3b9828b5d	2026-02-26T18:53:31+08:00	苏	su@sudeMacBook-Pro.local	refactor: 删除动态分析板块和未使用的handlers
+7eaad5af3c37ed8480fd7d67fe549c8f2040544d	2026-02-26T18:56:55+08:00	苏	su@sudeMacBook-Pro.local	refactor: 删除侧边栏中的动态分析导航项
+f8496ad1253a4957336eb9b058b96266125f5795	2026-03-01T00:11:57+08:00	苏	su@sudeMacBook-Pro.local	feat(phase3-4): Add EMC sharing logic, SPV leveraged finance, ESG scorecard & Sub-system analysis
+e89f60da0841ff6493d30c3127e0d0e7dcdbe4d8	2026-03-01T00:23:06+08:00	苏	su@sudeMacBook-Pro.local	feat(ux): Add animated numbers for macro KPIs and progressive disclosure for advanced settings
+a4d7ebbd08083b82c2ed064d81f3ff7cfbab9ce8	2026-03-01T00:33:59+08:00	苏	su@sudeMacBook-Pro.local	feat(solar,report): simplify solar investment mode to epc/emc and add detailed NPV/IRR to report
+21e575fab1c009861cc38de9cbc64eb3964be210	2026-03-14T17:24:55+08:00	苏	su@sudeMacBook-Pro.local	feat: 发布版本 2.10.0 - 新增云存储和多个业务模块
+015d5f3f903aac6c79c47fec5060e7bf2dc62bcd	2026-03-14T17:41:35+08:00	苏	su@sudeMacBook-Pro.local	feat: 添加云存储 UI 集成和管理员模式密码保护 (v2.11.0)
+36cf38510975180aa2d961356bfd810ed2038d17	2026-03-14T18:11:55+08:00	苏	su@sudeMacBook-Pro.local	feat: 新增用户注册和登录功能 (v2.12.0)
+5f1774bf65b22b3ddc3fd29cdac4752ba9ec44d1	2026-03-14T18:23:12+08:00	苏	su@sudeMacBook-Pro.local	fix: 注册时自动验证邮箱，用户可立即登录
+f8aafb0377af2bef71bc61b657943e231a27e58f	2026-03-20T10:16:19+08:00	苏	su@sudeMacBook-Pro.local	feat(solar): 重构光伏模块，新增PPT演示和方案对比功能
+7602af8fb84285f0c9f89a90a516b7ced32c2c53	2026-03-20T10:16:25+08:00	苏	su@sudeMacBook-Pro.local	feat: 新增NASA POWER数据接口和价格模板服务
+eb5eabc48de9ea8c862ff7691e9da957f4c42b6e	2026-03-20T10:16:30+08:00	苏	su@sudeMacBook-Pro.local	fix(hvac): 修复策略类型未定义导致的崩溃问题
+ed3dd48d1c8b5e7b013deef9a3bfd2849aed6c92	2026-03-20T10:16:35+08:00	苏	su@sudeMacBook-Pro.local	feat(report): 报告中心全中文化与精度优化
+9304237e705ea3e0f16c8d237e887fb399069ead	2026-03-20T10:16:51+08:00	苏	su@sudeMacBook-Pro.local	chore: 发布版本 v2.13.0
+35ed534b8a45825fa208c57ebde7d1ec92ab0564	2026-03-20T19:48:54+08:00	苏	su@sudeMacBook-Pro.local	feat: 添加地址选择器和光伏铺设图功能 (v2.14.0)
+33f3f837bebd34f1a28acb96e8e1e5be012289c6	2026-03-21T21:04:36+08:00	苏	su@sudeMacBook-Pro.local	refactor: 统一使用 utils/financial.ts 的 IRR 计算
+0d895ed4198c3d3ccfa3bf0d17a94acc2ad2d3f5	2026-07-03T15:48:06+08:00	Jfan4313	352572900@qq.com	feat: enhance solar and energy sales planning
+0090b5f43c6c69999346d2c5253efedb149acd74	2026-07-06T10:51:01+08:00	Jfan4313	352572900@qq.com	feat: refine solar ppt reporting

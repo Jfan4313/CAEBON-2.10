@@ -3,6 +3,14 @@
  * 用于生成完整的汇报报告
  */
 
+import { PRODUCT_IDENTITY } from '../shared/config/productIdentity';
+
+const REPORT_GENERATOR = `${PRODUCT_IDENTITY.fullName}${PRODUCT_IDENTITY.version}`;
+
+function formatLocalDateCompact(date = new Date()): string {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('');
+}
+
 // ==================== PDF导出功能 ====================
 
 /**
@@ -40,6 +48,9 @@ export function generatePrintableHTML(content: {
   charts?: any[];
 }): string {
   const { projectInfo, modules, financial, charts } = content;
+  const activeInvestment = modules.filter(m => m.isActive).reduce((sum, module) => sum + module.investment, 0);
+  const activeAnnualBenefit = modules.filter(m => m.isActive).reduce((sum, module) => sum + module.yearlySaving, 0);
+  const horizonYears = financial.period ?? 25;
 
   return `
 <!DOCTYPE html>
@@ -256,14 +267,14 @@ export function generatePrintableHTML(content: {
             <td>${m.strategy}</td>
             <td>${m.investment.toFixed(2)}</td>
             <td>${m.yearlySaving.toFixed(2)}</td>
-            <td>${((m.yearlySaving / m.investment) * 100).toFixed(1)}%</td>
+            <td>${m.investment > 0 ? `${((m.yearlySaving / m.investment) * 100).toFixed(1)}%` : '协同增量'}</td>
           </tr>
         `).join('')}
         <tr style="font-weight: bold; background-color: #e0e7ff;">
           <td colspan="4">合计</td>
-          <td>${modules.filter(m => m.isActive).reduce((s, m) => s + m.investment, 0).toFixed(2)}</td>
-          <td>${modules.filter(m => m.isActive).reduce((s, m) => s + m.yearlySaving, 0).toFixed(2)}</td>
-          <td>${((modules.filter(m => m.isActive).reduce((s, m) => s + m.yearlySaving, 0) / modules.filter(m => m.isActive).reduce((s, m) => s + m.investment, 1)) * 100).toFixed(1)}%</td>
+          <td>${activeInvestment.toFixed(2)}</td>
+          <td>${activeAnnualBenefit.toFixed(2)}</td>
+          <td>${activeInvestment > 0 ? `${((activeAnnualBenefit / activeInvestment) * 100).toFixed(1)}%` : '-'}</td>
         </tr>
       </tbody>
     </table>
@@ -287,14 +298,23 @@ export function generatePrintableHTML(content: {
       </div>
       <div class="kpi-card">
         <div class="label">回本周期</div>
-        <div class="value">${financial.payback > 20 ? '>20' : financial.payback.toFixed(1)}年</div>
+        <div class="value">${financial.payback > horizonYears ? `>${horizonYears}` : financial.payback.toFixed(1)}年</div>
       </div>
     </div>
   </div>
 
+  ${financial.participants?.length ? `
+  <div class="section">
+    <h2>四、参与方财务账本</h2>
+    <table class="data-table">
+      <thead><tr><th>参与方</th><th>承担投资(万元)</th><th>首年净收益(万元)</th><th>NPV(万元)</th><th>IRR</th><th>回收期</th></tr></thead>
+      <tbody>${financial.participants.map((p: any) => `<tr><td>${p.name}</td><td>${p.investment.toFixed(3)}</td><td>${p.firstYearNetBenefit.toFixed(3)}</td><td>${p.npv.toFixed(3)}</td><td>${p.irr.toFixed(2)}%</td><td>${p.payback.toFixed(2)}年</td></tr>`).join('')}</tbody>
+    </table>
+  </div>` : ''}
+
   <!-- 页脚 -->
   <div class="footer">
-    <p>本报告由零碳项目收益评估软件自动生成</p>
+    <p>本报告由${REPORT_GENERATOR}自动生成</p>
     <p>生成时间：${new Date().toLocaleString('zh-CN')}</p>
   </div>
 </body>
@@ -345,6 +365,24 @@ export function exportToWord(content: {
   };
 }): void {
   const { projectInfo, modules, financial, options = {} } = content;
+  const horizonYears = financial.period ?? 25;
+  const moduleChapterHtml = (financial.moduleDetails || []).filter((item: any) => ['retrofit-solar', 'retrofit-storage'].includes(item.moduleId)).map((item: any) => {
+    let cumulative = 0;
+    return `
+      <div style="page-break-before: always;"></div>
+      <h2>${item.name}完整方案</h2>
+      <div class="kpi-box"><div class="kpi-value">¥${item.investment.toFixed(2)}万</div><div class="kpi-label">专项投资</div></div>
+      <div class="kpi-box"><div class="kpi-value">¥${item.firstYearNetBenefit.toFixed(2)}万</div><div class="kpi-label">独立首年收益</div></div>
+      <div class="kpi-box"><div class="kpi-value">${item.irr.toFixed(2)}%</div><div class="kpi-label">板块IRR</div></div>
+      <div class="kpi-box"><div class="kpi-value">${item.payback.toFixed(2)}年</div><div class="kpi-label">动态回收期</div></div>
+      <h3>方案与技术参数</h3>
+      <table><tr><th>参数</th><th>数值</th></tr>${item.technicalMetrics.map((metric: any) => `<tr><td>${metric.label}</td><td>${metric.value}</td></tr>`).join('')}</table>
+      <h3>25年独立现金流</h3>
+      <table><tr><th>年份</th><th>年度净现金流(万元)</th><th>累计现金流(万元)</th></tr>${item.cashFlows.map((value: number, year: number) => { cumulative += value; return `<tr><td>${year}</td><td>${value.toFixed(3)}</td><td>${cumulative.toFixed(3)}</td></tr>`; }).join('')}</table>
+      <h3>假设与风险</h3>
+      <ul>${[...item.assumptions, ...item.warnings].map((text: string) => `<li>${text}</li>`).join('')}</ul>
+    `;
+  }).join('');
 
   const wordContent = `
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
@@ -355,6 +393,7 @@ export function exportToWord(content: {
     body { font-family: "Microsoft YaHei", sans-serif; line-height: 1.6; margin: 40px; }
     h1 { color: #4f46e5; border-bottom: 3px solid #4f46e5; padding-bottom: 10px; }
     h2 { color: #1e293b; border-left: 4px solid #4f46e5; padding-left: 12px; margin-top: 30px; }
+    h3 { color: #334155; margin-top: 22px; }
     table { border-collapse: collapse; width: 100%; margin: 20px 0; }
     th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: center; }
     th { background-color: #4f46e5; color: white; }
@@ -385,19 +424,35 @@ export function exportToWord(content: {
         <td>${m.isActive ? '启用' : '禁用'}</td>
         <td>${m.investment.toFixed(2)}</td>
         <td>${m.yearlySaving.toFixed(2)}</td>
-        <td>${((m.yearlySaving / m.investment) * 100).toFixed(1)}%</td>
+        <td>${m.investment > 0 ? `${((m.yearlySaving / m.investment) * 100).toFixed(1)}%` : '协同增量'}</td>
       </tr>
     `).join('')}
   </table>
 
-  <h2>三、财务综合分析</h2>
+  ${moduleChapterHtml}
+
+  <div style="page-break-before: always;"></div>
+  <h2>光储联合与系统财务汇总</h2>
   <div class="kpi-box"><div class="kpi-value">¥${financial.totalInvestment.toFixed(1)}万</div><div class="kpi-label">初始总投资</div></div>
   <div class="kpi-box"><div class="kpi-value">¥${financial.npv.toFixed(1)}万</div><div class="kpi-label">净现值 (NPV)</div></div>
   <div class="kpi-box"><div class="kpi-value">${financial.irr.toFixed(2)}%</div><div class="kpi-label">内部收益率 (IRR)</div></div>
-  <div class="kpi-box"><div class="kpi-value">${financial.payback > 20 ? '>20' : financial.payback.toFixed(1)}年</div><div class="kpi-label">回本周期</div></div>
+  <div class="kpi-box"><div class="kpi-value">${financial.payback > horizonYears ? `>${horizonYears}` : financial.payback.toFixed(1)}年</div><div class="kpi-label">动态回本周期</div></div>
+
+  ${financial.interactions?.length ? `<h3>板块协同收益</h3><table><tr><th>协同项目</th><th>年增量价值(万元)</th></tr>${financial.interactions.map((item: any) => `<tr><td>${item.label}</td><td>${item.annualValue.toFixed(3)}</td></tr>`).join('')}</table>` : ''}
+
+  ${financial.annualData?.length ? `<h3>系统25年现金流</h3><table><tr><th>年份</th><th>年度净现金流(万元)</th><th>累计现金流(万元)</th></tr>${financial.annualData.map((item: any) => `<tr><td>${item.year}</td><td>${item.net.toFixed(3)}</td><td>${item.cumulative.toFixed(3)}</td></tr>`).join('')}</table>` : ''}
+
+  ${financial.participants?.length ? `
+  <h2>四、参与方财务账本</h2>
+  <table>
+    <tr><th>参与方</th><th>承担投资(万元)</th><th>首年净收益(万元)</th><th>NPV(万元)</th><th>IRR</th><th>回收期</th></tr>
+    ${financial.participants.map((p: any) => `<tr><td>${p.name}</td><td>${p.investment.toFixed(3)}</td><td>${p.firstYearNetBenefit.toFixed(3)}</td><td>${p.npv.toFixed(3)}</td><td>${p.irr.toFixed(2)}%</td><td>${p.payback.toFixed(2)}年</td></tr>`).join('')}
+  </table>` : ''}
+
+  ${financial.assumptions?.length ? `<h3>统一测算依据与风险提示</h3><ul>${financial.assumptions.map((item: string) => `<li>${item}</li>`).join('')}</ul>` : ''}
 
   <p style="margin-top: 50px; color: #64748b; font-size: 12px; text-align: center;">
-    本报告由零碳项目收益评估软件自动生成<br/>
+    本报告由${REPORT_GENERATOR}自动生成<br/>
     生成时间：${new Date().toLocaleString('zh-CN')}
   </p>
 </body>
@@ -411,7 +466,7 @@ export function exportToWord(content: {
 
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const dateStr = formatLocalDateCompact();
   const safeName = projectInfo.name.replace(/[\\/:*?"<>|]/g, '_');
 
   link.href = url;
@@ -431,6 +486,9 @@ export function exportToMarkdown(content: {
   financial: any;
 }): string {
   const { projectInfo, modules, financial } = content;
+  const activeInvestment = modules.filter(m => m.isActive).reduce((sum, module) => sum + module.investment, 0);
+  const activeAnnualBenefit = modules.filter(m => m.isActive).reduce((sum, module) => sum + module.yearlySaving, 0);
+  const horizonYears = financial.period ?? 25;
 
   return `# 零碳项目收益估值报告
 
@@ -448,8 +506,8 @@ export function exportToMarkdown(content: {
 | 序号 | 模块名称 | 状态 | 投资额(万元) | 年收益(万元) | ROI(%) |
 |------|----------|------|---------------|---------------|--------|
 ${modules.map((m, i) => `
-| ${i + 1} | ${m.name} | ${m.isActive ? '✓' : '✗'} | ${m.investment.toFixed(2)} | ${m.yearlySaving.toFixed(2)} | ${((m.yearlySaving / m.investment) * 100).toFixed(1)}% |`).join('')}
-| | **合计** | | ${modules.filter(m => m.isActive).reduce((s, m) => s + m.investment, 0).toFixed(2)} | ${modules.filter(m => m.isActive).reduce((s, m) => s + m.yearlySaving, 0).toFixed(2)} | ${((modules.filter(m => m.isActive).reduce((s, m) => s + m.yearlySaving, 0) / modules.filter(m => m.isActive).reduce((s, m) => s + m.investment, 1)) * 100).toFixed(1)}% |
+| ${i + 1} | ${m.name} | ${m.isActive ? '✓' : '✗'} | ${m.investment.toFixed(2)} | ${m.yearlySaving.toFixed(2)} | ${m.investment > 0 ? `${((m.yearlySaving / m.investment) * 100).toFixed(1)}%` : '协同增量'} |`).join('')}
+| | **合计** | | ${activeInvestment.toFixed(2)} | ${activeAnnualBenefit.toFixed(2)} | ${activeInvestment > 0 ? `${((activeAnnualBenefit / activeInvestment) * 100).toFixed(1)}%` : '-'} |
 
 ## 财务综合分析
 
@@ -458,11 +516,11 @@ ${modules.map((m, i) => `
 - **初始总投资**: ¥${financial.totalInvestment.toFixed(1)}万
 - **净现值 (NPV)**: ¥${financial.npv.toFixed(1)}万
 - **内部收益率 (IRR)**: ${financial.irr.toFixed(2)}%
-- **回本周期**: ${financial.payback > 20 ? '>20' : financial.payback.toFixed(1)}年
+- **动态回本周期**: ${financial.payback > horizonYears ? `>${horizonYears}` : financial.payback.toFixed(1)}年
 
 ---
 
-*本报告由零碳项目收益评估软件自动生成*
+*本报告由${REPORT_GENERATOR}自动生成*
 `;
 }
 
@@ -482,7 +540,7 @@ export function exportMarkdownReport(content: {
 
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const dateStr = formatLocalDateCompact();
   const safeName = content.projectInfo.name.replace(/[\\/:*?"<>|]/g, '_');
 
   link.href = url;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useProject } from '../context/ProjectContext';
 import { projectStorageService } from '../services/projectStorage';
-import { ProjectTemplate } from '../types/projectStorage';
+import { ProjectListItem } from '../types/projectStorage';
 
 /**
  * 项目管理组件
@@ -9,7 +9,7 @@ import { ProjectTemplate } from '../types/projectStorage';
  */
 const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { importProjectConfig, setNotification } = useProject();
-  const [projects, setProjects] = useState<ProjectTemplate[]>([]);
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt' | 'name'>('updatedAt');
@@ -47,9 +47,11 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 
   // 加载项目
-  const handleLoadProject = async (project: ProjectTemplate) => {
+  const handleLoadProject = async (project: ProjectListItem) => {
     try {
-      await importProjectConfig(project.data);
+      const data = await projectStorageService.loadProjectData(project.id);
+      if (!data) throw new Error(`Project data not found: ${project.id}`);
+      await importProjectConfig(data);
       setNotification?.({ message: `已加载项目：${project.name}`, type: 'success' });
       onClose();
     } catch (error) {
@@ -59,22 +61,18 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   // 开始编辑项目名称
-  const handleStartEdit = (project: ProjectTemplate) => {
+  const handleStartEdit = (project: ProjectListItem) => {
     if (project.isTemplate) return;
     setEditingId(project.id);
     setEditingName(project.name);
   };
 
   // 保存编辑
-  const handleSaveEdit = async (project: ProjectTemplate) => {
+  const handleSaveEdit = async (project: ProjectListItem) => {
     if (!editingName.trim()) return;
 
     try {
-      const updatedProject: ProjectTemplate = {
-        ...project,
-        name: editingName.trim()
-      };
-      await projectStorageService.saveProjectToStorage(updatedProject);
+      await projectStorageService.renameProject(project.id, editingName.trim());
       setEditingId(null);
       loadProjects();
       setNotification?.({ message: '项目名称已更新', type: 'success' });
@@ -108,12 +106,19 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   // 导出项目
-  const handleExportProject = (project: ProjectTemplate) => {
-    projectStorageService.exportProjectConfig(project.data, {
-      filename: `${project.name}_config`,
-      formatted: true
-    });
-    setNotification?.({ message: '项目配置已导出', type: 'success' });
+  const handleExportProject = async (project: ProjectListItem) => {
+    try {
+      const data = await projectStorageService.loadProjectData(project.id);
+      if (!data) throw new Error(`Project data not found: ${project.id}`);
+      projectStorageService.exportProjectConfig(data, {
+        filename: `${project.name}_config`,
+        formatted: true
+      });
+      setNotification?.({ message: '项目配置已导出', type: 'success' });
+    } catch (error) {
+      console.error('Failed to export project:', error);
+      setNotification?.({ message: '导出项目失败', type: 'error' });
+    }
   };
 
   // 格式化日期
@@ -256,12 +261,10 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <span className="material-symbols-outlined text-[16px]">calendar_today</span>
                       更新于 {formatDate(project.updatedAt)}
                     </span>
-                    {project.data.modules && (
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[16px]">extension</span>
-                        {Object.values(project.data.modules).filter(m => m.isActive).length} 个模块
-                      </span>
-                    )}
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[16px]">extension</span>
+                      {project.activeModuleCount} 个模块
+                    </span>
                   </div>
 
                   {/* Actions */}

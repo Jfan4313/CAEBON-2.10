@@ -4,6 +4,8 @@ export interface StorageBasicParams {
     unitCost: number; // 元/kWh
 }
 
+export type StorageDispatchMode = 'pv_surplus' | 'hybrid';
+
 export interface StorageAdvParams {
     dod: number; // %
     rte: number; // % (Round-Trip Efficiency)
@@ -39,6 +41,7 @@ export interface StorageSimulationData {
     load: number;
     pv: number;
     action: number;
+    soc: number; // %
     gridLoad: number;
     transformerLimit: number;
 }

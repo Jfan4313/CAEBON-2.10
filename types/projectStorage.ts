@@ -47,6 +47,14 @@ export interface ProjectTemplate {
 }
 
 /**
+ * 项目列表使用的轻量索引，不重复保存完整项目数据。
+ */
+export interface ProjectListItem extends Omit<ProjectTemplate, 'data'> {
+  /** 已启用模块数，用于列表展示。 */
+  activeModuleCount: number;
+}
+
+/**
  * 导入验证结果
  */
 export interface ImportValidationResult {

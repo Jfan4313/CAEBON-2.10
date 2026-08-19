@@ -4,6 +4,8 @@ import { Building, EquipmentItem } from './project-entry/types';
 import { BuildingList } from './project-entry/BuildingList';
 import { SystemConfigTable } from './project-entry/SystemConfigTable';
 import { BillImport } from './project-entry/BillImport';
+import { RestaurantLoadProfilePreview } from './project-entry/RestaurantLoadProfilePreview';
+import { VillaLoadProfilePreview } from './project-entry/VillaLoadProfilePreview';
 import { LocationPicker } from './LocationPicker';
 // --- 省份城市数据 ---
 const PROVINCE_CITIES: Record<string, string[]> = {
@@ -205,6 +207,14 @@ const defaultBuildings: Building[] = [
     },
 ];
 
+const normalizeBuildingArea = (building: Building): Building => {
+    const numericArea = Number(building.area);
+    return {
+        ...building,
+        area: Number.isFinite(numericArea) ? numericArea : 0,
+    };
+};
+
 const ProjectEntry: React.FC = () => {
     const { transformers, setTransformers, saveProject, projectBaseInfo, setProjectBaseInfo } = useProject();
 
@@ -217,7 +227,7 @@ const ProjectEntry: React.FC = () => {
     // Building State (Hydrate from Context)
     const [buildings, setBuildings] = useState<Building[]>(
         (projectBaseInfo.buildings && projectBaseInfo.buildings.length > 0)
-            ? projectBaseInfo.buildings
+            ? projectBaseInfo.buildings.map(normalizeBuildingArea)
             : defaultBuildings
     );
 
@@ -281,7 +291,10 @@ const ProjectEntry: React.FC = () => {
     }, [targetBuildingId]);
 
     const handleBuildingChange = useCallback((id: number, field: string, value: string | number) => {
-        setBuildings(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
+        const normalizedValue = field === 'area'
+            ? (Number.isFinite(Number(value)) ? Number(value) : 0)
+            : value;
+        setBuildings(prev => prev.map(b => b.id === id ? { ...b, [field]: normalizedValue } : b));
     }, []);
 
     // -- Deep Update Handlers --
@@ -431,7 +444,7 @@ const ProjectEntry: React.FC = () => {
         // 1. Lighting
         if (b.systems.lighting.enabled) {
             if (b.systems.lighting.mode === 'density') {
-                totalKW += (b.systems.lighting.density * b.area) / 1000;
+                totalKW += (b.systems.lighting.density * (Number(b.area) || 0)) / 1000;
             } else {
                 const listSumW = b.systems.lighting.items.reduce((acc, item) => acc + (item.power * item.count), 0);
                 totalKW += listSumW / 1000; // Lighting items stored in Watts usually
@@ -518,6 +531,8 @@ const ProjectEntry: React.FC = () => {
                                         <option value="factory">零碳工厂 (Factory)</option>
                                         <option value="school">零碳学校 (School)</option>
                                         <option value="office">零碳商办 (Office)</option>
+                                        <option value="restaurant">饭店酒楼 (Restaurant)</option>
+                                        <option value="villa">别墅户用 (Villa Residential)</option>
                                     </select>
                                     <span className="material-symbols-outlined absolute right-3 top-3 text-slate-400 pointer-events-none text-[20px]">expand_more</span>
                                 </div>
@@ -580,6 +595,17 @@ const ProjectEntry: React.FC = () => {
                                         </p>
                                     </div>
                                 </div>
+                            )}
+
+                            {projectType === 'restaurant' && <RestaurantLoadProfilePreview />}
+                            {projectType === 'villa' && (
+                                <VillaLoadProfilePreview
+                                    dailyKwh={Number(projectBaseInfo.villaDailyKwh || 35)}
+                                    onDailyKwhChange={(value) => setProjectBaseInfo(previous => ({
+                                        ...previous,
+                                        villaDailyKwh: value,
+                                    }))}
+                                />
                             )}
 
                             <div className="space-y-2">
@@ -1213,7 +1239,7 @@ const ProjectEntry: React.FC = () => {
                                                             <span className="font-bold text-slate-800">{b.name}</span>
                                                         </div>
                                                         <div className="text-xs text-slate-500 pl-7">
-                                                            {b.type} | {b.area.toLocaleString()} ㎡
+                                                            {b.type} | {(Number(b.area) || 0).toLocaleString('zh-CN')} ㎡
                                                         </div>
                                                     </div>
 

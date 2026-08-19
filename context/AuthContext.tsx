@@ -1,361 +1,188 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { createClient, SupabaseClient, User, Session, AuthError } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  ALIYUN_AUTH_EXPIRY_KEY,
+  ALIYUN_AUTH_TOKEN_KEY,
+  ALIYUN_AUTH_USER_KEY,
+  AliyunApiError,
+  type AliyunUser,
+  aliyunApi,
+  clearAliyunSession,
+} from '../services/aliyun-api';
 
-// 用户信息接口
 export interface AuthUser {
   id: string;
+  username: string;
+  name: string;
   email?: string;
   phone?: string;
-  emailVerified?: boolean;
+  role: string;
+  permissions: string[];
   userMetadata?: {
     full_name?: string;
     avatar_url?: string;
   };
 }
 
-// 认证上下文接口
+interface AuthResult {
+  success: boolean;
+  error?: string;
+}
+
 interface AuthContextType {
   currentUser: AuthUser | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, fullName?: string) => Promise<{ success: boolean; error?: string }>;
+  login: (identifier: string, password: string) => Promise<AuthResult>;
+  register: (phone: string, password: string, fullName?: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
-  forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
-  resetPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
-  supabaseClient: SupabaseClient | null;
+  forgotPassword: (identifier: string) => Promise<AuthResult>;
+  resetPassword: (password: string) => Promise<AuthResult>;
+  supabaseClient: null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-// Supabase 客户端实例
-let supabaseClientInstance: SupabaseClient | null = null;
-
-/**
- * 获取 Supabase 客户端
- */
-function getSupabaseClient(): SupabaseClient | null {
-  if (!supabaseClientInstance) {
-    const url = import.meta.env.VITE_SUPABASE_URL || '';
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-    if (url && anonKey) {
-      try {
-        supabaseClientInstance = createClient(url, anonKey, {
-          auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true,
-          },
-        });
-      } catch (error) {
-        console.error('Failed to initialize Supabase auth client:', error);
-      }
-    }
-  }
-  return supabaseClientInstance;
-}
-
-/**
- * 转换 Supabase User 到 AuthUser
- */
-function transformUser(user: User | null): AuthUser | null {
-  if (!user) return null;
-
+function transformUser(user: AliyunUser): AuthUser {
   return {
     id: user.id,
+    username: user.username,
+    name: user.name,
     email: user.email || undefined,
     phone: user.phone || undefined,
-    emailVerified: user.email_confirmed_at != null,
-    userMetadata: user.user_metadata as AuthUser['userMetadata'],
+    role: user.role,
+    permissions: user.permissions,
+    userMetadata: { full_name: user.name },
   };
 }
 
-type PasswordLoginCredentials =
-  | { email: string; password: string }
-  | { phone: string; password: string };
-
-function getPasswordLoginCredentials(
-  identifier: string,
-  password: string
-): PasswordLoginCredentials | null {
-  const normalizedIdentifier = identifier.trim();
-
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedIdentifier)) {
-    return { email: normalizedIdentifier, password };
+function readCachedUser(): AuthUser | null {
+  try {
+    const user = JSON.parse(localStorage.getItem(ALIYUN_AUTH_USER_KEY) || 'null') as AliyunUser | null;
+    return user ? transformUser(user) : null;
+  } catch {
+    return null;
   }
-
-  const compactPhone = normalizedIdentifier.replace(/[\s-]/g, '');
-  if (/^1[3-9]\d{9}$/.test(compactPhone)) {
-    return { phone: `+86${compactPhone}`, password };
-  }
-  if (/^\+861[3-9]\d{9}$/.test(compactPhone)) {
-    return { phone: compactPhone, password };
-  }
-
-  return null;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+function storeSession(token: string, expiresAt: string, user: AliyunUser): void {
+  localStorage.setItem(ALIYUN_AUTH_TOKEN_KEY, token);
+  localStorage.setItem(ALIYUN_AUTH_EXPIRY_KEY, expiresAt);
+  localStorage.setItem(ALIYUN_AUTH_USER_KEY, JSON.stringify(user));
+}
+
+function friendlyAuthError(error: unknown): string {
+  if (!(error instanceof AliyunApiError)) return '操作失败，请重试';
+
+  const messages: Record<string, string> = {
+    invalid_credentials: '手机号（用户名）或密码错误',
+    authentication_required: '登录状态已失效，请重新登录',
+    username_exists: '该手机号已注册',
+    invalid_username: '请输入有效的中国大陆手机号',
+    invalid_name: '请输入姓名',
+    weak_password: '密码需为 8–64 位，并同时包含字母和数字',
+    network_error: '无法连接阿里云服务，请检查网络后重试',
+  };
+  return messages[error.code] || error.message || '操作失败，请重试';
+}
+
+function normalizePhone(value: string): string | null {
+  const compact = value.trim().replace(/[\s-]/g, '').replace(/^\+86/, '');
+  return /^1[3-9]\d{9}$/.test(compact) ? compact : null;
+}
+
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => readCachedUser());
   const [loading, setLoading] = useState(true);
-  const supabase = getSupabaseClient();
 
   useEffect(() => {
-    if (!supabase) {
+    const token = localStorage.getItem(ALIYUN_AUTH_TOKEN_KEY);
+    const expiresAt = localStorage.getItem(ALIYUN_AUTH_EXPIRY_KEY);
+    if (!token || (expiresAt && new Date(expiresAt).getTime() <= Date.now())) {
+      clearAliyunSession();
+      setCurrentUser(null);
       setLoading(false);
       return;
     }
 
-    // 初始化：检查现有会话
-    const initializeAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error('Error getting session:', error);
+    aliyunApi.getCurrentUser()
+      .then(({ user }) => {
+        localStorage.setItem(ALIYUN_AUTH_USER_KEY, JSON.stringify(user));
+        setCurrentUser(transformUser(user));
+      })
+      .catch((error) => {
+        if (error instanceof AliyunApiError && error.status === 401) {
+          clearAliyunSession();
+          setCurrentUser(null);
         }
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-        const user = transformUser(session?.user || null);
-        setCurrentUser(user);
-
-        // 同步用户 ID 到 SupabaseStorageAdapter
-        if (user) {
-          // 从 storage-adapter 导入并设置用户 ID
-          const { getSupabaseAdapter } = await import('../services/supabase-adapter');
-          const adapter = getSupabaseAdapter();
-          adapter.setUserId(user.id);
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
-
-    // 监听认证状态变化
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event);
-
-        const user = transformUser(session?.user || null);
-        setCurrentUser(user);
-
-        // 同步用户 ID 到 SupabaseStorageAdapter
-        if (user) {
-          const { getSupabaseAdapter } = await import('../services/supabase-adapter');
-          const adapter = getSupabaseAdapter();
-          adapter.setUserId(user.id);
-        }
-
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [supabase]);
-
-  /**
-   * 用户登录
-   */
-  const login = async (identifier: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    if (!supabase) {
-      return { success: false, error: '云存储未配置' };
-    }
-
-    const credentials = getPasswordLoginCredentials(identifier, password);
-    if (!credentials) {
-      return { success: false, error: '请输入有效的邮箱或中国大陆手机号' };
-    }
+  const login = async (identifier: string, password: string): Promise<AuthResult> => {
+    const username = identifier.trim().replace(/[\s-]/g, '').replace(/^\+86/, '');
+    if (!username) return { success: false, error: '请输入手机号或用户名' };
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword(credentials);
-
-      if (error) {
-        // 友好的错误消息
-        if (error.message.includes('Invalid login credentials')) {
-          return { success: false, error: '账号或密码错误' };
-        }
-        if (error.message.includes('Phone not confirmed')) {
-          return { success: false, error: '手机号尚未验证' };
-        }
-        return { success: false, error: error.message };
-      }
-
-      if (data.user) {
-        return { success: true };
-      }
-
-      return { success: false, error: '登录失败，请重试' };
+      const response = await aliyunApi.login(username, password);
+      storeSession(response.token, response.expiresAt, response.user);
+      setCurrentUser(transformUser(response.user));
+      return { success: true };
     } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, error: '登录失败，请重试' };
+      return { success: false, error: friendlyAuthError(error) };
     }
   };
 
-  /**
-   * 用户注册
-   */
-  const register = async (
-    email: string,
-    password: string,
-    fullName?: string
-  ): Promise<{ success: boolean; error?: string }> => {
-    if (!supabase) {
-      return { success: false, error: '云存储未配置' };
-    }
-
-    // 验证密码强度
-    if (password.length < 6) {
-      return { success: false, error: '密码长度至少为 6 位' };
-    }
+  const register = async (phoneInput: string, password: string, fullName?: string): Promise<AuthResult> => {
+    const phone = normalizePhone(phoneInput);
+    if (!phone) return { success: false, error: '请输入有效的中国大陆手机号' };
+    if (!fullName?.trim()) return { success: false, error: '请输入姓名' };
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
+      const response = await aliyunApi.register({
+        username: phone,
+        phone,
         password,
-        options: {
-          data: {
-            full_name: fullName || '',
-          },
-          emailConfirm: true, // 自动验证邮箱，用户注册后可直接登录
-        },
+        name: fullName.trim(),
       });
-
-      if (error) {
-        // 友好的错误消息
-        if (error.message.includes('User already registered')) {
-          return { success: false, error: '该邮箱已被注册' };
-        }
-        if (error.message.includes('Password should be')) {
-          return { success: false, error: '密码强度不足' };
-        }
-        return { success: false, error: error.message };
-      }
-
-      if (data.user) {
-        // 检查是否需要邮箱验证
-        if (data.session === null && !error) {
-          // 邮箱需要验证
-          return {
-            success: true,
-            error: '注册成功！请检查您的邮箱以验证账户'
-          };
-        }
-        return { success: true };
-      }
-
-      return { success: false, error: '注册失败，请重试' };
+      storeSession(response.token, response.expiresAt, response.user);
+      setCurrentUser(transformUser(response.user));
+      return { success: true };
     } catch (error) {
-      console.error('Register error:', error);
-      return { success: false, error: '注册失败，请重试' };
+      return { success: false, error: friendlyAuthError(error) };
     }
   };
 
-  /**
-   * 用户登出
-   */
   const logout = async (): Promise<void> => {
-    if (!supabase) return;
-
     try {
-      await supabase.auth.signOut();
-
-      // 清除 SupabaseStorageAdapter 的用户 ID
-      const { getSupabaseAdapter } = await import('../services/supabase-adapter');
-      const adapter = getSupabaseAdapter();
-      adapter.setUserId('');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  /**
-   * 忘记密码 - 发送重置邮件
-   */
-  const forgotPassword = async (email: string): Promise<{ success: boolean; error?: string }> => {
-    if (!supabase) {
-      return { success: false, error: '云存储未配置' };
-    }
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('Forgot password error:', error);
-      return { success: false, error: '发送重置邮件失败，请重试' };
-    }
-  };
-
-  /**
-   * 重置密码
-   */
-  const resetPassword = async (password: string): Promise<{ success: boolean; error?: string }> => {
-    if (!supabase) {
-      return { success: false, error: '云存储未配置' };
-    }
-
-    // 验证密码强度
-    if (password.length < 6) {
-      return { success: false, error: '密码长度至少为 6 位' };
-    }
-
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password,
-      });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('Reset password error:', error);
-      return { success: false, error: '密码重置失败，请重试' };
+      await aliyunApi.logout();
+    } catch {
+      // 即使网络中断，也应清除此设备上的会话。
+    } finally {
+      clearAliyunSession();
+      localStorage.setItem('carbon_storage_mode', 'local');
+      setCurrentUser(null);
     }
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        currentUser,
-        isAuthenticated: currentUser !== null,
-        loading,
-        login,
-        register,
-        logout,
-        forgotPassword,
-        resetPassword,
-        supabaseClient: supabase,
-      }}
-    >
+    <AuthContext.Provider value={{
+      currentUser,
+      isAuthenticated: currentUser !== null,
+      loading,
+      login,
+      register,
+      logout,
+      forgotPassword: async () => ({ success: false, error: '请联系管理员重置密码' }),
+      resetPassword: async () => ({ success: false, error: '请联系管理员重置密码' }),
+      supabaseClient: null,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-/**
- * 使用认证上下文
- */
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

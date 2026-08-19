@@ -1,21 +1,42 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useProject } from '../context/ProjectContext';
 import { getEffectiveActiveModules } from '../utils/moduleAggregation';
 import { exportProjectReport, exportSimplifiedReport, FinancialSummaryData } from '../utils/excelExport';
-import { exportToWord, generateAndPrintReport } from '../utils/reportExport';
+import { exportToWord } from '../utils/reportExport';
 import OnePageReport from './OnePageReport';
 import DetailedReport from './DetailedReport';
 import { ESGScoreCard } from './ESGScoreCard';
+import { buildCombinedReport, consumeRequestedReportModules, formatWan } from '../shared/reporting';
+import { COPYRIGHT_RELEASE_FEATURES } from '../shared/config/productIdentity';
+
+const isCopyrightReleaseModule = (moduleId: string) => {
+  if (moduleId === 'retrofit-ai') return COPYRIGHT_RELEASE_FEATURES.artificialIntelligencePlatform;
+  if (moduleId === 'retrofit-carbon') return COPYRIGHT_RELEASE_FEATURES.carbonTrading;
+  if (moduleId === 'retrofit-vpp') return COPYRIGHT_RELEASE_FEATURES.realtimeVppDispatch;
+  return true;
+};
 
 const ReportCenter: React.FC = () => {
   const { modules, projectBaseInfo, priceConfig, bills, transformers, exportProjectConfig } = useProject();
   const [isExporting, setIsExporting] = useState(false);
+  const reportableModules = useMemo(
+    () => getEffectiveActiveModules(modules).filter(module => isCopyrightReleaseModule(module.id)),
+    [modules]
+  );
+  const [selectedModuleIds, setSelectedModuleIds] = useState<string[]>(() => {
+    const requested = consumeRequestedReportModules();
+    const activeIds = getEffectiveActiveModules(modules)
+      .filter(module => isCopyrightReleaseModule(module.id))
+      .map(module => module.id);
+    return requested?.length ? requested.filter(isCopyrightReleaseModule) : activeIds;
+  });
 
   // 报告配置状态
   const [reportDetail, setReportDetail] = useState<'simple' | 'full'>('full');
   const [exportFormat, setExportFormat] = useState<'excel' | 'pdf' | 'word' | 'json'>('excel');
   const [showOnePage, setShowOnePage] = useState(false);
   const [showDetailedReport, setShowDetailedReport] = useState(false);
+  const [autoPrintDetailedReport, setAutoPrintDetailedReport] = useState(false);
   const [selectedSections, setSelectedSections] = useState({
     baseInfo: true,
     priceConfig: true,
@@ -24,9 +45,25 @@ const ReportCenter: React.FC = () => {
     charts: true,
   });
 
+  const report = useMemo(() => buildCombinedReport({
+    selectedModuleIds,
+    modules,
+    projectBaseInfo,
+    priceConfig,
+    bills,
+    transformers,
+    horizonYears: 25
+  }), [selectedModuleIds, modules, projectBaseInfo, priceConfig, bills, transformers]);
+
+  const toggleReportModule = useCallback((moduleId: string) => {
+    setSelectedModuleIds(current => current.includes(moduleId)
+      ? current.filter(id => id !== moduleId)
+      : [...current, moduleId]);
+  }, []);
+
   // 导出处理函数
   const handleExportReport = useCallback(() => {
-    const activeModules = getEffectiveActiveModules(modules);
+    const activeModules = report.modules;
 
     // 边界条件检查
     if (activeModules.length === 0) {
@@ -52,38 +89,79 @@ const ReportCenter: React.FC = () => {
     // 构建模块数据 (高精度 0.001)
     const moduleExportData = activeModules.map((m: any) => ({
       name: m.name,
-      isActive: m.isActive,
-      strategy: m.strategy || '混合模式',
-      investment: m.investment || 0,
-      yearlySaving: m.yearlySaving || 0,
-      roi: ((m.yearlySaving || 0) / (m.investment || 1)) * 100,
-      irr: 15.55, // 暂时硬编码，未来从模块内部实时获取
-      payback: (m.investment || 0) / (m.yearlySaving || 1),
-      npv: 0,
-      kpiPrimary: `${m.kpiPrimary?.label}: ${m.kpiPrimary?.value}`,
-      kpiSecondary: `${m.kpiSecondary?.label}: ${m.kpiSecondary?.value}`,
+      isActive: true,
+      strategy: `${m.strategy || '独立方案'} · ${m.investmentMode}`,
+      investment: m.metrics.investment,
+      yearlySaving: m.metrics.firstYearNetBenefit,
+      roi: m.metrics.investment > 0 ? (m.metrics.firstYearNetBenefit / m.metrics.investment) * 100 : 0,
+      irr: m.metrics.irr,
+      payback: m.metrics.paybackPeriod,
+      npv: m.metrics.npv,
+      kpiPrimary: m.technicalMetrics[0] ? `${m.technicalMetrics[0].label}: ${m.technicalMetrics[0].value}` : '-',
+      kpiSecondary: `投资方式: ${m.investmentMode}`,
     }));
+    const printableModuleData = [
+      ...moduleExportData,
+      ...report.interactions.map(item => ({
+        name: item.label,
+        isActive: true,
+        strategy: '物理联动增量（反事实场景差额）',
+        investment: 0,
+        yearlySaving: item.annualValue,
+        roi: 0,
+        irr: 0,
+        payback: 0,
+        npv: 0,
+        kpiPrimary: '协同收益',
+        kpiSecondary: '不作为独立资产重复投资'
+      }))
+    ];
 
     // 构建财务汇总数据
-    const totalInvestment = activeModules.reduce((sum: number, m: any) => sum + (Number(m.investment) || 0), 0);
-    const totalFirstYearSaving = activeModules.reduce((sum: number, m: any) => sum + (Number(m.yearlySaving) || 0), 0);
+    const totalInvestment = report.systemMetrics.investment;
+    const totalFirstYearSaving = report.combinedAnnualBenefit;
 
+    let cumulativeCashFlow = 0;
+    const annualData = report.systemMetrics.cashFlows.map((net, i) => {
+      cumulativeCashFlow += net;
+      return { year: i, net, cumulative: Number(cumulativeCashFlow.toFixed(3)) };
+    });
     const financialData: FinancialSummaryData = {
       projectName: projectBaseInfo.name,
       projectType: projectBaseInfo.type,
       totalInvestment,
       totalFirstYearSaving,
-      npv: totalFirstYearSaving * 8.5 - totalInvestment, // 简化版 8.5年折现 NPV
-      irr: 12.85,
-      payback: totalInvestment / totalFirstYearSaving,
+      npv: report.systemMetrics.npv,
+      irr: report.systemMetrics.irr,
+      payback: report.systemMetrics.paybackPeriod,
       period: 25,
-      discountRate: 6,
+      discountRate: report.systemMetrics.discountRate * 100,
       modules: moduleExportData,
-      annualData: Array.from({ length: 25 }, (_, i) => ({
-        year: i + 1,
-        net: totalFirstYearSaving * Math.pow(0.99, i), // 粗略估算衰减后的综合现金流
-        cumulative: 0 // 工具函数内部会累计
+      annualData,
+      interactions: report.interactions.map(item => ({ label: item.label, annualValue: item.annualValue })),
+      participants: report.participantLedgers.map(ledger => ({
+        name: ledger.name,
+        investment: ledger.investment,
+        firstYearNetBenefit: ledger.firstYearNetBenefit,
+        npv: ledger.metrics.npv,
+        irr: ledger.metrics.irr,
+        payback: ledger.metrics.paybackPeriod
       })),
+      assumptions: [...report.assumptions, ...report.warnings],
+      moduleDetails: report.modules.map(item => ({
+        moduleId: item.moduleId,
+        name: item.name,
+        investmentMode: item.investmentMode,
+        investment: item.metrics.investment,
+        firstYearNetBenefit: item.metrics.firstYearNetBenefit,
+        npv: item.metrics.npv,
+        irr: item.metrics.irr,
+        payback: item.metrics.paybackPeriod,
+        cashFlows: item.metrics.cashFlows,
+        technicalMetrics: item.technicalMetrics,
+        assumptions: item.assumptions,
+        warnings: item.warnings,
+      }))
     };
 
     // 根据导出格式执行不同操作
@@ -91,35 +169,22 @@ const ReportCenter: React.FC = () => {
       switch (exportFormat) {
         case 'excel':
           if (reportDetail === 'simple') {
-            exportSimplifiedReport(projectBaseInfo.name, moduleExportData as any, totalInvestment, totalFirstYearSaving);
+            exportSimplifiedReport(projectBaseInfo.name, printableModuleData as any, totalInvestment, totalFirstYearSaving);
           } else {
-            exportProjectReport(projectBaseInfo, financialData, selectedSections as any);
+            exportProjectReport({ ...projectBaseInfo, transformers }, financialData, selectedSections as any);
           }
           break;
 
         case 'pdf':
-          generateAndPrintReport({
-            projectInfo: projectBaseInfo,
-            modules: moduleExportData,
-            financial: {
-              totalInvestment: financialData.totalInvestment,
-              npv: financialData.npv,
-              irr: financialData.irr,
-              payback: financialData.payback,
-            }
-          });
+          setAutoPrintDetailedReport(true);
+          setShowDetailedReport(true);
           break;
 
         case 'word':
           exportToWord({
             projectInfo: projectBaseInfo,
-            modules: moduleExportData,
-            financial: {
-              totalInvestment: financialData.totalInvestment,
-              npv: financialData.npv,
-              irr: financialData.irr,
-              payback: financialData.payback,
-            }
+            modules: printableModuleData,
+            financial: financialData
           });
           break;
       }
@@ -133,7 +198,7 @@ const ReportCenter: React.FC = () => {
         setTimeout(() => setIsExporting(false), 2000);
       }
     }
-  }, [modules, projectBaseInfo, reportDetail, selectedSections, exportFormat, exportProjectConfig]);
+  }, [report, projectBaseInfo, transformers, reportDetail, selectedSections, exportFormat, exportProjectConfig]);
 
   return (
     <div className="flex h-full print:h-auto print:block">
@@ -144,8 +209,62 @@ const ReportCenter: React.FC = () => {
             <p className="text-slate-500">根据当前测算结果生成专业的项目评估报告，支持多种格式。</p>
           </div>
 
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">选择汇报板块</h2>
+                <p className="text-xs text-slate-500 mt-1">单选生成独立板块报告，多选生成联合报告并自动识别物理联动。</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${report.dataQuality === 'measured' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                {report.dataQuality === 'measured' ? '实测/精确数据' : '包含估算数据'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {reportableModules.map(module => {
+                const checked = selectedModuleIds.includes(module.id);
+                const reportModule = report.modules.find(item => item.moduleId === module.id);
+                return (
+                  <button key={module.id} onClick={() => toggleReportModule(module.id)} className={`text-left p-3 rounded-lg border-2 transition-all ${checked ? 'border-primary bg-primary/5' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-slate-800">{module.name}</span>
+                      <span className={`material-icons text-lg ${checked ? 'text-primary' : 'text-slate-300'}`}>{checked ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-1">{module.kpiPrimary?.label}: {module.kpiPrimary?.value}</div>
+                    {reportModule && <div className="text-[10px] text-primary mt-1 font-medium">{reportModule.investmentMode}</div>}
+                  </button>
+                );
+              })}
+            </div>
+            {report.relationshipLabels.length > 0 && (
+              <div className="mt-4 p-3 rounded-lg bg-indigo-50 border border-indigo-100">
+                <div className="text-xs font-bold text-indigo-800 mb-2">已识别联动关系</div>
+                <div className="flex flex-wrap gap-2">{report.relationshipLabels.map(label => <span key={label} className="text-[11px] text-indigo-700 bg-white border border-indigo-100 px-2.5 py-1 rounded-full">{label}</span>)}</div>
+              </div>
+            )}
+            {report.warnings.map(warning => <div key={warning} className="mt-3 text-xs text-amber-700 flex items-start gap-2"><span className="material-icons text-sm">warning</span><span>{warning}</span></div>)}
+          </div>
+
+          {selectedModuleIds.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] text-slate-400 font-bold uppercase">系统总投资</div><div className="text-lg font-black text-slate-800 mt-1">{formatWan(report.systemMetrics.investment)}</div></div>
+              <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] text-slate-400 font-bold uppercase">独立收益合计</div><div className="text-lg font-black text-slate-800 mt-1">{formatWan(report.standaloneAnnualBenefit)}</div></div>
+              <div className="bg-indigo-50 rounded-xl border border-indigo-100 p-4"><div className="text-[10px] text-indigo-500 font-bold uppercase">联动增量收益</div><div className={`text-lg font-black mt-1 ${report.interactionAnnualBenefit >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>{formatWan(report.interactionAnnualBenefit)}</div></div>
+              <div className="bg-emerald-50 rounded-xl border border-emerald-100 p-4"><div className="text-[10px] text-emerald-600 font-bold uppercase">联合首年收益</div><div className="text-lg font-black text-emerald-700 mt-1">{formatWan(report.combinedAnnualBenefit)}</div></div>
+            </div>
+          )}
+
+          {report.participantLedgers.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h2 className="text-base font-bold text-slate-800">参与方收益账本</h2>
+              <p className="text-xs text-slate-500 mt-1 mb-4">内部结算在系统合并账中抵消，下表展示合同分配后的各方回报。</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {report.participantLedgers.map(ledger => <div key={ledger.id} className="rounded-lg border border-slate-100 bg-slate-50 p-4"><div className="flex justify-between items-center"><span className="text-sm font-bold text-slate-800">{ledger.name}</span><span className="text-xs font-bold text-purple-600">IRR {ledger.metrics.irr.toFixed(2)}%</span></div><div className="grid grid-cols-3 gap-2 mt-3 text-xs"><div><span className="text-slate-400 block">承担投资</span><strong className="text-slate-700">{formatWan(ledger.investment)}</strong></div><div><span className="text-slate-400 block">首年净收益</span><strong className="text-emerald-600">{formatWan(ledger.firstYearNetBenefit)}</strong></div><div><span className="text-slate-400 block">NPV</span><strong className={ledger.metrics.npv >= 0 ? 'text-emerald-600' : 'text-red-500'}>{formatWan(ledger.metrics.npv)}</strong></div></div></div>)}
+              </div>
+            </div>
+          )}
+
           {/* ESG Dashboard */}
-          <ESGScoreCard />
+          {COPYRIGHT_RELEASE_FEATURES.carbonTrading && <ESGScoreCard />}
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             {/* Basic Config */}
@@ -228,7 +347,7 @@ const ReportCenter: React.FC = () => {
                 </div>
                 <button
                   onClick={handleExportReport}
-                  disabled={isExporting}
+                  disabled={isExporting || selectedModuleIds.length === 0}
                   className={`px-8 py-4 rounded-lg shadow-lg flex items-center justify-center gap-3 transition-all transform hover:-translate-y-0.5 ${isExporting
                     ? 'bg-slate-400 cursor-not-allowed'
                     : 'bg-primary hover:bg-primary-700 text-white shadow-primary/30'
@@ -291,8 +410,8 @@ const ReportCenter: React.FC = () => {
       </div>
 
       {/* Render Frontend Report Modals */}
-      {showOnePage && <OnePageReport onClose={() => setShowOnePage(false)} />}
-      {showDetailedReport && <DetailedReport onClose={() => setShowDetailedReport(false)} />}
+      {showOnePage && <OnePageReport onClose={() => setShowOnePage(false)} report={report} />}
+      {showDetailedReport && <DetailedReport onClose={() => { setShowDetailedReport(false); setAutoPrintDetailedReport(false); }} report={report} autoPrint={autoPrintDetailedReport} />}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 {
   "appId": "com.zerocarbon.valuation",
-  "productName": "ZeroCarbon Valuation",
-  "copyright": "Copyright © 2025",
+  "productName": "园区综合能源项目投资收益测算与辅助决策系统",
+  "copyright": "Copyright © 2026 权利人待确认",
   "directories": {
     "output": "dist-electron",
     "buildResources": "assets"

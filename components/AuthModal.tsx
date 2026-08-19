@@ -6,10 +6,11 @@ type AuthMode = 'login' | 'register' | 'forgot';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onAuthenticated?: () => void;
   initialMode?: AuthMode;
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'login' }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthenticated, initialMode = 'login' }) => {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -51,30 +52,23 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
       if (mode === 'login') {
         const result = await login(identifier, password);
         if (result.success) {
-          onClose();
+          onAuthenticated?.();
+          if (!onAuthenticated) onClose();
         } else {
           setError(result.error || '登录失败');
         }
       } else if (mode === 'register') {
         const result = await register(identifier, password, fullName);
         if (result.success) {
-          if (result.error) {
-            // Success with warning (e.g., email verification required)
-            setSuccess(result.error);
-            // Optionally switch to login after a delay
-            setTimeout(() => {
-              onClose();
-            }, 3000);
-          } else {
-            onClose();
-          }
+          onAuthenticated?.();
+          if (!onAuthenticated) onClose();
         } else {
           setError(result.error || '注册失败');
         }
       } else if (mode === 'forgot') {
         const result = await forgotPassword(identifier);
         if (result.success) {
-          setSuccess('重置密码邮件已发送，请检查您的邮箱');
+          setSuccess('密码重置申请已提交');
           setTimeout(() => {
             onClose();
           }, 3000);
@@ -164,7 +158,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
             {isRegisterMode && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  姓名（可选）
+                  姓名
                 </label>
                 <input
                   type="text"
@@ -179,21 +173,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                {isLoginMode ? '邮箱或手机号' : '邮箱'}
+                {isLoginMode ? '手机号或用户名' : '手机号'}
               </label>
               <input
-                type={isLoginMode ? 'text' : 'email'}
+                type={isLoginMode ? 'text' : 'tel'}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                placeholder={isLoginMode ? '请输入邮箱或手机号' : '请输入您的邮箱'}
-                autoComplete={isLoginMode ? 'username' : 'email'}
+                placeholder={isLoginMode ? '请输入手机号或用户名' : '请输入中国大陆手机号'}
+                autoComplete={isLoginMode ? 'username' : 'tel'}
                 required
                 disabled={loading}
               />
               {isLoginMode && (
                 <p className="text-xs text-slate-500 mt-1">
-                  支持中国大陆 11 位手机号，将自动使用 +86 区号登录
+                  使用阿里云账号登录，中国大陆手机号可直接输入 11 位号码
                 </p>
               )}
             </div>
@@ -211,11 +205,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
                   placeholder="请输入密码"
                   required
                   disabled={loading}
-                  minLength={6}
+                  minLength={8}
                 />
                 {isRegisterMode && (
                   <p className="text-xs text-slate-500 mt-1">
-                    密码长度至少为 6 位
+                    密码需为 8–64 位，并同时包含字母和数字
                   </p>
                 )}
               </div>

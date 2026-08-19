@@ -1,12 +1,12 @@
 {
-  "name": "zero-carbon-valuation",
+  "name": "zero-carbon-decision-support",
   "private": true,
-  "version": "2.13.0",
-  "description": "零碳园区/校园项目收益估值系统",
-  "productName": "ZeroCarbon Valuation",
+  "version": "2.14.0",
+  "description": "园区综合能源项目投资收益测算与辅助决策系统",
+  "author": "待权利人确认",
+  "productName": "园区综合能源项目投资收益测算与辅助决策系统",
   "type": "module",
   "main": "electron/main.cjs",
-  "author": "ZeroCarbon Team",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -18,14 +18,21 @@
   },
   "build": {
     "appId": "com.zerocarbon.valuation",
-    "productName": "零碳项目收益评估软件",
+    "productName": "园区综合能源项目投资收益测算与辅助决策系统",
     "directories": {
       "output": "dist-electron"
     },
     "files": [
-      "electron/**/*",
-      "dist/**/*",
-      "node_modules/**/*",
+      {
+        "from": "electron",
+        "to": "electron",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "dist",
+        "to": "dist",
+        "filter": ["**/*"]
+      },
       "package.json"
     ],
     "win": {

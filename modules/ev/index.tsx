@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, AreaChart, Area, ComposedChart, Line, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
 import { useProject } from '../../context/ProjectContext';
 import { calculateIRR } from '../../utils/financial';
+import { requestReportForModules } from '../../shared/reporting';
 
 // --- Constants ---
 const CHARGER_Types = {
@@ -31,6 +32,12 @@ export default function RetrofitEV() {
   const [mode, setMode] = useState<'quick' | 'precise'>(savedParams.mode || 'quick');
   const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
   const [isChartExpanded, setIsChartExpanded] = useState(false);
+  const [businessConfig, setBusinessConfig] = useState(savedParams.businessConfig || {
+      mode: 'self_operated' as 'self_operated' | 'third_party' | 'entrusted',
+      ownerShareRate: 20,
+      operatorCommissionRate: 15,
+      contractYears: 10
+  });
 
   // Quick Mode State
   const [quickState, setQuickState] = useState(savedParams.quickState || {
@@ -235,7 +242,7 @@ export default function RetrofitEV() {
 
   // --- Effects ---
   useEffect(() => {
-      const newParams = { mode, quickState, preciseState };
+      const newParams = { mode, quickState, preciseState, businessConfig };
       const currentStoredParams = JSON.stringify(currentModule.params);
       const newParamsString = JSON.stringify(newParams);
 
@@ -249,7 +256,7 @@ export default function RetrofitEV() {
               params: newParams
           });
       }
-  }, [mode, quickState, preciseState, financials, updateModule, currentModule.params]);
+  }, [mode, quickState, preciseState, businessConfig, financials, updateModule, currentModule.params]);
 
   // --- Handlers ---
   const addEquipment = () => {
@@ -311,9 +318,14 @@ export default function RetrofitEV() {
                     </button>
                 </div>
             </div>
-            <button className="flex items-center gap-2 text-sm text-primary font-medium hover:underline">
-                <span className="material-icons text-base">history</span> 加载历史方案
-            </button>
+            <div className="flex items-center gap-3">
+                <button onClick={() => requestReportForModules(['retrofit-ev'])} className="flex items-center gap-2 text-sm text-primary font-bold px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10">
+                    <span className="material-icons text-base">summarize</span> 生成板块报告
+                </button>
+                <button className="flex items-center gap-2 text-sm text-slate-500 font-medium hover:underline">
+                    <span className="material-icons text-base">history</span> 加载历史方案
+                </button>
+            </div>
         </header>
 
         <div className={`flex-1 overflow-y-auto p-8 pb-32 transition-opacity duration-300 ${currentModule.isActive ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
@@ -342,6 +354,22 @@ export default function RetrofitEV() {
                         </button>
                     </div>
                 </div>
+
+                <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                        <div><h4 className="text-sm font-bold text-slate-800">投资与运营方式</h4><p className="text-xs text-slate-500 mt-1">运营方式只改变参与方现金流，不改变充电负荷与物理调度。</p></div>
+                        <span className="text-[10px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold">参与方结算</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {[
+                            { id: 'self_operated', label: '业主自投自营', desc: '业主承担投资并获得全部运营净收益' },
+                            { id: 'third_party', label: '第三方投建运营', desc: '运营方投资，按比例向业主分成' },
+                            { id: 'entrusted', label: '业主投建委托运营', desc: '业主投资，运营方收取运营佣金' }
+                        ].map(item => <button key={item.id} onClick={() => setBusinessConfig({ ...businessConfig, mode: item.id })} className={`text-left p-3 rounded-lg border-2 transition-all ${businessConfig.mode === item.id ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-slate-200'}`}><div className="text-sm font-bold text-slate-800">{item.label}</div><div className="text-[10px] text-slate-500 mt-1">{item.desc}</div></button>)}
+                    </div>
+                    {businessConfig.mode === 'third_party' && <label className="mt-4 block max-w-xs"><span className="text-xs text-slate-500">业主运营收益分成（%）</span><input type="number" min="0" max="100" value={businessConfig.ownerShareRate} onChange={event => setBusinessConfig({ ...businessConfig, ownerShareRate: Number(event.target.value) })} className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" /></label>}
+                    {businessConfig.mode === 'entrusted' && <label className="mt-4 block max-w-xs"><span className="text-xs text-slate-500">运营方佣金比例（%）</span><input type="number" min="0" max="100" value={businessConfig.operatorCommissionRate} onChange={event => setBusinessConfig({ ...businessConfig, operatorCommissionRate: Number(event.target.value) })} className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" /></label>}
+                </section>
 
                 {/* --- QUICK MODE --- */}
                 {mode === 'quick' && (

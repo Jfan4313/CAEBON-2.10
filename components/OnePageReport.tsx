@@ -1,6 +1,8 @@
 import React, { useRef } from 'react';
 import { useProject } from '../context/ProjectContext';
-import { getEffectiveActiveModules } from '../utils/moduleAggregation';
+import type { CombinedReportResult } from '../shared/reporting';
+import { getProjectTypeLabel } from '../shared/utils/projectLoadProfiles';
+import { PRODUCT_IDENTITY } from '../shared/config/productIdentity';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine,
     BarChart, Bar, Tooltip as RechartsTooltip, Legend, Cell, PieChart, Pie
@@ -8,69 +10,30 @@ import {
 
 const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6'];
 
-export default function OnePageReport({ onClose }: { onClose: () => void }) {
-    const { projectBaseInfo, modules } = useProject();
+export default function OnePageReport({ onClose, report }: { onClose: () => void; report: CombinedReportResult }) {
+    const { projectBaseInfo } = useProject();
     const printRef = useRef<HTMLDivElement>(null);
 
     const handlePrint = () => {
         window.print();
     };
 
-    const activeModules = getEffectiveActiveModules(modules);
-    const totalInvestment: number = activeModules.reduce((sum: number, m) => sum + (Number(m.investment) || 0), 0);
-    const totalSaving: number = activeModules.reduce((sum: number, m) => sum + (Number(m.yearlySaving) || 0), 0);
-    const payback = totalSaving > 0 ? totalInvestment / totalSaving : 0;
-
-    // Math for IRR
-    const omRate = projectBaseInfo.omRate ?? 0;
-    const taxRate = projectBaseInfo.taxRate ?? 0;
-
-    const spvConfig = projectBaseInfo.spvConfig || { debtRatio: 70, loanInterest: 4.5, loanTerm: 10, shareholderARate: 51 };
-    const loanAmount = totalInvestment * (spvConfig.debtRatio / 100);
-    const equityAmount = totalInvestment - loanAmount;
-    const principalPerYear = spvConfig.loanTerm > 0 ? loanAmount / spvConfig.loanTerm : 0;
-
-    const cashFlowDataIRR = Array.from({ length: 26 }, (_, i) => {
-        if (i === 0) return { net: -totalInvestment, leveredNet: -equityAmount };
-        const revenue = totalSaving * Math.pow(0.99, i - 1);
-        const opex = totalInvestment * (omRate / 100) * Math.pow(1.02, i - 1);
-        const depreciation = i <= 20 ? totalInvestment / 20 : 0;
-
-        let remainingPrincipal = loanAmount - principalPerYear * (i - 1);
-        if (remainingPrincipal < 0) remainingPrincipal = 0;
-        const interestItem = remainingPrincipal * (spvConfig.loanInterest / 100);
-        const principalItem = i <= spvConfig.loanTerm ? principalPerYear : 0;
-
-        const ebit = revenue - opex - depreciation;
-        const ebt = ebit - interestItem;
-        const tax = ebt > 0 ? ebt * (taxRate / 100) : 0;
-        const unleveredTax = ebit > 0 ? ebit * (taxRate / 100) : 0;
-
-        return {
-            net: ebit - unleveredTax + depreciation,
-            leveredNet: ebit - tax + depreciation - interestItem - principalItem
-        };
-    });
-
-    const calculateIRR = (cashFlows: number[]) => {
-        let guess = 0.1;
-        for (let i = 0; i < 40; i++) {
-            let npv = 0;
-            for (let j = 0; j < cashFlows.length; j++) npv += cashFlows[j] / Math.pow(1 + guess, j);
-            if (Math.abs(npv) < 0.1) break;
-            guess += npv > 0 ? 0.01 : -0.01;
-        }
-        return guess * 100;
-    };
-
-    const projectIRR = totalInvestment > 0 ? calculateIRR(cashFlowDataIRR.map(d => d.net)) : 0;
-    const leveredIRR = equityAmount > 0 ? calculateIRR(cashFlowDataIRR.map(d => d.leveredNet)) : 0;
+    const activeModules = report.modules.map(module => ({
+        ...module,
+        investment: module.metrics.investment,
+        yearlySaving: module.metrics.firstYearNetBenefit
+    }));
+    const totalInvestment = report.systemMetrics.investment;
+    const totalSaving = report.combinedAnnualBenefit;
+    const payback = report.systemMetrics.paybackPeriod;
+    const projectIRR = report.systemMetrics.irr;
+    const leveredIRR = report.participantLedgers.find(ledger => ledger.role === 'owner')?.metrics.irr || 0;
 
     // Simulate 10-year cash flow for chart
-    const cashFlowData = Array.from({ length: 11 }, (_, i) => {
-        if (i === 0) return { year: 0, value: -totalInvestment, cumulative: -totalInvestment };
-        const cumulative = -totalInvestment + totalSaving * i;
-        return { year: i, value: totalSaving, cumulative: parseFloat(cumulative.toFixed(2)) };
+    let cumulative = 0;
+    const cashFlowData = report.systemMetrics.cashFlows.slice(0, 11).map((value, year) => {
+        cumulative += value;
+        return { year, value, cumulative: Number(cumulative.toFixed(3)) };
     });
 
     // Data for Investment Donut
@@ -121,21 +84,15 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                     }}
                 >
                     {/* Header */}
-                    <div className="border-b-4 border-primary pb-6 mb-6 flex items-end justify-between">
-                        <div className="flex-1 pr-4">
-                            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight leading-tight">{projectBaseInfo.name || '未命名零碳项目'}</h1>
-                            <div className="flex items-center gap-4 mt-3 text-sm font-medium text-slate-600">
-                                <span className="flex items-center gap-1"><span className="material-icons text-[16px] text-slate-400">business_center</span> {projectBaseInfo.type === 'factory' ? '工业厂房' : projectBaseInfo.type === 'commercial' ? '商业综合体' : '公共建筑'}</span>
-                                <span className="flex items-center gap-1"><span className="material-icons text-[16px] text-slate-400">location_on</span> {projectBaseInfo.province || ''} {projectBaseInfo.city || '待定'}</span>
-                                <span className="flex items-center gap-1"><span className="material-icons text-[16px] text-slate-400">square_foot</span> {projectBaseInfo.buildings?.reduce((acc: number, b: any) => acc + (b.area || 0), 0) || 0} m²</span>
-                            </div>
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl p-6 mb-6 shadow-lg shadow-blue-900/10">
+                        <div className="flex items-start justify-between gap-5">
+                            <div className="flex-1"><div className="text-[10px] font-bold text-blue-100 uppercase tracking-widest mb-2">零碳规划及收益评估</div><h1 className="text-3xl font-extrabold tracking-tight leading-tight">{projectBaseInfo.name || '未命名零碳项目'}</h1><p className="text-sm font-bold text-blue-100 mt-2">{report.scenarioName} · 一页式决策简报</p></div>
+                            <div className="text-right shrink-0"><div className="text-sm font-black">{PRODUCT_IDENTITY.shortName} {PRODUCT_IDENTITY.version}</div><div className="text-[10px] text-blue-100 mt-1">{new Date().toLocaleDateString('zh-CN')}</div></div>
                         </div>
-                        <div className="text-right shrink-0">
-                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">零碳规划及收益评估</div>
-                            <div className="text-xl font-black text-primary">ONE-PAGE TEASER</div>
-                            <div className="text-[10px] text-slate-500 mt-1">{new Date().toLocaleDateString()}</div>
-                        </div>
+                        <div className="flex items-center gap-5 mt-4 pt-3 border-t border-white/20 text-xs text-blue-50"><span>{getProjectTypeLabel(projectBaseInfo.type)}</span><span>{projectBaseInfo.province || '地点待定'} {projectBaseInfo.city || ''}</span><span>{projectBaseInfo.buildings?.reduce((acc: number, b: any) => acc + (b.area || 0), 0) || 0} m²</span></div>
                     </div>
+
+                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-3 flex items-center gap-2"><span className="material-icons text-blue-600 text-base">insights</span>一、核心收益指标</h3>
 
                     {/* Core Financials */}
                     <div className="grid grid-cols-5 gap-4 mb-6">
@@ -156,7 +113,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                             <div className="text-xl font-black text-purple-700">{projectIRR.toFixed(1)}<span className="text-xs font-normal text-purple-600/60">%</span></div>
                         </div>
                         <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100 flex flex-col justify-center items-center text-center">
-                            <span className="text-[10px] font-bold text-indigo-600 uppercase mb-1">项目资本金 IRR</span>
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase mb-1">业主侧 IRR</span>
                             <div className="text-xl font-black text-indigo-700">{leveredIRR.toFixed(1)}<span className="text-xs font-normal text-indigo-600/60">%</span></div>
                         </div>
                     </div>
@@ -164,7 +121,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                     {/* Donut & Bar Chart Row */}
                     <div className="grid grid-cols-2 gap-4 mb-6 h-48">
                         <div className="bg-white border border-slate-100 rounded-lg p-2 flex flex-col">
-                            <h3 className="text-[11px] font-bold text-slate-600 ml-2 mt-1">资金投入分布 (CAPEX)</h3>
+                            <h3 className="text-[11px] font-bold text-slate-700 ml-2 mt-1">二、资金投入分布 (CAPEX)</h3>
                             <div className="flex-1 w-full">
                                 <ResponsiveContainer width="100%" height="100%" minHeight={150}>
                                     <PieChart>
@@ -178,7 +135,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                             </div>
                         </div>
                         <div className="bg-white border border-slate-100 rounded-lg p-2 flex flex-col">
-                            <h3 className="text-[11px] font-bold text-slate-600 ml-2 mt-1">板块收益贡献 (Yearly Savings)</h3>
+                            <h3 className="text-[11px] font-bold text-slate-700 ml-2 mt-1">三、板块收益贡献 (Yearly Savings)</h3>
                             <div className="flex-1 w-full relative -left-4">
                                 <ResponsiveContainer width="100%" height="100%" minHeight={150}>
                                     <BarChart data={savingsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
@@ -199,7 +156,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                     <div className="mb-6">
                         <h3 className="text-sm font-bold text-slate-800 border-b-2 border-slate-100 pb-2 mb-3 flex items-center gap-2">
                             <span className="material-icons text-primary text-sm">view_module</span>
-                            纳入本次规划的节能降碳业务板块
+                            四、推荐方案与纳入板块
                         </h3>
                         <div className="grid grid-cols-2 gap-3">
                             {activeModules.map((m: any, idx: number) => (
@@ -215,11 +172,11 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                                         <div className="flex gap-2">
                                             <div className="bg-white px-1.5 py-0.5 rounded border border-slate-100 flex-1 flex justify-between items-center">
                                                 <span className="text-[9px] text-slate-500">建设</span>
-                                                <span className="text-[10px] font-bold text-slate-700">{(m.investment || 0).toFixed(1)} <span className="font-normal text-[8px] text-slate-400">W</span></span>
+                                                <span className="text-[10px] font-bold text-slate-700">{(m.investment || 0).toFixed(1)} <span className="font-normal text-[8px] text-slate-400">万</span></span>
                                             </div>
                                             <div className="bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex-1 flex justify-between items-center">
                                                 <span className="text-[9px] text-emerald-600">收益</span>
-                                                <span className="text-[10px] font-bold text-emerald-700">{(m.yearlySaving || 0).toFixed(1)} <span className="font-normal text-[8px] text-emerald-600/60">W</span></span>
+                                                <span className="text-[10px] font-bold text-emerald-700">{(m.yearlySaving || 0).toFixed(1)} <span className="font-normal text-[8px] text-emerald-600/60">万</span></span>
                                             </div>
                                         </div>
                                     </div>
@@ -237,7 +194,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
                     <div className="mb-4">
                         <h3 className="text-sm font-bold text-slate-800 border-b-2 border-slate-100 pb-2 mb-3 flex items-center gap-2">
                             <span className="material-icons text-primary text-sm">show_chart</span>
-                            核心财务推演：十年期累积净现金流走势
+                            五、投资回报：十年期累计净现金流
                         </h3>
                         <div className="h-40 w-full bg-white rounded-lg border border-slate-100 p-2 relative -left-2">
                             <ResponsiveContainer width="100%" height="100%">
@@ -261,7 +218,7 @@ export default function OnePageReport({ onClose }: { onClose: () => void }) {
 
                     {/* Footer Warning */}
                     <div className="mt-auto pt-4 text-[9px] text-slate-400 text-center border-t border-slate-100 flex justify-between items-center bg-white print:break-inside-avoid">
-                        <div>本页报告由 <span className="font-bold text-slate-500">零碳项目收益评估系统</span> 自动生成，预测指标不构成最终商务承诺。</div>
+                        <div>本页报告由 <span className="font-bold text-slate-500">{PRODUCT_IDENTITY.fullName}{PRODUCT_IDENTITY.version}</span> 自动生成，预测指标不构成最终商务承诺。</div>
                         <div className="uppercase tracking-widest font-bold">Internal Confidential</div>
                     </div>
 

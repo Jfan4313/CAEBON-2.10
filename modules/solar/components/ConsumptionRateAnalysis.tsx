@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { calculateSolarMetrics } from '../hooks';
 import { SolarParamsState } from '../types';
 
@@ -39,6 +38,7 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
     baseRate,
     onUpdateRates
 }) => {
+    const projectLifeYears = Math.max(1, Math.round(params.advParams.projectLifeYears || 11));
     const scenarioRates = useMemo(() => normalizeRates(params.consumptionRateScenarios), [params.consumptionRateScenarios]);
     const [rateInput, setRateInput] = useState(scenarioRates.join(', '));
 
@@ -68,6 +68,28 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
     const ownerBenefitSpread = highResult.ownerBenefit - lowResult.ownerBenefit;
     const paybackRangeDiff = lowResult.payback - highResult.payback;
     const baseToHighPaybackDiff = baseResult.payback - highResult.payback;
+    const chartWidth = 600;
+    const chartHeight = 205;
+    const chartLeft = 42;
+    const chartRight = 16;
+    const chartTop = 12;
+    const chartBottom = 30;
+    const plotWidth = chartWidth - chartLeft - chartRight;
+    const plotHeight = chartHeight - chartTop - chartBottom;
+    const xFor = (index: number) => chartLeft + (index + 0.5) / Math.max(1, analysisData.length) * plotWidth;
+    const revenueValues = analysisData.flatMap(item => isEmc ? [item.rev25Year, item.ownerBenefit] : [item.rev25Year]);
+    const revenueMin = Math.min(0, ...revenueValues);
+    const revenueMax = Math.max(1, ...revenueValues);
+    const revenueRange = Math.max(1, revenueMax - revenueMin);
+    const revenueY = (value: number) => chartTop + (revenueMax - value) / revenueRange * plotHeight;
+    const revenueZeroY = revenueY(0);
+    const paybackMin = Math.min(...analysisData.map(item => item.payback));
+    const paybackMax = Math.max(paybackMin + 0.1, ...analysisData.map(item => item.payback));
+    const irrMin = Math.min(...analysisData.map(item => item.irr));
+    const irrMax = Math.max(irrMin + 0.1, ...analysisData.map(item => item.irr));
+    const normalizedY = (value: number, min: number, max: number) => chartTop + (max - value) / (max - min) * plotHeight;
+    const paybackPoints = analysisData.map((item, index) => `${xFor(index)},${normalizedY(item.payback, paybackMin, paybackMax)}`).join(' ');
+    const irrPoints = analysisData.map((item, index) => `${xFor(index)},${normalizedY(item.irr, irrMin, irrMax)}`).join(' ');
 
     const applyRateInput = () => {
         const nextRates = parseRates(rateInput);
@@ -141,49 +163,54 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-white rounded-[22px] border border-slate-200/70 p-4 shadow-sm">
-                    <div className="text-xs font-semibold text-slate-700 mb-3">{isEmc ? '25年投资方/业主累计收益' : '25年投资方累计净收益'}</div>
+                    <div className="text-xs font-semibold text-slate-700 mb-3">{isEmc ? `${projectLifeYears}年投资方/业主累计收益` : `${projectLifeYears}年投资方累计净收益`}</div>
                     <div className="h-52">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={analysisData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis dataKey="rate" tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11, fill: '#64748b' }} />
-                                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                                <Tooltip
-                                    formatter={(value: number, name: string, item: any) => [
-                                        `${value.toFixed(2)} 万元`,
-                                        item?.dataKey === 'ownerBenefit' ? '业主25年收益' : '投资方25年净收益'
-                                    ]}
-                                    labelFormatter={(label) => `消纳率 ${label}%`}
-                                />
-                                {isEmc && <Legend />}
-                                <Bar dataKey="rev25Year" name="投资方净收益" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                {isEmc && <Bar dataKey="ownerBenefit" name="业主收益" fill="#10b981" radius={[4, 4, 0, 0]} />}
-                            </BarChart>
-                        </ResponsiveContainer>
+                        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full" role="img" aria-label="不同消纳率累计收益对比" preserveAspectRatio="none">
+                            {[0, 0.5, 1].map(ratio => {
+                                const y = chartTop + ratio * plotHeight;
+                                const value = revenueMax - ratio * revenueRange;
+                                return <g key={ratio}><line x1={chartLeft} y1={y} x2={chartLeft + plotWidth} y2={y} stroke="#e2e8f0" strokeDasharray="4 4" /><text x={chartLeft - 6} y={y + 3} textAnchor="end" fontSize="9" fill="#94a3b8">{value.toFixed(0)}</text></g>;
+                            })}
+                            {analysisData.map((item, index) => {
+                                const x = xFor(index);
+                                const groupWidth = plotWidth / Math.max(1, analysisData.length) * 0.62;
+                                const barWidth = groupWidth / (isEmc ? 2 : 1);
+                                const investorY = revenueY(item.rev25Year);
+                                const ownerY = revenueY(item.ownerBenefit);
+                                return (
+                                    <g key={item.rate}>
+                                        <rect x={x - groupWidth / 2} y={Math.min(investorY, revenueZeroY)} width={barWidth} height={Math.max(1, Math.abs(revenueZeroY - investorY))} rx="3" fill="#3b82f6"><title>{`消纳率${item.rate}% 投资方净收益 ${item.rev25Year.toFixed(2)}万元`}</title></rect>
+                                        {isEmc && <rect x={x - groupWidth / 2 + barWidth} y={Math.min(ownerY, revenueZeroY)} width={barWidth} height={Math.max(1, Math.abs(revenueZeroY - ownerY))} rx="3" fill="#10b981"><title>{`消纳率${item.rate}% 业主收益 ${item.ownerBenefit.toFixed(2)}万元`}</title></rect>}
+                                        <text x={x} y={chartHeight - 10} textAnchor="middle" fontSize="9" fill="#64748b">{item.rate}%</text>
+                                    </g>
+                                );
+                            })}
+                        </svg>
                     </div>
+                    {isEmc && <div className="flex justify-center gap-4 text-[10px] text-slate-500"><span className="flex items-center gap-1"><i className="w-3 h-2 bg-blue-500" />投资方净收益</span><span className="flex items-center gap-1"><i className="w-3 h-2 bg-emerald-500" />业主收益</span></div>}
                 </div>
 
                 <div className="bg-white rounded-[22px] border border-slate-200/70 p-4 shadow-sm">
                     <div className="text-xs font-semibold text-slate-700 mb-3">回本周期变化（核心）</div>
                     <div className="h-52">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={analysisData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis dataKey="rate" tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11, fill: '#64748b' }} />
-                                <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#0071e3' }} />
-                                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8e8e93' }} />
-                                <Tooltip
-                                    formatter={(value: number, name: string) => [
-                                        name === 'payback' ? `${value.toFixed(2)} 年` : `${value.toFixed(2)}%`,
-                                        name === 'payback' ? '回本周期' : 'IRR（辅助）'
-                                    ]}
-                                    labelFormatter={(label) => `消纳率 ${label}%`}
-                                />
-                                <Line yAxisId="left" type="monotone" dataKey="payback" stroke="#0071e3" strokeWidth={4} dot={{ r: 4 }} />
-                                <Line yAxisId="right" type="monotone" dataKey="irr" stroke="#8e8e93" strokeWidth={2} dot={{ r: 3 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full" role="img" aria-label="消纳率对回本周期与内部收益率影响" preserveAspectRatio="none">
+                            {[0, 0.5, 1].map(ratio => <line key={ratio} x1={chartLeft} y1={chartTop + ratio * plotHeight} x2={chartLeft + plotWidth} y2={chartTop + ratio * plotHeight} stroke="#e2e8f0" strokeDasharray="4 4" />)}
+                            <text x={chartLeft - 6} y={chartTop + 4} textAnchor="end" fontSize="9" fill="#0071e3">{paybackMax.toFixed(1)}年</text>
+                            <text x={chartLeft - 6} y={chartTop + plotHeight} textAnchor="end" fontSize="9" fill="#0071e3">{paybackMin.toFixed(1)}年</text>
+                            <text x={chartWidth - 2} y={chartTop + 4} textAnchor="end" fontSize="9" fill="#8e8e93">{irrMax.toFixed(1)}%</text>
+                            <text x={chartWidth - 2} y={chartTop + plotHeight} textAnchor="end" fontSize="9" fill="#8e8e93">{irrMin.toFixed(1)}%</text>
+                            <polyline points={paybackPoints} fill="none" stroke="#0071e3" strokeWidth="4" />
+                            <polyline points={irrPoints} fill="none" stroke="#8e8e93" strokeWidth="2" />
+                            {analysisData.map((item, index) => (
+                                <g key={item.rate}>
+                                    <circle cx={xFor(index)} cy={normalizedY(item.payback, paybackMin, paybackMax)} r="4" fill="#0071e3"><title>{`消纳率${item.rate}% 回本周期 ${item.payback.toFixed(2)}年`}</title></circle>
+                                    <circle cx={xFor(index)} cy={normalizedY(item.irr, irrMin, irrMax)} r="3" fill="#8e8e93"><title>{`消纳率${item.rate}% IRR ${item.irr.toFixed(2)}%`}</title></circle>
+                                    <text x={xFor(index)} y={chartHeight - 10} textAnchor="middle" fontSize="9" fill="#64748b">{item.rate}%</text>
+                                </g>
+                            ))}
+                        </svg>
                     </div>
+                    <div className="flex justify-center gap-4 text-[10px] text-slate-500"><span className="flex items-center gap-1"><i className="w-3 h-0.5 bg-[#0071e3]" />回本周期</span><span className="flex items-center gap-1"><i className="w-3 h-0.5 bg-[#8e8e93]" />IRR</span></div>
                 </div>
             </div>
 
@@ -192,13 +219,13 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
                     <span className="text-slate-400 block mb-1">当前基准</span>
                     <span className="font-bold text-slate-700">
                         {baseResult.rate}% 消纳率，回本周期 {baseResult.payback.toFixed(2)} 年，IRR {baseResult.irr.toFixed(2)}%
-                        {isEmc ? `，业主25年收益 ${baseResult.ownerBenefit.toFixed(1)} 万元` : ''}
+                        {isEmc ? `，业主${projectLifeYears}年收益 ${baseResult.ownerBenefit.toFixed(1)} 万元` : ''}
                     </span>
                 </div>
                 <div className="bg-white rounded-[22px] border border-slate-200/70 p-4 shadow-sm">
                     <span className="text-slate-400 block mb-1">低消纳风险</span>
                     <span className="font-bold text-slate-700">
-                        {lowResult.rate}% 时回本周期 {lowResult.payback.toFixed(2)} 年，投资方25年净收益 {lowResult.rev25Year.toFixed(1)} 万元
+                        {lowResult.rate}% 时回本周期 {lowResult.payback.toFixed(2)} 年，投资方{projectLifeYears}年净收益 {lowResult.rev25Year.toFixed(1)} 万元
                         {isEmc ? `，业主收益 ${lowResult.ownerBenefit.toFixed(1)} 万元` : ''}
                     </span>
                 </div>

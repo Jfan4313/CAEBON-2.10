@@ -6,6 +6,7 @@
 import { storage } from './storage-adapter';
 import {
   ProjectTemplate,
+  ProjectListItem,
   ProjectFullData,
   ImportValidationResult,
   ProjectListOptions,
@@ -15,6 +16,11 @@ import {
 const PROJECT_LIST_KEY = 'ZERO_CARBON_PROJECT_LIST';
 const PROJECT_PREFIX = 'ZERO_CARBON_PROJECT_';
 const CURRENT_VERSION = '1.0.0';
+
+type LegacyProjectListEntry = Omit<ProjectTemplate, 'data'> & {
+  data?: ProjectFullData;
+  activeModuleCount?: number;
+};
 
 // 默认项目模板
 const DEFAULT_TEMPLATES: ProjectTemplate[] = [
@@ -57,6 +63,45 @@ const DEFAULT_TEMPLATES: ProjectTemplate[] = [
 
 class ProjectStorageService {
   /**
+   * 项目列表只保存轻量索引，完整数据单独存储，避免同一项目被重复保存两次。
+   */
+  private toProjectListEntry(project: ProjectTemplate): ProjectListItem {
+    const { data: _data, ...entry } = project;
+    return {
+      ...entry,
+      activeModuleCount: Object.values(project.data.modules ?? {}).filter(module => module.isActive).length
+    };
+  }
+
+  private async persistProjectList(list: ProjectListItem[]): Promise<void> {
+    await storage.setItem(PROJECT_LIST_KEY, JSON.stringify(list));
+  }
+
+  /**
+   * 兼容旧版把完整项目塞进列表的格式，并在保存前主动释放这部分空间。
+   */
+  private async compactStoredProjectList(): Promise<void> {
+    const listJson = await storage.getItem(PROJECT_LIST_KEY);
+    if (!listJson) return;
+
+    const entries: LegacyProjectListEntry[] = JSON.parse(listJson);
+    const compactEntries: ProjectListItem[] = entries.map(entry => {
+      const { data: _data, ...metadata } = entry;
+      return {
+        ...metadata,
+        activeModuleCount: entry.activeModuleCount ??
+          Object.values(entry.data?.modules ?? {}).filter(module => module.isActive).length
+      };
+    });
+    await storage.setItem(PROJECT_LIST_KEY, JSON.stringify(compactEntries));
+  }
+
+  private async loadProjectTemplate(id: string): Promise<ProjectTemplate | null> {
+    const projectJson = await storage.getItem(`${PROJECT_PREFIX}${id}`);
+    return projectJson ? JSON.parse(projectJson) as ProjectTemplate : null;
+  }
+
+  /**
    * 初始化服务，加载默认模板（如果不存在）
    */
   async init(): Promise<void> {
@@ -72,11 +117,19 @@ class ProjectStorageService {
   /**
    * 获取项目列表
    */
-  async getProjectList(options?: ProjectListOptions): Promise<ProjectTemplate[]> {
+  async getProjectList(options?: ProjectListOptions): Promise<ProjectListItem[]> {
     const listJson = await storage.getItem(PROJECT_LIST_KEY);
     if (!listJson) return [];
 
-    let list: ProjectTemplate[] = JSON.parse(listJson);
+    const entries: LegacyProjectListEntry[] = JSON.parse(listJson);
+    let list: ProjectListItem[] = entries.map(entry => {
+      const { data: _data, ...metadata } = entry;
+      return {
+        ...metadata,
+        activeModuleCount: entry.activeModuleCount ??
+          Object.values(entry.data?.modules ?? {}).filter(module => module.isActive).length
+      };
+    });
 
     // 过滤模板
     if (options?.templatesOnly) {
@@ -106,25 +159,31 @@ class ProjectStorageService {
    * 保存项目到存储
    */
   async saveProjectToStorage(project: ProjectTemplate): Promise<void> {
-    // 保存项目数据
     const projectKey = `${PROJECT_PREFIX}${project.id}`;
-    await storage.setItem(projectKey, JSON.stringify(project));
+    const previousProject = await storage.getItem(projectKey);
 
-    // 更新项目列表
-    await this.updateProjectList(project);
+    try {
+      // 先迁移旧列表，通常可立即释放一半以上的项目存储空间。
+      await this.compactStoredProjectList();
+      await storage.setItem(projectKey, JSON.stringify(project));
+      await this.updateProjectList(project);
+    } catch (error) {
+      // 避免列表更新失败后留下不可见的孤立项目，占用更多空间。
+      if (previousProject) {
+        await storage.setItem(projectKey, previousProject);
+      } else {
+        await storage.removeItem(projectKey);
+      }
+      throw error;
+    }
   }
 
   /**
    * 加载项目数据
    */
   async loadProjectData(id: string): Promise<ProjectFullData | null> {
-    const projectKey = `${PROJECT_PREFIX}${id}`;
-    const projectJson = await storage.getItem(projectKey);
-
-    if (!projectJson) return null;
-
-    const project: ProjectTemplate = JSON.parse(projectJson);
-    return project.data;
+    const project = await this.loadProjectTemplate(id);
+    return project?.data ?? null;
   }
 
   /**
@@ -145,8 +204,23 @@ class ProjectStorageService {
 
     // 从列表中移除
     const newList = list.filter(p => p.id !== id);
-    await storage.setItem(PROJECT_LIST_KEY, JSON.stringify(newList));
+    await this.persistProjectList(newList);
 
+    return true;
+  }
+
+  /**
+   * 更新项目名称，不需要把完整项目数据加载到列表组件中。
+   */
+  async renameProject(id: string, name: string): Promise<boolean> {
+    const project = await this.loadProjectTemplate(id);
+    if (!project || project.isTemplate) return false;
+
+    await this.saveProjectToStorage({
+      ...project,
+      name,
+      updatedAt: new Date().toISOString()
+    });
     return true;
   }
 
@@ -279,8 +353,8 @@ class ProjectStorageService {
     const list = await this.getProjectList();
     const existingIndex = list.findIndex(p => p.id === project.id);
 
-    const projectWithTimestamp = {
-      ...project,
+    const projectWithTimestamp: ProjectListItem = {
+      ...this.toProjectListEntry(project),
       updatedAt: new Date().toISOString()
     };
 
@@ -295,7 +369,7 @@ class ProjectStorageService {
       list.push(projectWithTimestamp);
     }
 
-    await storage.setItem(PROJECT_LIST_KEY, JSON.stringify(list));
+    await this.persistProjectList(list);
   }
 
   /**
@@ -306,20 +380,27 @@ class ProjectStorageService {
     name?: string,
     description?: string
   ): Promise<ProjectTemplate> {
-    const id = name ?
-      `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` :
-      `autosave_${Date.now()}`;
+    const normalizedName = name?.trim();
+    const existingProject = normalizedName
+      ? (await this.getProjectList()).find(project =>
+          !project.isTemplate && project.name.trim() === normalizedName
+        )
+      : undefined;
+    const now = new Date().toISOString();
+    const id = existingProject?.id ?? (normalizedName
+      ? `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      : `autosave_${Date.now()}`);
 
     const project: ProjectTemplate = {
       id,
-      name: name || data.projectBaseInfo.name || '未命名项目',
+      name: normalizedName || data.projectBaseInfo.name || '未命名项目',
       description,
       data: {
         ...data,
-        lastSaved: new Date().toISOString()
+        lastSaved: now
       },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: existingProject?.createdAt ?? now,
+      updatedAt: now,
       isTemplate: false
     };
 

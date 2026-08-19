@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area, LineChart, Line } from 'recharts';
 import { SolarParamsState } from '../types';
 
@@ -20,7 +20,16 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
     chartData, longTermMetrics,
     params, investment, handleUpdate
 }) => {
+    const projectLifeYears = Math.max(1, Math.round(params.advParams.projectLifeYears || 11));
     const isEmc = params.simpleParams.investmentMode === 'emc';
+    const [financialPerspective, setFinancialPerspective] = useState<'investor' | 'owner'>('investor');
+    const firstYearDetails = longTermMetrics.yearlyDetails?.[0] || {};
+    const investorInitialInvestment = Number(longTermMetrics.investorInitialInvestment ?? investment);
+    const investorIrr = Number(longTermMetrics.investorIrr ?? longTermMetrics.irr ?? 0);
+    const investorPayback = Number(longTermMetrics.paybackPeriod ?? 0);
+    const investorLifecycleIncome = Number(longTermMetrics.rev25Year ?? 0);
+    const ownerLifecycleBenefit = Number(longTermMetrics.totalOwnerBenefit25 ?? 0);
+    const isInvestorPerspective = !isEmc || financialPerspective === 'investor';
 
     return (
         <>
@@ -115,7 +124,7 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                     <span className="w-10 h-10 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center shadow-sm">
                                         <span className="material-icons">monetization_on</span>
                                     </span>
-                                    全生命周期测算 (25年财务模型)
+                                    全生命周期测算 ({projectLifeYears}年财务模型)
                                 </h2>
                                 <p className="text-slate-500 mt-1 ml-14">
                                     模式: <span className="font-bold text-primary">{params.simpleParams.investmentMode.toUpperCase()}</span> |
@@ -133,43 +142,74 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
+                            {isEmc && (
+                                <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-800">收益分析视角</p>
+                                        <p className="mt-1 text-xs text-slate-500">投资方用于判断项目是否值得投；业主视角用于展示节省与综合收益。</p>
+                                    </div>
+                                    <div className="flex rounded-xl bg-slate-100 p-1" aria-label="收益分析视角">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFinancialPerspective('investor')}
+                                            className={`rounded-lg px-4 py-2 text-sm font-bold transition-all ${financialPerspective === 'investor' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                        >
+                                            EMC投资方
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFinancialPerspective('owner')}
+                                            className={`rounded-lg px-4 py-2 text-sm font-bold transition-all ${financialPerspective === 'owner' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                        >
+                                            业主收益
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* KPI Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">项目总投资</p>
-                                    <div className="text-2xl font-bold text-slate-900">¥ {investment.toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span></div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                        {isInvestorPerspective ? (isEmc ? '投资方初始投入' : '项目总投资') : '业主初始投入'}
+                                    </p>
+                                    <div className="text-2xl font-bold text-slate-900">
+                                        ¥ {(isInvestorPerspective ? investorInitialInvestment : 0).toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span>
+                                    </div>
                                 </div>
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                                        {isEmc ? '投资方 25年净收益' : '25年总累计净收益'}
+                                        {isInvestorPerspective ? `${isEmc ? '投资方 ' : ''}${projectLifeYears}年净收益` : `业主 ${projectLifeYears}年综合收益`}
                                     </p>
-                                    <div className="text-2xl font-bold text-emerald-600">¥ {longTermMetrics.rev25Year.toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span></div>
-                                </div>
-                                {isEmc && (
-                                    <div className="bg-white p-6 rounded-xl border border-blue-200 shadow-sm">
-                                        <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                            <span className="w-2 h-2 rounded-full bg-blue-500"></span> 业主 25年总收益
-                                        </p>
-                                        <div className="text-2xl font-bold text-blue-600">¥ {longTermMetrics.totalOwnerBenefit25.toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span></div>
+                                    <div className="text-2xl font-bold text-emerald-600">
+                                        ¥ {(isInvestorPerspective ? investorLifecycleIncome : ownerLifecycleBenefit).toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span>
                                     </div>
-                                )}
+                                </div>
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">内部收益率 (IRR)</p>
-                                    <div className="text-2xl font-bold text-purple-600">{longTermMetrics.irr}%</div>
-                                </div>
-                                {!isEmc && (
-                                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">回本周期</p>
-                                        <div className="text-2xl font-bold text-orange-500">{longTermMetrics.paybackPeriod.toFixed(2)} <span className="text-sm font-normal text-slate-500">年</span></div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                        {isInvestorPerspective ? '投资方内部收益率 (IRR)' : '业主首年综合收益'}
+                                    </p>
+                                    <div className="text-2xl font-bold text-purple-600">
+                                        {isInvestorPerspective ? `${investorIrr.toFixed(2)}%` : `¥ ${Number(firstYearDetails.ownerBenefit ?? 0).toFixed(3)} 万`}
                                     </div>
-                                )}
+                                </div>
+                                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                        {isInvestorPerspective ? '投资方回本周期' : '业主收益方式'}
+                                    </p>
+                                    <div className="text-2xl font-bold text-orange-500">
+                                        {isInvestorPerspective
+                                            ? <>{investorPayback.toFixed(2)} <span className="text-sm font-normal text-slate-500">年</span></>
+                                            : <span className="text-lg text-blue-600">零投入 · 持续节省</span>}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                                 {/* Cash Flow Trend */}
                                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                                        <span className="material-icons text-primary text-base">savings</span> 25年累计现金流趋势
+                                        <span className="material-icons text-primary text-base">savings</span> {isEmc ? '投资方' : ''}{projectLifeYears}年累计现金流趋势
                                     </h3>
                                     <div className="h-64 w-full">
                                         <ResponsiveContainer width="100%" height="100%">
@@ -224,9 +264,14 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
                                     <h3 className="text-sm font-bold text-slate-700">
-                                        {isEmc ? '业主 vs 投资方 逐年收益明细 (25年)' : '测算数据明细 (25年)'}
+                                        {isEmc ? `业主 vs 投资方 逐年收益明细 (${projectLifeYears}年)` : `测算数据明细 (${projectLifeYears}年)`}
                                     </h3>
-                                    <span className="text-[10px] text-slate-400">单位: 万元 (除发电量外) | 精度: 0.001</span>
+                                    <span className="text-[10px] text-slate-400">
+                                        单位: 万元 | 增值税: {params.advParams.vatTaxpayerType === 'general' ? '一般纳税人（销项减进项及留抵）' : '小规模纳税人（年销售额≤120万元免征，否则1%）'} | 所得税率: {params.advParams.incomeTaxMode === 'custom' ? params.advParams.taxRate : params.advParams.incomeTaxMode === 'exempt' || params.simpleParams.operationMode === 'off_grid' ? 0 : 5}%
+                                        {params.advParams.incomeTaxMode === 'exempt' || params.simpleParams.operationMode === 'off_grid'
+                                            ? '（离网/户用默认免计）'
+                                            : params.advParams.incomeTaxMode !== 'custom' ? '（小型微利企业）' : ''}
+                                    </span>
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm text-left whitespace-nowrap">
@@ -235,14 +280,16 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                                 <th className="px-5 py-4 sticky left-0 bg-slate-50">运营年份</th>
                                                 <th className="px-5 py-4">发电量(万度)</th>
                                                 <th className="px-5 py-4 text-right">
-                                                    {isEmc ? '投资方营收' : '总营收'}
+                                                    {isEmc ? '发电收益（含税）' : '总营收'}
                                                 </th>
-                                                {isEmc && <th className="px-5 py-4 text-right text-blue-600">业主收益</th>}
-                                                <th className="px-5 py-4 text-right">运维质保</th>
-                                                <th className="px-5 py-4 text-right">所得税费</th>
+                                                {isEmc && <th className="px-5 py-4 text-right text-red-500">减：应缴增值税</th>}
+                                                {isEmc && <th className="px-5 py-4 text-right text-red-500">减：屋顶租金</th>}
+                                                <th className="px-5 py-4 text-right">{isEmc ? '减：运维质保' : '运维质保'}</th>
+                                                <th className="px-5 py-4 text-right">{isEmc ? '减：所得税及附加' : '所得税及附加'}</th>
                                                 <th className="px-5 py-4 text-right bg-slate-50/50 font-bold text-slate-700">
                                                     {isEmc ? '投资方净收益' : '净现金流'}
                                                 </th>
+                                                {isEmc && <th className="px-5 py-4 text-right text-blue-600">业主综合收益</th>}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -251,23 +298,29 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                                 <td className="px-5 py-3 text-slate-400">-</td>
                                                 <td className="px-5 py-3 text-right text-slate-400">-</td>
                                                 {isEmc && <td className="px-5 py-3 text-right text-slate-400">-</td>}
+                                                {isEmc && <td className="px-5 py-3 text-right text-slate-400">-</td>}
                                                 <td className="px-5 py-3 text-right text-slate-400">-</td>
                                                 <td className="px-5 py-3 text-right text-slate-400">-</td>
                                                 <td className="px-5 py-3 text-right font-bold text-red-500">
                                                     -{investment.toFixed(3)}
                                                 </td>
+                                                {isEmc && <td className="px-5 py-3 text-right text-slate-400">-</td>}
                                             </tr>
                                             {longTermMetrics.yearlyDetails.map((row: any, i: number) => (
                                                 <tr key={i} className="hover:bg-slate-50 transition-colors">
                                                     <td className="px-5 py-3 font-medium text-slate-700 sticky left-0 bg-white">第 {row.year} 年</td>
                                                     <td className="px-5 py-3 text-slate-600 font-mono">{row.generation.toFixed(3)}</td>
-                                                    <td className="px-5 py-3 text-right text-orange-600 font-medium font-mono">{row.revenue.toFixed(3)}</td>
-                                                    {isEmc && <td className="px-5 py-3 text-right text-blue-600 font-medium font-mono">{row.ownerBenefit.toFixed(3)}</td>}
-                                                    <td className="px-5 py-3 text-right text-orange-500 font-mono">-{row.opex.toFixed(3)}</td>
+                                                    <td className="px-5 py-3 text-right text-orange-600 font-medium font-mono">
+                                                        {(isEmc ? row.grossGenerationRevenue : row.revenue).toFixed(3)}
+                                                    </td>
+                                                    {isEmc && <td className="px-5 py-3 text-right text-red-500 font-mono">-{row.vatPayable.toFixed(3)}</td>}
+                                                    {isEmc && <td className="px-5 py-3 text-right text-red-500 font-mono">-{row.roofRentCost.toFixed(3)}</td>}
+                                                    <td className="px-5 py-3 text-right text-orange-500 font-mono">-{(isEmc ? row.grossOpex : row.opex).toFixed(3)}</td>
                                                     <td className="px-5 py-3 text-right text-slate-500 font-mono">-{row.tax.toFixed(3)}</td>
                                                     <td className={`px-5 py-3 text-right font-bold bg-slate-50/30 font-mono ${row.netIncome >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                                         {row.netIncome.toFixed(3)}
                                                     </td>
+                                                    {isEmc && <td className="px-5 py-3 text-right text-blue-600 font-medium font-mono">{row.ownerBenefit.toFixed(3)}</td>}
                                                 </tr>
                                             ))}
                                         </tbody>

@@ -1,10 +1,11 @@
-import React, { useState, lazy, Suspense, memo, useMemo, useCallback } from 'react';
+import React, { useState, lazy, Suspense, memo, useMemo, useEffect } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import Sidebar from './components/Sidebar';
 import { View } from './types';
 import { useProject } from './context/ProjectContext';
 import { StorageProvider } from './context/StorageContext';
 import { AuthProvider } from './context/AuthContext';
+import { getProductDisplayName } from './shared/config/productIdentity';
 
 // Lazy load components for code splitting
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -25,6 +26,7 @@ const RevenueAnalysis = lazy(() => import('./components/RevenueAnalysis'));
 const ReportCenter = lazy(() => import('./components/ReportCenter'));
 const FormulaAdmin = lazy(() => import('./components/FormulaAdmin'));
 const VisualAnalysis = lazy(() => import('./components/VisualAnalysis'));
+const AboutSoftware = lazy(() => import('./shared/components/AboutSoftware'));
 
 // Loading fallback component
 const LoadingFallback = memo(() => (
@@ -39,6 +41,13 @@ const LoadingFallback = memo(() => (
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const { notification } = useProject();
+
+  useEffect(() => {
+    document.title = getProductDisplayName();
+    const openReport = () => setCurrentView('report-center');
+    window.addEventListener('zero-carbon:open-report', openReport);
+    return () => window.removeEventListener('zero-carbon:open-report', openReport);
+  }, []);
 
   const renderView = () => {
     switch (currentView) {
@@ -78,6 +87,8 @@ const App: React.FC = () => {
         return <FormulaAdmin />;
       case 'visual-analysis':
         return <VisualAnalysis />;
+      case 'about-software':
+        return <AboutSoftware />;
       default:
         return <Dashboard />;
     }
@@ -96,8 +107,8 @@ const App: React.FC = () => {
             <div className="print:hidden">
               <Sidebar currentView={currentView} onChangeView={setCurrentView} />
             </div>
-            <main className="flex-1 flex flex-col min-w-0 overflow-hidden print:overflow-visible relative">
-              <div className="flex-1 h-full print:h-auto overflow-hidden print:overflow-visible">
+            <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden print:overflow-visible relative">
+              <div className="flex-1 h-full min-w-0 min-h-0 print:h-auto overflow-hidden print:overflow-visible">
                 <Suspense fallback={<LoadingFallback />}>
                   {renderContent}
                 </Suspense>

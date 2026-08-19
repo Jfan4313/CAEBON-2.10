@@ -16,7 +16,8 @@ export type View =
   | 'revenue-analysis'
   | 'report-center'
   | 'formula-admin'
-  | 'visual-analysis';
+  | 'visual-analysis'
+  | 'about-software';
 
 // Module type definitions for better type safety
 export type ModuleType =

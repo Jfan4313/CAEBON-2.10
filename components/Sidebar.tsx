@@ -3,6 +3,7 @@ import { View } from '../types';
 import { useStorage } from '../context/StorageContext';
 import { useAuth } from '../context/AuthContext';
 import AuthModal from './AuthModal';
+import { COPYRIGHT_RELEASE_FEATURES, PRODUCT_IDENTITY } from '../shared/config/productIdentity';
 
 interface SidebarProps {
   currentView: View;
@@ -90,9 +91,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
     { id: 'retrofit-storage' as View, label: '储能系统', icon: 'battery_charging_full' },
     { id: 'retrofit-ev' as View, label: '充电桩设施', icon: 'ev_station' },
     { id: 'retrofit-microgrid' as View, label: '微电网', icon: 'grid_4x4' },
-    { id: 'retrofit-vpp' as View, label: '虚拟电厂', icon: 'hub' },
-    { id: 'retrofit-ai' as View, label: 'AI 管理平台', icon: 'psychology' },
-    { id: 'retrofit-carbon' as View, label: '碳资产管理', icon: 'co2' },
+    ...(COPYRIGHT_RELEASE_FEATURES.realtimeVppDispatch
+      ? [{ id: 'retrofit-vpp' as View, label: '虚拟电厂', icon: 'hub' }]
+      : []),
+    ...(COPYRIGHT_RELEASE_FEATURES.artificialIntelligencePlatform
+      ? [{ id: 'retrofit-ai' as View, label: 'AI 管理平台', icon: 'psychology' }]
+      : []),
+    ...(COPYRIGHT_RELEASE_FEATURES.carbonTrading
+      ? [{ id: 'retrofit-carbon' as View, label: '碳资产管理', icon: 'co2' }]
+      : []),
   ], []);
 
   return (
@@ -103,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
             <span className="material-symbols-outlined text-[20px]">eco</span>
           </div>
           <span className="font-bold text-lg tracking-tight text-slate-800">
-            ZeroCarbon
+            {PRODUCT_IDENTITY.shortName}
           </span>
         </div>
       </div>
@@ -192,8 +199,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
           <span className="font-medium text-sm">报告中心</span>
         </div>
 
-        {/* Cloud Storage Toggle */}
-        <div className="px-4 py-3">
+        {/* 云端多人协同不纳入 V2.14 软著冻结版。 */}
+        {COPYRIGHT_RELEASE_FEATURES.cloudCollaboration && <div className="px-4 py-3">
           <div className="bg-slate-50 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -243,11 +250,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
               </p>
             )}
           </div>
-        </div>
+        </div>}
 
         <div className="border-t border-slate-200 my-2"></div>
 
-        <div
+        {COPYRIGHT_RELEASE_FEATURES.algorithmAdministration && <div
           className={navItemClass(currentView === 'formula-admin')}
           onClick={handleAdminClick}
         >
@@ -256,11 +263,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
           {isAdminAuthenticated && (
             <span className="material-symbols-outlined text-[12px] text-emerald-500 ml-auto">check_circle</span>
           )}
+        </div>}
+
+        <div
+          className={navItemClass(currentView === 'about-software')}
+          onClick={() => onChangeView('about-software')}
+        >
+          <span className={iconClass(currentView === 'about-software')}>info</span>
+          <span className="font-medium text-sm">关于软件</span>
+          <span className="ml-auto text-[10px] font-semibold text-slate-400">{PRODUCT_IDENTITY.version}</span>
         </div>
       </nav>
 
       {/* Admin Password Dialog */}
-      {showAdminPassword && (
+      {COPYRIGHT_RELEASE_FEATURES.algorithmAdministration && showAdminPassword && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-2xl">
             <div className="flex items-center gap-2 mb-4">
@@ -298,21 +314,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
         </div>
       )}
 
-      <div className="p-4 border-t border-slate-100">
+      {COPYRIGHT_RELEASE_FEATURES.cloudCollaboration && <div className="p-4 border-t border-slate-100">
         {isAuthenticated && currentUser ? (
           // Logged in user
           <div className="bg-slate-50 rounded-2xl p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-purple-500 flex items-center justify-center text-white shadow-md">
                 <span className="text-xs font-bold">
-                  {currentUser.email?.charAt(0).toUpperCase() || 'U'}
+                  {(currentUser.name || currentUser.username).charAt(0).toUpperCase() || 'U'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-slate-800 truncate">
                   {currentUser.userMetadata?.full_name || '用户'}
                 </p>
-                <p className="text-[10px] text-slate-500 truncate">{currentUser.email}</p>
+                <p className="text-[10px] text-slate-500 truncate">{currentUser.phone || currentUser.username}</p>
               </div>
             </div>
             <button
@@ -333,12 +349,17 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
             <span className="text-sm font-semibold">登录 / 注册</span>
           </button>
         )}
-      </div>
+      </div>}
 
       {/* Auth Modal */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
+        onAuthenticated={() => {
+          localStorage.setItem('carbon_storage_mode', 'cloud');
+          setShowAuthModal(false);
+          window.location.reload();
+        }}
       />
     </aside>
   );

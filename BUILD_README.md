@@ -1,112 +1,40 @@
-# 零碳项目收益评估软件 - macOS桌面应用
+# 园区综合能源项目投资收益测算与辅助决策系统 V2.14 - macOS 构建说明
 
-## 构建说明
+## 环境要求
 
-### 前置要求
-- Node.js >= 18
-- npm >= 9
+- Node.js 18 或更高版本
+- npm 9 或更高版本
+- macOS 10.15 或更高版本
 
-### 构建步骤
+## 构建步骤
 
-#### 1. 安装依赖
+在仓库根目录执行：
+
 ```bash
-cd ~/Desktop/code/项目/零碳项目收益评估软件前端
 npm install
-```
-
-#### 2. 构建前端
-```bash
 npm run build
+npm run electron:build
 ```
 
-#### 3. 打包macOS应用
+安装包生成在 `dist-electron/`。产品名称为“园区综合能源项目投资收益测算与辅助决策系统”，版本为 2.14.0。
+
+## 开发运行
+
 ```bash
-npm run electron:build:mac
-```
-
-构建完成后，应用包将位于 `dist-electron/` 目录：
-- `零碳项目收益评估软件-1.0.0-arm64.dmg` (Apple Silicon)
-- `零碳项目收益评估软件-1.0.0.dmg` (Intel)
-
-### 开发模式运行
-
-#### 启动开发服务器
-```bash
-cd ~/Desktop/code/项目/零碳项目收益评估软件前端
 npm run electron:dev
 ```
 
-### 安装和运行
+## 数据位置
 
-#### 方法1: 直接安装DMG
-1. 打开 `dist-electron` 目录
-2. 双击 `零碳项目收益评估软件-1.0.0.dmg` 文件
-3. 将应用拖拽到 Applications 文件夹
+桌面应用的数据目录由 Electron 的 `userData` 路径确定，并在其中使用 `data/` 子目录。浏览器模式使用 IndexedDB 或 localStorage。正式申报归档不得包含该目录中的用户项目数据。
 
-#### 方法2: 命令行安装
-```bash
-# 安装 DMG
-hdiutil attach dist-electron/零碳项目收益评估软件-1.0.0.dmg
-cp -R "/Volumes/零碳项目收益评估软件/零碳项目收益评估软件.app" /Applications/
-hdiutil detach "/Volumes/零碳项目收益评估软件"
+## 申报构建注意事项
 
-# 或使用 installer
-sudo installer -store -pkg dist-electron/零碳项目收益评估软件-1.0.0-arm64.dmg
-```
+- 构建前确认 `VITE_COPYRIGHT_HOLDER` 与最终申请人一致；未确认时界面显示“待权利人确认”。
+- `.env`、`.env.development`、`outputs/`、`tmp/`、`dist/`、`dist-electron/` 和用户数据不得进入自主源程序归档。
+- React、Electron、Recharts、Supabase SDK 等第三方依赖不得作为自主源程序提交。
+- 正式安装包应保存构建日志和 SHA256 校验值，并在干净环境验证启动。
 
-### 启动应用
+## 许可与权属
 
-安装后，在 Launchpad 或 Applications 文件夹中找到并启动：
-- **零碳项目收益评估软件**
-
-### 功能特性
-
-- ✅ 光伏系统投资收益分析
-- ✅ 储能系统套利计算
-- ✅ 空调节能收益分析
-- ✅ 照明节能改造评估
-- ✅ 充电桩运营收益分析
-- ✅ 微电网系统可视化
-- ✅ VPP虚拟电厂分析
-- ✅ AI平台收益评估
-- ✅ 项目数据持久化存储
-- ✅ Excel报告导出
-
-### 技术栈
-
-- **前端**: React + TypeScript + Vite
-- **桌面框架**: Electron
-- **UI组件**: TailwindCSS + 自定义组件
-- **图表库**: Recharts
-- **数据存储**: IndexedDB (via idb)
-- **后端集成**: FastAPI (可选)
-
-### 系统要求
-
-- macOS 10.15 或更高版本
-- 100MB 硬盘空间
-
-### 故障排除
-
-#### 应用无法启动
-- 检查 macOS 安全设置：系统设置 > 隐私与安全性 > 允许从以下位置下载的应用
-- 右键点击 .dmg 文件 > 打开
-
-#### 数据文件位置
-应用数据存储在：`~/Library/Application Support/零碳项目收益评估软件/data/`
-
-#### 开发者工具
-安装的应用如果需要调试：
-1. 右键点击应用图标
-2. 选择"显示包内容"
-3. 右键点击应用 > 显示简介
-4. 在"共享文件夹"位置中输入 `/usr/bin/log stream`
-5. 重启应用，然后可以通过 Chrome 调试：`chrome://inspect`
-
-## 许可证
-
-MIT License
-
-## 作者
-
-Zero Carbon Project Team
+本仓库未随附面向公众的开源许可证。第三方依赖遵循各自许可证；V2.14 自有业务代码的权属及授权状态以最终权利人书面确认为准。
