@@ -50,7 +50,7 @@ const ProjectManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const handleLoadProject = async (project: ProjectListItem) => {
     try {
       const data = await projectStorageService.loadProjectData(project.id);
-      if (!data) throw new Error(`Project data not found: ${project.id}`);
+      if (!data) throw new Error('Project detail is unavailable');
       await importProjectConfig(data);
       setNotification?.({ message: `已加载项目：${project.name}`, type: 'success' });
       onClose();

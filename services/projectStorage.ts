@@ -121,15 +121,48 @@ class ProjectStorageService {
     const listJson = await storage.getItem(PROJECT_LIST_KEY);
     if (!listJson) return [];
 
-    const entries: LegacyProjectListEntry[] = JSON.parse(listJson);
-    let list: ProjectListItem[] = entries.map(entry => {
-      const { data: _data, ...metadata } = entry;
-      return {
-        ...metadata,
-        activeModuleCount: entry.activeModuleCount ??
-          Object.values(entry.data?.modules ?? {}).filter(module => module.isActive).length
-      };
-    });
+    const storedList: LegacyProjectListEntry[] = JSON.parse(listJson);
+
+    // Some older/local project indexes only contain project metadata. Hydrate
+    // those entries from their dedicated project records before rendering or
+    // loading them. This also keeps cloud-migrated indexes backwards compatible.
+    let list: ProjectListItem[] = await Promise.all(storedList.map(async (project) => {
+      if (project.data) {
+        const { data: _data, ...metadata } = project;
+        return {
+          ...metadata,
+          activeModuleCount: project.activeModuleCount ??
+            Object.values(project.data.modules ?? {}).filter(module => module.isActive).length
+        };
+      }
+
+      try {
+        const projectJson = await storage.getItem(`${PROJECT_PREFIX}${project.id}`);
+        if (!projectJson) {
+          const { data: _data, ...metadata } = project;
+          return { ...metadata, activeModuleCount: project.activeModuleCount ?? 0 };
+        }
+
+        const storedProject = JSON.parse(projectJson);
+        const data = storedProject?.data || storedProject as ProjectFullData;
+        if (!data?.projectBaseInfo) {
+          const { data: _data, ...metadata } = project;
+          return { ...metadata, activeModuleCount: project.activeModuleCount ?? 0 };
+        }
+
+        const { data: _data, ...metadata } = project;
+        return {
+          ...metadata,
+          activeModuleCount: Object.values(data.modules ?? {}).filter(module => module.isActive).length
+        };
+      } catch (error) {
+        console.warn(`Failed to hydrate project ${project.id}:`, error);
+        // Keep the metadata entry visible even when a large/legacy project
+        // detail cannot be fetched. Loading/exporting retries that record.
+        const { data: _data, ...metadata } = project;
+        return { ...metadata, activeModuleCount: project.activeModuleCount ?? 0 };
+      }
+    }));
 
     // 过滤模板
     if (options?.templatesOnly) {
