@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Calculation basis presentation background">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".52" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#fff7ed"/>
+    </linearGradient>
+    <filter id="paper" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="30" stdDeviation="28" flood-color="#0f172a" flood-opacity=".09"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <g opacity=".16" stroke="#2563eb" stroke-width="2">
+    <path d="M80 120H1520M80 220H1520M80 320H1520M80 420H1520M80 520H1520M80 620H1520M80 720H1520"/>
+    <path d="M180 80V800M330 80V800M480 80V800M630 80V800M780 80V800M930 80V800M1080 80V800M1230 80V800M1380 80V800"/>
+  </g>
+  <g filter="url(#paper)" transform="translate(925 130) rotate(4)">
+    <rect width="480" height="560" rx="34" fill="#ffffff"/>
+    <rect x="42" y="48" width="210" height="16" rx="8" fill="#0f172a" opacity=".18"/>
+    <rect x="42" y="104" width="390" height="10" rx="5" fill="#94a3b8" opacity=".28"/>
+    <rect x="42" y="138" width="330" height="10" rx="5" fill="#94a3b8" opacity=".22"/>
+    <rect x="42" y="190" width="390" height="90" rx="18" fill="#f1f5f9"/>
+    <g fill="#f59e0b" opacity=".7">
+      <circle cx="88" cy="236" r="18"/>
+      <circle cx="176" cy="236" r="18"/>
+      <circle cx="264" cy="236" r="18"/>
+      <circle cx="352" cy="236" r="18"/>
+    </g>
+    <g stroke="#10b981" stroke-width="9" stroke-linecap="round" opacity=".68">
+      <path d="M62 362 L138 314 L226 348 L324 265 L420 304" fill="none"/>
+    </g>
+    <rect x="42" y="420" width="390" height="12" rx="6" fill="#94a3b8" opacity=".2"/>
+    <rect x="42" y="456" width="280" height="12" rx="6" fill="#94a3b8" opacity=".18"/>
+  </g>
+  <g opacity=".28">
+    <circle cx="225" cy="170" r="96" fill="#fbbf24"/>
+    <circle cx="255" cy="190" r="150" fill="#fde68a"/>
+  </g>
+</svg>
