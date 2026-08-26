@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
-import { calculateCampusConsumptionRate, ConsumptionResult } from '../../services/campusConsumption';
+import { ConsumptionResult } from '../../services/campusConsumption';
 import { getLocalSunHoursInfo, SunHoursResult } from '../../services/solarData';
 import { fetchNasaSolarData } from '../../services/nasaPower';
 import { DEFAULTS, SolarParamsState, BuildingData, DEFAULT_SOLUTIONS, SolarSolution, MODULE_BRANDS, EmcSubMode, InvestmentMode } from './types';
@@ -806,23 +806,57 @@ export const useSolarRetrofit = () => {
         if (selfUseMode !== 'auto') return;
 
         const totalCapacity = params.simpleParams.capacity || 0;
-        const storageCapacity = modules['retrofit-storage']?.params?.basicParams?.capacity
-            || modules['retrofit-storage']?.params?.capacity
-            || 0;
+        const storageModule = modules['retrofit-storage'];
+        const storageIsActive = Boolean(storageModule?.isActive);
+        const storageCapacity = storageIsActive
+            ? (storageModule?.params?.basicParams?.capacity
+                || storageModule?.params?.capacity
+                || 0)
+            : 0;
 
-        if (projectBaseInfo.type === 'school' && projectBaseInfo.schoolType) {
-            const region = ['Shanghai', 'Guangdong', 'Zhejiang'].includes(projectBaseInfo.province) ? 'south' : 'central';
-            const result = calculateCampusConsumptionRate({
-                schoolType: projectBaseInfo.schoolType,
-                pvCapacity: totalCapacity,
-                storageCapacity: storageCapacity,
-                hasAirConditioning: projectBaseInfo.hasAirConditioning ?? true,
-                region,
-                considerWeekends: true,
-                considerVacations: true
+        if (projectBaseInfo.type === 'school') {
+            // 学校项目也必须使用实际账单年化负荷与逐时匹配，不能用学校类型经验值替代。
+            const billEstimation = estimateAnnualLoad(bills, {
+                projectType: 'school',
+                province: projectBaseInfo.province,
+                hasAirConditioning: projectBaseInfo.hasAirConditioning,
             });
-            setConsumptionResult(result);
-            setCalculatedSelfConsumption(Math.round(result.recommendedRate * 100));
+            const annualLoadKwh = billEstimation.annualizedKwh
+                || transformers.reduce((total, transformer) => total + Number(transformer.capacity || 0), 0) * 0.45 * 2000
+                || 1000000;
+            const storageParams = storageModule?.params || {};
+            const profile = buildPvConsumptionProfile({
+                annualLoadKwh,
+                projectType: 'school',
+                pvCapacityKw: totalCapacity,
+                dailySunHours: Number(params.advParams.dailySunHours || 4),
+                performanceRatio: Number(params.advParams.prValue || 80) / 100
+                    * Number(params.advParams.azimuthEfficiency || 100) / 100,
+                location: {
+                    latitude: projectBaseInfo.latitude,
+                    longitude: projectBaseInfo.longitude,
+                    province: projectBaseInfo.province,
+                    city: projectBaseInfo.city,
+                },
+                storage: {
+                    enabled: Boolean(storageIsActive && storageCapacity > 0),
+                    powerKw: Number(storageParams.basicParams?.power || 0),
+                    capacityKwh: Number(storageCapacity),
+                    dod: Number(storageParams.advParams?.dod || 90) / 100,
+                    rte: Number(storageParams.advParams?.rte || 88) / 100,
+                },
+            });
+            const pvKwh = profile.reduce((sum, point) => sum + point.pv, 0);
+            const consumedPvKwh = profile.reduce(
+                (sum, point) => sum + point.directConsumption + point.storageCharge,
+                0,
+            );
+            const profileRate = pvKwh > 0 ? consumedPvKwh / pvKwh : 0;
+            // 物理上限：光伏消纳量不可能超过项目同期总用电量。
+            const energyRatioCap = pvKwh > 0 ? Math.min(1, annualLoadKwh / 365 / pvKwh) : 0;
+            const rate = Math.min(profileRate, energyRatioCap);
+            setCalculatedSelfConsumption(Math.round(rate * 100));
+            setConsumptionResult(null);
         } else if (projectBaseInfo.type === 'villa') {
             const billEstimation = estimateAnnualLoad(bills, {
                 projectType: 'villa',

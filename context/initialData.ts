@@ -14,7 +14,7 @@ export const initialModules: Record<string, ModuleData> = {
     'retrofit-storage': {
         id: 'retrofit-storage',
         name: '工商业储能',
-        isActive: true,
+        isActive: false,
         strategy: '光伏余电消纳',
         investment: 62.64,
         yearlySaving: 0,

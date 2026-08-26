@@ -321,14 +321,7 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                                             <span className="material-icons text-[12px] text-[#0071e3]">school</span>
                                             <span className="font-bold text-slate-700">{getSchoolTypeName(projectBaseInfo.schoolType || 'university')}消纳率预估</span>
                                         </p>
-                                        <p>基于学校类型、储容比、空调配置、节假日等因素综合计算</p>
-                                        <button
-                                            onClick={() => setShowConsumptionDetail(!showConsumptionDetail)}
-                                            className="text-[#0071e3] hover:text-blue-700 flex items-center gap-1 mt-1"
-                                        >
-                                            <span className="material-icons text-[14px]">info</span>
-                                            {showConsumptionDetail ? '隐藏详情' : '查看详情'}
-                                        </button>
+                                        <p>按电费单年化用电量，结合学校日负荷与光伏出力逐时匹配；储能仅在储能模块启用时计入</p>
                                     </>
                                 ) : projectBaseInfo.type === 'villa' ? (
                                     <>

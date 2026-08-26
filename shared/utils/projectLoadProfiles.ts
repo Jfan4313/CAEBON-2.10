@@ -19,6 +19,14 @@ export const RESTAURANT_LOAD_PROFILE = [
   0.94, 1.00, 0.92, 0.72, 0.46, 0.28,
 ];
 
+/** 学校园区典型日负荷：教学时段较高，夜间仅保留宿舍、安防和基础设施负荷。 */
+export const SCHOOL_LOAD_PROFILE = [
+  0.30, 0.22, 0.20, 0.20, 0.22, 0.32,
+  0.55, 0.78, 0.92, 1.00, 1.00, 0.92,
+  0.72, 0.62, 0.62, 0.78, 0.90, 0.88,
+  0.72, 0.58, 0.46, 0.38, 0.32, 0.28,
+];
+
 /**
  * 别墅户用典型日负荷：早晨起居形成小高峰，工作日白天维持冰箱、
  * 安防、热水循环等基荷，晚间空调、照明、炊事和家电形成主高峰。
@@ -46,6 +54,8 @@ export const VILLA_ANNUAL_WEIGHTED_LOAD_PROFILE = VILLA_RESIDENTIAL_LOAD_PROFILE
 export const getProjectLoadProfile = (projectType?: string): number[] => (
   projectType === 'restaurant'
     ? RESTAURANT_LOAD_PROFILE
+    : projectType === 'school'
+      ? SCHOOL_LOAD_PROFILE
     : projectType === 'villa'
       ? VILLA_ANNUAL_WEIGHTED_LOAD_PROFILE
       : projectType === 'office' || projectType === 'commercial'
