@@ -356,7 +356,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onAuthenticated={() => {
-          localStorage.setItem('carbon_storage_mode', 'cloud');
+          // Keep the existing local projects visible after login. Cloud storage
+          // is an explicit opt-in so signing in cannot hide browser-local data.
           setShowAuthModal(false);
           window.location.reload();
         }}
