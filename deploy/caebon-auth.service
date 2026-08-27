@@ -1,0 +1,25 @@
+[Unit]
+Description=CAEBON isolated phone authentication service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/opt/caebon-2.10
+Environment=NODE_ENV=production
+Environment=AUTH_HOST=127.0.0.1
+Environment=AUTH_PORT=3201
+Environment=AUTH_DATA_DIR=/var/lib/caebon-auth
+EnvironmentFile=-/etc/caebon-auth.env
+ExecStart=/usr/bin/node /opt/caebon-2.10/server/caebon-auth-server.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/caebon-auth
+
+[Install]
+WantedBy=multi-user.target
