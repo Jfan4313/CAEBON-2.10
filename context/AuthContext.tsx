@@ -80,7 +80,7 @@ function friendlyAuthError(error: unknown): string {
     invalid_username: '请输入有效的中国大陆手机号',
     invalid_name: '请输入姓名',
     weak_password: '密码需为 8–64 位，并同时包含字母和数字',
-    network_error: '无法连接阿里云服务，请检查网络后重试',
+    network_error: '无法连接登录服务，请检查网络后重试',
   };
   return messages[error.code] || error.message || '操作失败，请重试';
 }

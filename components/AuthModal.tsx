@@ -187,7 +187,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthenticated,
               />
               {isLoginMode && (
                 <p className="text-xs text-slate-500 mt-1">
-                  使用阿里云账号登录，中国大陆手机号可直接输入 11 位号码
+                  CAEBON 独立账号，中国大陆手机号可直接输入 11 位号码
                 </p>
               )}
             </div>
