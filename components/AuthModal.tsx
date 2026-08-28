@@ -6,7 +6,7 @@ type AuthMode = 'login' | 'register' | 'forgot';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuthenticated?: () => void;
+  onAuthenticated?: () => void | Promise<void>;
   initialMode?: AuthMode;
 }
 
@@ -52,7 +52,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthenticated,
       if (mode === 'login') {
         const result = await login(identifier, password);
         if (result.success) {
-          onAuthenticated?.();
+          await onAuthenticated?.();
           if (!onAuthenticated) onClose();
         } else {
           setError(result.error || '登录失败');
@@ -60,7 +60,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthenticated,
       } else if (mode === 'register') {
         const result = await register(identifier, password, fullName);
         if (result.success) {
-          onAuthenticated?.();
+          await onAuthenticated?.();
           if (!onAuthenticated) onClose();
         } else {
           setError(result.error || '注册失败');

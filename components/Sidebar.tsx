@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View } from '../types';
 import { useStorage } from '../context/StorageContext';
 import { useAuth } from '../context/AuthContext';
+import { projectStorageService } from '../services/projectStorage';
 import AuthModal from './AuthModal';
 import { COPYRIGHT_RELEASE_FEATURES, PRODUCT_IDENTITY } from '../shared/config/productIdentity';
 
@@ -355,9 +356,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        onAuthenticated={() => {
-          // Keep the existing local projects visible after login. Cloud storage
-          // is an explicit opt-in so signing in cannot hide browser-local data.
+        onAuthenticated={async () => {
+          // Copy existing browser projects before switching this account to cloud storage.
+          await projectStorageService.migrateLocalProjectsToCloud();
+          localStorage.setItem('carbon_storage_mode', 'cloud');
           setShowAuthModal(false);
           window.location.reload();
         }}

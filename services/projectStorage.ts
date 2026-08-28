@@ -3,7 +3,8 @@
  * 提供项目的保存、加载、导出、导入功能
  */
 
-import { storage } from './storage-adapter';
+import { getStorage, storage } from './storage-adapter';
+import { aliyunStorage } from './aliyun-storage-adapter';
 import {
   ProjectTemplate,
   ProjectListItem,
@@ -62,6 +63,38 @@ const DEFAULT_TEMPLATES: ProjectTemplate[] = [
 ];
 
 class ProjectStorageService {
+  /**
+   * 将当前浏览器中的项目完整数据复制到当前 CAEBON 云账号。
+   * 本地数据只读不删，避免登录或切换存储模式造成项目丢失。
+   */
+  async migrateLocalProjectsToCloud(): Promise<number> {
+    const localStorage = getStorage('local');
+    const listJson = await localStorage.getItem(PROJECT_LIST_KEY);
+    if (!listJson) return 0;
+
+    const storedList = JSON.parse(listJson) as LegacyProjectListEntry[];
+    const cloudList: ProjectListItem[] = [];
+
+    for (const entry of storedList) {
+      const projectKey = `${PROJECT_PREFIX}${entry.id}`;
+      const projectJson = entry.data
+        ? JSON.stringify(entry)
+        : await localStorage.getItem(projectKey);
+      if (!projectJson) continue;
+
+      await aliyunStorage.setItem(projectKey, projectJson);
+      const activeModuleCount = entry.activeModuleCount ??
+        Object.values(entry.data?.modules ?? {}).filter(module => module.isActive).length;
+      const { data: _data, ...metadata } = entry;
+      cloudList.push({ ...metadata, activeModuleCount });
+    }
+
+    if (cloudList.length > 0) {
+      await aliyunStorage.setItem(PROJECT_LIST_KEY, JSON.stringify(cloudList));
+    }
+    return cloudList.length;
+  }
+
   /**
    * 项目列表只保存轻量索引，完整数据单独存储，避免同一项目被重复保存两次。
    */
