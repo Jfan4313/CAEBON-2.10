@@ -109,6 +109,13 @@ function issueSession(user) {
   return { token: signToken({ sub: user.id, exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS }), expiresAt };
 }
 
+function appDataFile(userId, key) {
+  if (!key || key.length > 512) return null;
+  const userDir = path.join(DATA_DIR, 'app-data', userId);
+  const file = path.join(userDir, `${crypto.createHash('sha256').update(key).digest('hex')}.json`);
+  return { userDir, file };
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -155,6 +162,32 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/auth/logout') return json(res, 200, { ok: true });
+
+    if ((req.method === 'GET' || req.method === 'PUT') && url.pathname.startsWith('/app-data/')) {
+      const user = authUser(req);
+      if (!user) return json(res, 401, { error: 'authentication_required' });
+      const key = decodeURIComponent(url.pathname.slice('/app-data/'.length));
+      const target = appDataFile(user.id, key);
+      if (!target) return json(res, 400, { error: 'invalid_key' });
+
+      if (req.method === 'GET') {
+        try {
+          const record = JSON.parse(fs.readFileSync(target.file, 'utf8'));
+          return json(res, 200, record);
+        } catch (error) {
+          if (error.code === 'ENOENT') return json(res, 404, { error: 'not_found' });
+          throw error;
+        }
+      }
+
+      const body = await readBody(req);
+      if (!Object.prototype.hasOwnProperty.call(body, 'value')) return json(res, 400, { error: 'invalid_value' });
+      fs.mkdirSync(target.userDir, { recursive: true, mode: 0o700 });
+      const record = { key, value: body.value, updatedAt: new Date().toISOString(), version: 1 };
+      fs.writeFileSync(target.file, JSON.stringify(record), { mode: 0o600 });
+      return json(res, 200, record);
+    }
+
     return json(res, 404, { error: 'not_found' });
   } catch (error) {
     if (error.message === 'payload_too_large') return json(res, 413, { error: 'payload_too_large' });
