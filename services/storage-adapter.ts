@@ -121,7 +121,11 @@ const localStorageAdapter: StorageAdapter = isElectron()
     : new BrowserStorageAdapter();
 
 function shouldUseCloudStorage(): boolean {
-    return !isElectron() && localStorage.getItem(STORAGE_MODE_KEY) === 'cloud';
+    // A stale cloud-mode flag must not hide local projects when the session
+    // has expired or the user has not signed in yet.
+    return !isElectron() &&
+        localStorage.getItem(STORAGE_MODE_KEY) === 'cloud' &&
+        Boolean(localStorage.getItem('zero-carbon-aliyun-auth-token'));
 }
 
 // 每次操作时解析存储模式，确保登录后切换云端可以立即生效。
