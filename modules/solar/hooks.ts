@@ -1089,6 +1089,11 @@ const calculateSolarMetrics = (params: SolarParamsState, selfRate: number) => {
         ownerBenefitFirstYearAfterTerm: parseFloat(ownerBenefitFirstYearAfterTerm.toFixed(3)),
         investorIrr,
         ownerIrr,
+        investorPaybackReached: paybackYear > 0,
+        ownerPaybackReached: ownerPaybackYear > 0,
+        paybackReached: isCoBuild ? ownerPaybackYear > 0 : paybackYear > 0,
+        investorPaybackPeriod: paybackYear > 0 ? parseFloat(paybackYear.toFixed(2)) : projectLifeYears,
+        ownerPaybackPeriod: ownerPaybackYear > 0 ? parseFloat(ownerPaybackYear.toFixed(2)) : projectLifeYears,
         irr: isCoBuild ? ownerIrr : investorIrr,
         paybackPeriod: isCoBuild
             ? (ownerPaybackYear > 0 ? parseFloat(ownerPaybackYear.toFixed(2)) : projectLifeYears)

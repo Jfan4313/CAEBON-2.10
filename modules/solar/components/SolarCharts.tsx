@@ -22,11 +22,13 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
 }) => {
     const projectLifeYears = Math.max(1, Math.round(params.advParams.projectLifeYears || 11));
     const isEmc = params.simpleParams.investmentMode === 'emc';
+    const isCoBuild = params.simpleParams.investmentMode === 'co_build';
     const [financialPerspective, setFinancialPerspective] = useState<'investor' | 'owner'>('investor');
     const firstYearDetails = longTermMetrics.yearlyDetails?.[0] || {};
     const investorInitialInvestment = Number(longTermMetrics.investorInitialInvestment ?? investment);
     const investorIrr = Number(longTermMetrics.investorIrr ?? longTermMetrics.irr ?? 0);
-    const investorPayback = Number(longTermMetrics.paybackPeriod ?? 0);
+    const investorPayback = Number(isCoBuild ? longTermMetrics.investorPaybackPeriod : longTermMetrics.paybackPeriod);
+    const investorPaybackReached = isCoBuild ? longTermMetrics.investorPaybackReached : longTermMetrics.paybackReached;
     const investorLifecycleIncome = Number(longTermMetrics.rev25Year ?? 0);
     const ownerLifecycleBenefit = Number(longTermMetrics.totalOwnerBenefit25 ?? 0);
     const isInvestorPerspective = !isEmc || financialPerspective === 'investor';
@@ -171,7 +173,7 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                                        {isInvestorPerspective ? (isEmc ? '投资方初始投入' : '项目总投资') : '业主初始投入'}
+                                        {isInvestorPerspective ? (isEmc ? '投资方初始投入' : isCoBuild ? '我方初始投入' : '项目总投资') : '业主初始投入'}
                                     </p>
                                     <div className="text-2xl font-bold text-slate-900">
                                         ¥ {(isInvestorPerspective ? investorInitialInvestment : 0).toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span>
@@ -179,7 +181,7 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                 </div>
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                                        {isInvestorPerspective ? `${isEmc ? '投资方 ' : ''}${projectLifeYears}年净收益` : `业主 ${projectLifeYears}年综合收益`}
+                                        {isInvestorPerspective ? `${isEmc ? '投资方 ' : isCoBuild ? '我方' : ''}${projectLifeYears}年净收益` : `业主 ${projectLifeYears}年综合收益`}
                                     </p>
                                     <div className="text-2xl font-bold text-emerald-600">
                                         ¥ {(isInvestorPerspective ? investorLifecycleIncome : ownerLifecycleBenefit).toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span>
@@ -199,7 +201,7 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                     </p>
                                     <div className="text-2xl font-bold text-orange-500">
                                         {isInvestorPerspective
-                                            ? <>{investorPayback.toFixed(2)} <span className="text-sm font-normal text-slate-500">年</span></>
+                                            ? (investorPaybackReached ? <>{investorPayback.toFixed(2)} <span className="text-sm font-normal text-slate-500">年</span></> : '测算期内未回本')
                                             : <span className="text-lg text-blue-600">零投入 · 持续节省</span>}
                                     </div>
                                 </div>

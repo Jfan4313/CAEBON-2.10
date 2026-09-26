@@ -323,7 +323,7 @@ export default function SolarReport({
     const params = solarModule.params;
     // Keep presentation metrics aligned with the live solar form.
     const calculatedSelfConsumption = selfConsumptionRate ?? 85;
-    const { longTermMetrics, chartData } = useSolarMetrics(params, calculatedSelfConsumption);
+    const { longTermMetrics: currentMetrics, chartData } = useSolarMetrics(params, calculatedSelfConsumption);
     const currentSolution = params.selectedSolutionId
         ? (params.solutions || []).find(s => s.id === params.selectedSolutionId)
         : null;
@@ -473,10 +473,7 @@ export default function SolarReport({
         return solutions.map(solution => {
             // Create params for this solution
             const brandConfig = MODULE_BRANDS[solution.brand];
-            // Use current EPC price if this is the selected solution, otherwise use solution's stored price
-            const effectiveEpcPrice = solution.id === params.selectedSolutionId
-                ? params.simpleParams.epcPrice
-                : solution.epcPrice;
+            const effectiveEpcPrice = solution.epcPrice;
 
             const solutionParams: SolarParamsState = {
                 ...params,
@@ -522,7 +519,7 @@ export default function SolarReport({
             // Calculate investment
             const capacity = solution.capacity ?? params.simpleParams.capacity;
             const baseInvestment = (capacity * effectiveEpcPrice / 10);
-            const voltageUpgradeCost = solution.connectionType === 'high' && solution.voltageUpgradeCost ? solution.voltageUpgradeCost : 0;
+            const voltageUpgradeCost = solution.connectionType === 'high' ? (solution.voltageUpgradeCost || 15) : 0;
             const totalInvestment = baseInvestment + voltageUpgradeCost;
             const emcSubModeLabel = (() => {
                 switch (solution.emcSubMode || params.simpleParams.emcSubMode) {
@@ -566,10 +563,19 @@ export default function SolarReport({
                 constructionMethodLabel: SOLAR_CONSTRUCTION_METHODS[solution.constructionMethod || 'rooftop'].name,
                 epcPrice: effectiveEpcPrice,
                 investment: totalInvestment,
+                params: solutionParams,
+                metrics: solMetrics,
                 irr: solMetrics.irr,
                 paybackPeriod: solMetrics.paybackPeriod,
+                paybackReached: solMetrics.paybackReached,
                 rev25Year: solMetrics.rev25Year || 0,
+                investorIrr: solMetrics.investorIrr,
+                investorPaybackPeriod: solMetrics.investorPaybackPeriod,
+                investorPaybackReached: solMetrics.investorPaybackReached,
                 ownerBenefit25: solMetrics.totalOwnerBenefit25 || 0,
+                ownerBenefitDuringTerm: solMetrics.ownerBenefitDuringTerm,
+                ownerBenefitAfterTerm: solMetrics.ownerBenefitAfterTerm,
+                ownerBenefitFirstYearAfterTerm: solMetrics.ownerBenefitFirstYearAfterTerm,
                 ownerBenefitYear1: solMetrics.yearlyDetails?.[0]?.ownerBenefit || 0,
                 netIncomeYear1: solMetrics.yearlyDetails?.[0]?.netIncome || 0,
                 ownerInitialInvestment: solMetrics.ownerInitialInvestment || 0,
@@ -582,7 +588,7 @@ export default function SolarReport({
     };
 
     const solutionComparisonData = calculateSolutionMetrics();
-    const bestComparisonPayback = solutionComparisonData.length > 0 ? Math.min(...solutionComparisonData.map(s => s.paybackPeriod)) : 0;
+    const bestComparisonPayback = Math.min(...solutionComparisonData.filter(s => s.paybackReached).map(s => s.paybackPeriod));
     const bestPaybackSolution = solutionComparisonData.find(s => s.paybackPeriod === bestComparisonPayback);
 
     const presentationLayoutEntries: Array<{ solution: any; image: string }> = (params.solutions || []).reduce((entries: Array<{ solution: any; image: string }>, solution: any) => {
@@ -606,12 +612,20 @@ export default function SolarReport({
         ])).sort((a, b) => a - b);
     };
 
+    // Presentation slides data
+    const investMode = getInvestmentModeLabel(params.simpleParams.investmentMode);
+    const recommendedSolutionConfig = params.solutions?.find(solution => solution.id === params.selectedSolutionId) || params.solutions?.[0];
+    const recommendedComparison = solutionComparisonData.find(solution => solution.id === params.selectedSolutionId)
+        || bestPaybackSolution
+        || solutionComparisonData[0];
+    const longTermMetrics = recommendedComparison?.metrics ?? currentMetrics;
     const consumptionScenarioData = normalizeConsumptionRates(params.consumptionRateScenarios).map(rate => {
-        const metrics = calculateSolarMetrics(params, rate);
+        const metrics = calculateSolarMetrics(recommendedComparison?.params ?? params, rate);
         return {
             rate,
-            irr: metrics.irr,
-            payback: metrics.paybackPeriod,
+            irr: recommendedComparison?.investmentMode === 'co_build' && reportAudience !== 'owner' ? metrics.investorIrr : metrics.irr,
+            payback: recommendedComparison?.investmentMode === 'co_build' && reportAudience !== 'owner' ? metrics.investorPaybackPeriod : metrics.paybackPeriod,
+            paybackReached: recommendedComparison?.investmentMode === 'co_build' && reportAudience !== 'owner' ? metrics.investorPaybackReached : metrics.paybackReached,
             rev25Year: metrics.rev25Year,
             ownerBenefit: metrics.totalOwnerBenefit25,
             isBase: rate === Math.round(calculatedSelfConsumption)
@@ -620,14 +634,8 @@ export default function SolarReport({
     const baseConsumptionScenario = consumptionScenarioData.find(item => item.isBase) || consumptionScenarioData[0];
     const lowConsumptionScenario = consumptionScenarioData[0];
     const highConsumptionScenario = consumptionScenarioData[consumptionScenarioData.length - 1];
-    const paybackRangeDiff = lowConsumptionScenario.payback - highConsumptionScenario.payback;
-
-    // Presentation slides data
-    const investMode = getInvestmentModeLabel(params.simpleParams.investmentMode);
-    const recommendedSolutionConfig = params.solutions?.find(solution => solution.id === params.selectedSolutionId) || params.solutions?.[0];
-    const recommendedComparison = solutionComparisonData.find(solution => solution.id === params.selectedSolutionId)
-        || bestPaybackSolution
-        || solutionComparisonData[0];
+    const paybackRangeDiff = lowConsumptionScenario.paybackReached && highConsumptionScenario.paybackReached
+        ? lowConsumptionScenario.payback - highConsumptionScenario.payback : null;
     const detailedAlternativeSolutions = showMultipleSolutions
         ? solutionComparisonData.filter(solution => solution.id !== recommendedComparison?.id)
         : [];
@@ -649,20 +657,36 @@ export default function SolarReport({
         return Number.isFinite(parsed) ? parsed : fallback;
     };
     const formatSafe = (value: unknown, digits = 1, fallback = 0) => safeNumber(value, fallback).toFixed(digits);
-    const effectiveInvestment = safeNumber(solarModule.investment, recommendedComparison?.investment || params.simpleParams.capacity * params.simpleParams.epcPrice / 10);
-    const effectiveYearOneIncome = safeNumber(solarModule.yearlySaving, longTermMetrics.yearlyDetails?.[0]?.netIncome ?? 0);
-    const effectivePaybackPeriod = safeNumber(longTermMetrics.paybackPeriod, projectLifeYears);
-    const effectiveIrr = safeNumber(longTermMetrics.irr, 0);
-    const effectiveRev25Year = safeNumber(longTermMetrics.rev25Year, 0);
-    const effectiveInvestorInvestment = safeNumber(longTermMetrics.investorInitialInvestment, effectiveInvestment);
-    const effectiveGenYear1 = safeNumber(longTermMetrics.genYear1, 0);
-    const firstYearOwnerBenefit = safeNumber(longTermMetrics.yearlyDetails?.[0]?.ownerBenefit, 0);
-    const ownerTotalBenefit25 = safeNumber(longTermMetrics.totalOwnerBenefit25, 0);
-    const ownerBenefitDuringTerm = safeNumber(longTermMetrics.ownerBenefitDuringTerm, 0);
-    const ownerBenefitAfterTerm = safeNumber(longTermMetrics.ownerBenefitAfterTerm, 0);
-    const ownerBenefitFirstYearAfterTerm = safeNumber(longTermMetrics.ownerBenefitFirstYearAfterTerm, 0);
-    const ownerInitialInvestment = safeNumber(longTermMetrics.ownerInitialInvestment, 0);
-    const coBuildTermYears = Math.min(projectLifeYears, Math.max(1, Math.round(safeNumber(params.advParams.coBuildTermYears, 11))));
+    const formatPayback = (value: number, reached: boolean) => reached ? `${formatSafe(value, 2)}年` : '测算期内未回本';
+    const coBuildInvestorShareRate = safeNumber(recommendedComparison?.coBuildInvestorShareRate ?? params.advParams.coBuildInvestorShareRate);
+    const coBuildOwnerShareRate = 100 - coBuildInvestorShareRate;
+    const effectiveInvestment = safeNumber(recommendedComparison?.investment ?? solarModule.investment, params.simpleParams.capacity * params.simpleParams.epcPrice / 10);
+    const effectiveYearOneIncome = safeNumber(recommendedComparison?.netIncomeYear1 ?? longTermMetrics.yearlyDetails?.[0]?.netIncome, 0);
+    const effectivePaybackPeriod = safeNumber(
+        isReportCoBuildMode && reportAudience !== 'owner'
+            ? recommendedComparison?.investorPaybackPeriod ?? longTermMetrics.investorPaybackPeriod
+            : recommendedComparison?.paybackPeriod ?? longTermMetrics.paybackPeriod,
+        projectLifeYears
+    );
+    const effectivePaybackReached = isReportCoBuildMode && reportAudience !== 'owner'
+        ? longTermMetrics.investorPaybackReached
+        : longTermMetrics.paybackReached;
+    const effectiveIrr = safeNumber(
+        isReportCoBuildMode && reportAudience !== 'owner'
+            ? recommendedComparison?.investorIrr ?? longTermMetrics.investorIrr
+            : recommendedComparison?.irr ?? longTermMetrics.irr,
+        0
+    );
+    const effectiveRev25Year = safeNumber(recommendedComparison?.rev25Year ?? longTermMetrics.rev25Year, 0);
+    const effectiveInvestorInvestment = safeNumber(recommendedComparison?.investorInitialInvestment ?? longTermMetrics.investorInitialInvestment, effectiveInvestment);
+    const effectiveGenYear1 = safeNumber(recommendedComparison?.genYear1 ?? longTermMetrics.genYear1, 0);
+    const firstYearOwnerBenefit = safeNumber(recommendedComparison?.ownerBenefitYear1 ?? longTermMetrics.yearlyDetails?.[0]?.ownerBenefit, 0);
+    const ownerTotalBenefit25 = safeNumber(recommendedComparison?.ownerBenefit25 ?? longTermMetrics.totalOwnerBenefit25, 0);
+    const ownerBenefitDuringTerm = safeNumber(recommendedComparison?.ownerBenefitDuringTerm ?? longTermMetrics.ownerBenefitDuringTerm, 0);
+    const ownerBenefitAfterTerm = safeNumber(recommendedComparison?.ownerBenefitAfterTerm ?? longTermMetrics.ownerBenefitAfterTerm, 0);
+    const ownerBenefitFirstYearAfterTerm = safeNumber(recommendedComparison?.ownerBenefitFirstYearAfterTerm ?? longTermMetrics.ownerBenefitFirstYearAfterTerm, 0);
+    const ownerInitialInvestment = safeNumber(recommendedComparison?.ownerInitialInvestment ?? longTermMetrics.ownerInitialInvestment, 0);
+    const coBuildTermYears = Math.min(projectLifeYears, Math.max(1, Math.round(safeNumber(recommendedComparison?.coBuildTermYears ?? params.advParams.coBuildTermYears, 11))));
     const supportsAudienceSelection = isReportEmcMode || isReportCoBuildMode;
     const isOwnerFocusedReport = supportsAudienceSelection && reportAudience === 'owner';
     const inferredLocation = (() => {
@@ -781,13 +805,13 @@ export default function SolarReport({
             }
         ]
         : isReportCoBuildMode && isOwnerFocusedReport ? [
-            { label: '业主初始投入（40%）', value: `¥${formatSafe(ownerInitialInvestment, 1)}万`, tone: 'text-slate-950' },
+            { label: `业主初始投入（${formatSafe(coBuildOwnerShareRate, 0)}%）`, value: `¥${formatSafe(ownerInitialInvestment, 1)}万`, tone: 'text-slate-950' },
             { label: `前${coBuildTermYears}年累计收益`, value: `¥${formatSafe(ownerBenefitDuringTerm, 1)}万`, tone: 'text-emerald-600' },
             { label: '项目周期', value: `${projectLifeYears}年`, tone: 'text-cyan-700' },
             { label: `${projectLifeYears}年累计收益`, value: `¥${formatSafe(ownerTotalBenefit25, 1)}万`, tone: 'text-blue-600' }
         ]
         : [
-            { label: isReportFinancingMode ? '业主初始投入' : isReportCoBuildMode ? '我方初始投入' : '总投资', value: `¥${formatSafe(isReportFinancingMode || isReportCoBuildMode ? longTermMetrics.investorInitialInvestment : effectiveInvestment, 1)}万`, tone: 'text-slate-950' },
+            { label: isReportFinancingMode ? '业主初始投入' : isReportCoBuildMode ? '我方初始投入' : '总投资', value: `¥${formatSafe(isReportFinancingMode || isReportCoBuildMode ? effectiveInvestorInvestment : effectiveInvestment, 1)}万`, tone: 'text-slate-950' },
             { label: '首年净收益', value: `¥${formatSafe(effectiveYearOneIncome, 1)}万`, tone: 'text-emerald-600' },
             { label: 'IRR', value: `${formatSafe(effectiveIrr, 2)}%`, tone: 'text-blue-600' },
             { label: `${projectLifeYears}年净收益`, value: `¥${formatSafe(effectiveRev25Year, 1)}万`, tone: 'text-emerald-600' }
@@ -806,17 +830,17 @@ export default function SolarReport({
         ]
         : isReportCoBuildMode ? [
             ['合作模式', '股权共建（同股同酬）'],
-            ['我方 / 业主持股', `${formatSafe(params.advParams.coBuildInvestorShareRate, 0)}% / ${formatSafe(100 - params.advParams.coBuildInvestorShareRate, 0)}%`],
-            ['合作售电价', `${formatSafe(params.advParams.coBuildSalePrice, 2)} 元/kWh`],
-            ['合作期限', `${formatSafe(params.advParams.coBuildTermYears, 0)}年`],
+            ['我方 / 业主持股', `${formatSafe(coBuildInvestorShareRate, 0)}% / ${formatSafe(coBuildOwnerShareRate, 0)}%`],
+            ['合作售电价', `${formatSafe(recommendedComparison?.coBuildSalePrice ?? params.advParams.coBuildSalePrice, 2)} 元/kWh`],
+            ['合作期限', `${coBuildTermYears}年`],
             ['铺设容量', `${formatSafe(recommendedComparison?.capacity ?? params.simpleParams.capacity, 2)} kWp`],
             ['建设方式', recommendedComparison?.constructionMethodLabel || '彩钢瓦屋顶光伏'],
             ['组件 / 逆变器', `${recommendedComparison?.brand || '通用组件'} / ${recommendedComparison?.inverterBrand || '通用逆变器'}`],
             ['电缆配置', `${recommendedComparison?.cableBrand || '国标电缆'} · ${recommendedComparison?.cableType || '铝芯'}`]
         ] : isReportFinancingMode ? [
             ['合作模式', '融资共建'],
-            ['融资比例', `${formatSafe(params.advParams.financingRatio, 0)}%`],
-            ['利率 / 期限', `${formatSafe(params.advParams.financingAnnualRate, 2)}% / ${formatSafe(params.advParams.financingTermYears, 0)}年`],
+            ['融资比例（测算假设）', `${formatSafe(recommendedComparison?.financingRatio ?? params.advParams.financingRatio, 0)}%`],
+            ['利率 / 期限（测算假设）', `${formatSafe(recommendedComparison?.financingAnnualRate ?? params.advParams.financingAnnualRate, 2)}% / ${formatSafe(recommendedComparison?.financingTermYears ?? params.advParams.financingTermYears, 0)}年`],
             ['铺设容量', `${formatSafe(recommendedComparison?.capacity ?? params.simpleParams.capacity, 2)} kWp`],
             ['建造单价', `¥${formatSafe(recommendedComparison?.epcPrice ?? params.simpleParams.epcPrice, 2)}/Wp`],
             ['建设方式', recommendedComparison?.constructionMethodLabel || '彩钢瓦屋顶光伏'],
@@ -833,13 +857,13 @@ export default function SolarReport({
             ['逆变器品牌', recommendedComparison?.inverterBrand || '通用逆变器']
         ];
 
-    const maxPayback = Math.max(...consumptionScenarioData.map(item => safeNumber(item.payback, 0)), 1);
+    const maxPayback = Math.max(...consumptionScenarioData.filter(item => item.paybackReached).map(item => safeNumber(item.payback, 0)), 1);
     const maxScenarioRevenue = Math.max(...consumptionScenarioData.map(item => safeNumber(item.rev25Year, 0)), 1);
     const maxOwnerBenefit = Math.max(...consumptionScenarioData.map(item => safeNumber(item.ownerBenefit, 0)), 1);
     const layoutFootnote = '收益测算以平台当前配置容量为准';
     const revenueLabel = isOwnerFocusedReport
         ? `业主${projectLifeYears}年收益`
-        : `${isReportEmcMode ? '投资方' : '项目'}${projectLifeYears}年净收益`;
+        : `${isReportEmcMode ? '投资方' : isReportCoBuildMode ? '我方' : '项目'}${projectLifeYears}年净收益`;
     const recommendedConstruction = SOLAR_CONSTRUCTION_METHODS[recommendedComparison?.constructionMethod || recommendedSolutionConfig?.constructionMethod || 'rooftop'];
     const isCanopyConstruction = ['color_steel_canopy', 'bipv_canopy', 'daylighting_canopy'].includes(
         recommendedComparison?.constructionMethod || recommendedSolutionConfig?.constructionMethod || 'rooftop'
@@ -908,7 +932,7 @@ export default function SolarReport({
         });
         const ownerYearOne = ownerCashFlows[1] ?? (isEmc || isCoBuild ? solution.ownerBenefitYear1 : solution.netIncomeYear1);
         const ownerBenefit25 = ownerCashFlows.slice(1).reduce((sum: number, cashFlow: number) => sum + cashFlow, 0);
-        const ownerPaybackText = isEmc ? '业主零投入' : `${formatSafe(solution.paybackPeriod, 2)}年`;
+        const ownerPaybackText = isEmc ? '业主零投入' : formatPayback(solution.paybackPeriod, solution.paybackReached);
         const overviewPanelClass = isCoBuild
             ? 'bg-gradient-to-br from-cyan-50 via-white to-emerald-50 text-slate-950 border border-cyan-200'
             : 'bg-slate-950 text-white';
@@ -982,7 +1006,7 @@ export default function SolarReport({
                                 </div>
                                 <div className="text-right">
                                     <p className="text-xs font-bold text-slate-500">回本 / IRR</p>
-                                    <p className="text-base font-black text-slate-950">{isEmc ? '业主零投入' : `${formatSafe(solution.paybackPeriod, 2)}年 / ${formatSafe(solution.irr, 2)}%`}</p>
+                                    <p className="text-base font-black text-slate-950">{isEmc ? '业主零投入' : `${formatPayback(solution.paybackPeriod, solution.paybackReached)} / ${formatSafe(solution.irr, 2)}%`}</p>
                                 </div>
                             </div>
                             <div className="flex-1 min-h-[250px]">
@@ -1088,8 +1112,8 @@ export default function SolarReport({
                                 ) : (
                                     <>
                                         <div className="mt-4 flex items-center gap-3">
-                                            <span className="text-[88px] leading-[1.12] font-black tabular-nums text-amber-300">{formatSafe(effectivePaybackPeriod, 2)}</span>
-                                            <span className="text-3xl leading-none font-black">年</span>
+                                            <span className={`${effectivePaybackReached ? 'text-[88px]' : 'text-5xl'} leading-[1.12] font-black tabular-nums text-amber-300`}>{effectivePaybackReached ? formatSafe(effectivePaybackPeriod, 2) : '测算期内未回本'}</span>
+                                            {effectivePaybackReached && <span className="text-3xl leading-none font-black">年</span>}
                                         </div>
                                         <p className="text-2xl font-black mt-2">预计回本</p>
                                     </>
@@ -1106,7 +1130,7 @@ export default function SolarReport({
                 <CleanSlideBackground>
                     <PremiumSlideHeader
                         icon="verified"
-                        title={isOwnerFocusedReport ? `核心结论：业主首年综合收益约 ${formatSafe(firstYearOwnerBenefit, 1)} 万元` : `核心结论：预计 ${formatSafe(effectivePaybackPeriod, 2)} 年回本`}
+                        title={isOwnerFocusedReport ? `核心结论：业主首年综合收益约 ${formatSafe(firstYearOwnerBenefit, 1)} 万元` : `核心结论：${effectivePaybackReached ? `预计 ${formatPayback(effectivePaybackPeriod, true)}回本` : '测算期内未回本'}`}
                         tone="emerald"
                     />
                     <div className="relative z-10 flex-1 px-12 pb-8 grid grid-cols-[0.92fr_1.08fr] gap-8">
@@ -1131,8 +1155,8 @@ export default function SolarReport({
                                     </>
                                 ) : (
                                     <div className="mt-2 flex items-center gap-3">
-                                        <span className="text-[96px] leading-[1.12] font-black tabular-nums">{formatSafe(effectivePaybackPeriod, 2)}</span>
-                                        <span className="text-4xl leading-none font-black">年</span>
+                                        <span className={`${effectivePaybackReached ? 'text-[96px]' : 'text-5xl'} leading-[1.12] font-black tabular-nums`}>{effectivePaybackReached ? formatSafe(effectivePaybackPeriod, 2) : '测算期内未回本'}</span>
+                                        {effectivePaybackReached && <span className="text-4xl leading-none font-black">年</span>}
                                     </div>
                                 )}
                             </div>
@@ -1310,13 +1334,13 @@ export default function SolarReport({
                                     <div className="rounded-2xl bg-white p-4 text-slate-950">
                                         <p className="text-sm font-bold text-slate-500">
                                             {isOwnerFocusedReport
-                                                ? (isReportEmcMode ? '业主投入' : '业主投入（40%）')
+                                                ? (isReportEmcMode ? '业主投入' : `业主投入（${formatSafe(coBuildOwnerShareRate, 0)}%）`)
                                                 : (isReportEmcMode ? '投资方初始投入' : '回本周期')}
                                         </p>
                                         <p className={`text-4xl font-black mt-2 ${isOwnerFocusedReport ? 'text-slate-950' : 'text-orange-600'}`}>
                                             {isOwnerFocusedReport
                                                 ? (isReportEmcMode ? '¥0' : `¥${formatSafe(ownerInitialInvestment, 1)}万`)
-                                                : (isReportEmcMode ? `¥${formatSafe(effectiveInvestorInvestment, 1)}万` : `${formatSafe(recommendedComparison?.paybackPeriod ?? effectivePaybackPeriod, 2)}年`)}
+                                                : (isReportEmcMode ? `¥${formatSafe(effectiveInvestorInvestment, 1)}万` : formatPayback(effectivePaybackPeriod, effectivePaybackReached))}
                                         </p>
                                     </div>
                                     <div className="rounded-2xl bg-white p-4 text-slate-950">
@@ -1337,6 +1361,11 @@ export default function SolarReport({
                                     </div>
                                 ))}
                             </div>
+                            {(isReportCoBuildMode || isReportFinancingMode) && (
+                                <p className="text-xs font-semibold text-slate-500">
+                                    {isReportCoBuildMode ? '收益测算未计双方各自借款利息；资金来源与资金成本待确认。' : '融资比例、利率与期限为测算假设，正式融资条件待确认。'}
+                                </p>
+                            )}
                             {businessConditionCards.length > 0 && (
                                 <div className="rounded-[26px] bg-amber-50 border border-amber-200 p-4">
                                     <p className="text-sm font-black text-amber-700 mb-3">商务方案专项约定</p>
@@ -1370,7 +1399,7 @@ export default function SolarReport({
                         {compactComparisonData.length > 0 ? (
                             <div className="h-full min-h-0 rounded-[32px] bg-white border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.08)] overflow-hidden flex flex-col">
                                 <div className="grid grid-cols-[1.58fr_0.72fr_0.66fr_0.78fr_0.86fr_0.88fr_0.9fr_0.78fr_0.58fr] bg-slate-950 text-white text-[13px] font-black">
-                                    {['方案配置', '合作模式', '容量', '业主投入', '业主首年收益', `业主${projectLifeYears}年收益`, '收益方式', '回本/IRR', '推荐'].map(header => (
+                                    {['方案配置', '合作模式', '容量', '业主投入', '业主首年收益', `业主${projectLifeYears}年收益`, '收益方式', '业主回本/IRR', '推荐'].map(header => (
                                         <div key={header} className="px-3 py-4">{header}</div>
                                     ))}
                                 </div>
@@ -1413,7 +1442,7 @@ export default function SolarReport({
                                                         <p className="font-black text-slate-400">不适用</p>
                                                     ) : (
                                                         <>
-                                                            <p className="font-black text-orange-600">{formatSafe(solution.paybackPeriod, 2)}年</p>
+                                                            <p className="font-black text-orange-600">{formatPayback(solution.paybackPeriod, solution.paybackReached)}</p>
                                                             <p className="text-[11px] font-bold text-blue-600 mt-1">IRR {formatSafe(solution.irr, 2)}%</p>
                                                         </>
                                                     )}
@@ -1581,8 +1610,8 @@ export default function SolarReport({
                                 ) : (
                                     <>
                                         <div className="mt-8 flex items-center gap-3">
-                                            <span className="text-[104px] leading-[1.12] font-black tabular-nums text-amber-300">{formatSafe(effectivePaybackPeriod, 2)}</span>
-                                            <span className="text-4xl leading-none font-black">年</span>
+                                            <span className={`${effectivePaybackReached ? 'text-[104px]' : 'text-5xl'} leading-[1.12] font-black tabular-nums text-amber-300`}>{effectivePaybackReached ? formatSafe(effectivePaybackPeriod, 2) : '测算期内未回本'}</span>
+                                            {effectivePaybackReached && <span className="text-4xl leading-none font-black">年</span>}
                                         </div>
                                         <p className="text-2xl font-black text-white mt-4">预计回本周期</p>
                                     </>
@@ -1597,7 +1626,7 @@ export default function SolarReport({
                                     <p className="text-sm font-bold text-slate-500">{isOwnerFocusedReport ? '收益方式' : '首年净收益'}</p>
                                     <p className="text-3xl font-black text-emerald-600 mt-2 leading-tight">
                                         {isOwnerFocusedReport
-                                            ? (isReportEmcMode ? recommendedEmcSettlement.modeText : '电价优惠 + 40%分红')
+                                            ? (isReportEmcMode ? recommendedEmcSettlement.modeText : `电价优惠 + ${formatSafe(coBuildOwnerShareRate, 0)}%分红`)
                                             : `¥${formatSafe(effectiveYearOneIncome, 1)}万`}
                                     </p>
                                 </div>
@@ -1610,7 +1639,7 @@ export default function SolarReport({
                                     <p className="text-sm font-semibold text-slate-500 mt-1">{isOwnerFocusedReport ? '柱形为业主年度收益，折线为业主累计收益；合作期满后按资产移交口径测算' : '柱形为年度净收益，折线为累计现金流'}</p>
                                 </div>
                                 <span className={`rounded-full px-4 py-2 text-sm font-black ${isOwnerFocusedReport ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                                    {isOwnerFocusedReport ? `${projectLifeYears}年约 ${formatSafe(ownerTotalBenefit25, 1)} 万元` : `第 ${formatSafe(effectivePaybackPeriod, 2)} 年附近回本`}
+                                    {isOwnerFocusedReport ? `${projectLifeYears}年约 ${formatSafe(ownerTotalBenefit25, 1)} 万元` : effectivePaybackReached ? `第 ${formatSafe(effectivePaybackPeriod, 2)} 年附近回本` : '测算期内未回本'}
                                 </span>
                             </div>
                             <ResponsiveContainer width="100%" height={390}>
@@ -1659,9 +1688,9 @@ export default function SolarReport({
                                         ['收益提升空间', `¥${formatSafe(Math.max(0, safeNumber(highConsumptionScenario.ownerBenefit) - safeNumber(lowConsumptionScenario.ownerBenefit)), 1)}万`, 'bg-amber-50 text-amber-700']
                                     ]
                                     : [
-                                        ['当前回本', `${formatSafe(baseConsumptionScenario.payback, 2)} 年`, 'bg-blue-50 text-blue-700'],
-                                        ['高消纳回本', `${formatSafe(highConsumptionScenario.payback, 2)} 年`, 'bg-emerald-50 text-emerald-700'],
-                                        ['高低档差值', `${formatSafe(Math.max(0, safeNumber(paybackRangeDiff)), 2)} 年`, 'bg-amber-50 text-amber-700']
+                                        ['当前回本', formatPayback(baseConsumptionScenario.payback, baseConsumptionScenario.paybackReached), 'bg-blue-50 text-blue-700'],
+                                        ['高消纳回本', formatPayback(highConsumptionScenario.payback, highConsumptionScenario.paybackReached), 'bg-emerald-50 text-emerald-700'],
+                                        ['高低档差值', paybackRangeDiff === null ? '不适用' : `${formatSafe(Math.max(0, paybackRangeDiff), 2)} 年`, 'bg-amber-50 text-amber-700']
                                     ]
                                 ).map(([label, value, cls]) => (
                                     <div key={label} className={`rounded-2xl p-3.5 ${cls}`}>
@@ -1681,11 +1710,11 @@ export default function SolarReport({
                                             <div className={`${isReportEmcMode && !isReportSharingEmcMode ? 'h-4' : 'h-3'} rounded-full bg-slate-100 overflow-hidden`}>
                                                 <div
                                                     className={`h-full rounded-full ${isOwnerFocusedReport ? 'bg-emerald-500' : 'bg-orange-500'}`}
-                                                    style={{ width: `${Math.max(6, ((isOwnerFocusedReport ? safeNumber(item.ownerBenefit) / maxOwnerBenefit : safeNumber(item.payback) / maxPayback)) * 100)}%` }}
+                                                    style={{ width: `${Math.max(6, ((isOwnerFocusedReport ? safeNumber(item.ownerBenefit) / maxOwnerBenefit : item.paybackReached ? safeNumber(item.payback) / maxPayback : 0)) * 100)}%` }}
                                                 ></div>
                                             </div>
                                             <span className={`text-sm font-black text-right ${isOwnerFocusedReport ? 'text-emerald-600' : 'text-orange-600'}`}>
-                                                {isOwnerFocusedReport ? `¥${formatSafe(item.ownerBenefit, 0)}万` : `${formatSafe(item.payback, 2)}年`}
+                                                {isOwnerFocusedReport ? `¥${formatSafe(item.ownerBenefit, 0)}万` : formatPayback(item.payback, item.paybackReached)}
                                             </span>
                                         </div>
                                     ))}
@@ -1694,7 +1723,7 @@ export default function SolarReport({
                             {!(isReportEmcMode && !isReportSharingEmcMode) && (
                             <div className="min-h-0 overflow-hidden rounded-[30px] bg-white border border-slate-200 p-4 shadow-[0_20px_70px_rgba(15,23,42,0.07)]">
                                 <h3 className="text-lg font-black text-slate-900 mb-3">
-                                    {isReportSharingEmcMode ? '分成模式收益结构' : (isOwnerFocusedReport ? '业主收益变化' : '项目净收益')}
+                                    {isReportSharingEmcMode ? '分成模式收益结构' : (isOwnerFocusedReport ? '业主收益变化' : isReportCoBuildMode ? '我方净收益' : '项目净收益')}
                                 </h3>
                                 <div className="space-y-2">
                                     {consumptionScenarioData.map(item => (
@@ -1794,7 +1823,7 @@ export default function SolarReport({
                             {[
                                 ['合作模式', isReportEmcMode ? 'EMC' : isReportFinancingMode ? '融资共建' : isReportCoBuildMode ? '股权共建' : 'EPC'],
                                 ['装机容量', currentCapacityText],
-                                [isOwnerFocusedReport ? '业主首年收益' : '预计回本', isOwnerFocusedReport ? `¥${formatSafe(firstYearOwnerBenefit, 1)}万` : `${formatSafe(effectivePaybackPeriod, 2)}年`],
+                                [isOwnerFocusedReport ? '业主首年收益' : '预计回本', isOwnerFocusedReport ? `¥${formatSafe(firstYearOwnerBenefit, 1)}万` : formatPayback(effectivePaybackPeriod, effectivePaybackReached)],
                                 [isOwnerFocusedReport ? `业主${projectLifeYears}年收益` : `${projectLifeYears}年净收益`, isOwnerFocusedReport ? `¥${formatSafe(ownerTotalBenefit25, 1)}万` : `¥${formatSafe(effectiveRev25Year, 1)}万`]
                             ].map(([label, value]) => (
                                 <div key={label} className="rounded-3xl bg-white text-slate-950 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
@@ -2161,7 +2190,7 @@ export default function SolarReport({
                         </div>
                         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 text-center">
                             <div className="text-xs text-orange-600 mb-1">回本周期</div>
-                            <div className="text-2xl font-bold text-orange-700">{formatSafe(effectivePaybackPeriod, 2)}年</div>
+                            <div className="text-2xl font-bold text-orange-700">{formatPayback(effectivePaybackPeriod, effectivePaybackReached)}</div>
                         </div>
                     </div>
                 </section>
@@ -2179,15 +2208,15 @@ export default function SolarReport({
                         </div>
                         <div className="bg-slate-50 rounded-lg p-4 text-center border border-slate-200">
                             <div className="text-xs text-slate-500 mb-1">当前回本周期</div>
-                            <div className="text-2xl font-bold text-slate-800">{formatSafe(baseConsumptionScenario?.payback, 2)}年</div>
+                            <div className="text-2xl font-bold text-slate-800">{formatPayback(baseConsumptionScenario.payback, baseConsumptionScenario.paybackReached)}</div>
                         </div>
                         <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-100">
                             <div className="text-xs text-emerald-600 mb-1">高消纳回本</div>
-                            <div className="text-2xl font-bold text-emerald-700">{formatSafe(highConsumptionScenario?.payback, 2)}年</div>
+                            <div className="text-2xl font-bold text-emerald-700">{formatPayback(highConsumptionScenario.payback, highConsumptionScenario.paybackReached)}</div>
                         </div>
                         <div className="bg-amber-50 rounded-lg p-4 text-center border border-amber-100">
                             <div className="text-xs text-amber-600 mb-1">高低档回本差</div>
-                            <div className="text-2xl font-bold text-amber-700">{paybackRangeDiff.toFixed(2)}年</div>
+                            <div className="text-2xl font-bold text-amber-700">{paybackRangeDiff === null ? '不适用' : `${paybackRangeDiff.toFixed(2)}年`}</div>
                         </div>
                     </div>
                     <div className="h-64 mb-6">
@@ -2224,7 +2253,7 @@ export default function SolarReport({
                                 {consumptionScenarioData.map((item) => (
                                     <tr key={item.rate} className={`border-b border-slate-100 ${item.isBase ? 'bg-blue-50' : ''}`}>
                                         <td className="px-4 py-3 font-medium text-slate-800">{item.rate}%</td>
-                                        <td className="px-4 py-3 text-right font-bold text-blue-700">{item.payback.toFixed(2)} 年</td>
+                                        <td className="px-4 py-3 text-right font-bold text-blue-700">{formatPayback(item.payback, item.paybackReached)}</td>
                                         <td className="px-4 py-3 text-right text-slate-700">{item.irr.toFixed(2)}%</td>
                                         <td className="px-4 py-3 text-right text-emerald-700">
                                             {formatSafe(isReportEmcMode && !isReportSharingEmcMode ? item.ownerBenefit : item.rev25Year, 2)} 万元
@@ -2398,9 +2427,11 @@ export default function SolarReport({
                     <div className="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
                         <p className="text-sm text-amber-800">
                             <span className="font-semibold">回本周期说明：</span>
-                            项目预计在第 <span className="font-bold text-amber-900">{Math.floor(longTermMetrics.paybackPeriod)}</span> 年
-                            {Math.floor(longTermMetrics.paybackPeriod) < longTermMetrics.paybackPeriod && ` 第 ${Math.round((longTermMetrics.paybackPeriod % 1) * 12)} 个月`}
-                            左右实现投资回本（累计净现值转正）。
+                            {longTermMetrics.paybackReached ? <>
+                                项目预计在第 <span className="font-bold text-amber-900">{Math.floor(longTermMetrics.paybackPeriod)}</span> 年
+                                {Math.floor(longTermMetrics.paybackPeriod) < longTermMetrics.paybackPeriod && ` 第 ${Math.round((longTermMetrics.paybackPeriod % 1) * 12)} 个月`}
+                                左右实现投资回本（累计净现金流转正）。
+                            </> : `测算期内累计净现金流未转正，尚未回本。`}
                         </p>
                     </div>
                 </section>
@@ -2440,7 +2471,7 @@ export default function SolarReport({
                                 </tr>
                                 <tr className="border-b border-slate-200">
                                     <td className="px-4 py-3 text-slate-600 bg-slate-50 font-medium">投资回本周期</td>
-                                    <td className="px-4 py-3 text-slate-800 font-medium">{formatSafe(effectivePaybackPeriod, 2)} 年</td>
+                                    <td className="px-4 py-3 text-slate-800 font-medium">{formatPayback(effectivePaybackPeriod, effectivePaybackReached)}</td>
                                 </tr>
                                 <tr className="border-b border-slate-200">
                                     <td className="px-4 py-3 text-slate-600 bg-slate-50 font-medium">{projectLifeYears}年总净现值</td>

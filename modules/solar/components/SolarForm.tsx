@@ -1019,7 +1019,7 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                                 <span className="solar-apple-icon material-icons text-[18px]">payments</span>
                                 <div>
                                     <h4 className="text-sm font-black text-[#1d1d1f]">当前方案融资共建配置</h4>
-                                    <p className="text-[10px] text-slate-400 mt-1">业主投入自有资金，融资方提供其余建设资金；运营现金流按等额本息偿还融资。</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">融资比例、利率和期限仅为测算假设，正式资金来源与融资条件待确认；运营现金流按等额本息偿还融资。</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

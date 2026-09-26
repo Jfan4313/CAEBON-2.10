@@ -56,7 +56,7 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
         // 计算投资总额
         const capacity = solution.capacity ?? params.simpleParams.capacity ?? 0;
         const baseInvestment = parseFloat((capacity * solution.epcPrice / 10).toFixed(2));
-        const voltageUpgradeCost = solution.connectionType === 'high' && solution.voltageUpgradeCost ? solution.voltageUpgradeCost : 0;
+        const voltageUpgradeCost = solution.connectionType === 'high' ? (solution.voltageUpgradeCost || 15) : 0;
         const totalInvestment = parseFloat((baseInvestment + voltageUpgradeCost).toFixed(2));
         return {
             solution,
@@ -223,7 +223,7 @@ export const SolutionComparison: React.FC<SolutionComparisonProps> = ({
                                 <td key={i} className={`px-4 py-3 text-center ${
                                     r.solution.id === bestSolution.solution.id ? 'bg-green-50 font-bold' : ''
                                 }`}>
-                                    {r.paybackPeriod.toFixed(2)}年
+                                    {r.paybackReached ? `${r.paybackPeriod.toFixed(2)}年` : '测算期内未回本'}
                                 </td>
                             ))}
                         </tr>

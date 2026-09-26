@@ -53,6 +53,7 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
                 rate,
                 irr: result.irr,
                 payback: result.paybackPeriod,
+                paybackReached: result.paybackReached,
                 rev25Year: result.rev25Year,
                 ownerBenefit: result.totalOwnerBenefit25,
                 isBase: rate === Math.round(baseRate)
@@ -66,8 +67,9 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
     const isEmc = params.simpleParams.investmentMode === 'emc';
     const revenueSpread = highResult.rev25Year - lowResult.rev25Year;
     const ownerBenefitSpread = highResult.ownerBenefit - lowResult.ownerBenefit;
-    const paybackRangeDiff = lowResult.payback - highResult.payback;
-    const baseToHighPaybackDiff = baseResult.payback - highResult.payback;
+    const paybackRangeDiff = lowResult.paybackReached && highResult.paybackReached ? lowResult.payback - highResult.payback : null;
+    const baseToHighPaybackDiff = baseResult.paybackReached && highResult.paybackReached ? baseResult.payback - highResult.payback : null;
+    const formatPayback = (value: number, reached: boolean) => reached ? `${value.toFixed(2)}年` : '测算期内未回本';
     const chartWidth = 600;
     const chartHeight = 205;
     const chartLeft = 42;
@@ -83,12 +85,15 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
     const revenueRange = Math.max(1, revenueMax - revenueMin);
     const revenueY = (value: number) => chartTop + (revenueMax - value) / revenueRange * plotHeight;
     const revenueZeroY = revenueY(0);
-    const paybackMin = Math.min(...analysisData.map(item => item.payback));
-    const paybackMax = Math.max(paybackMin + 0.1, ...analysisData.map(item => item.payback));
+    const reachedPaybacks = analysisData.filter(item => item.paybackReached).map(item => item.payback);
+    const paybackMin = reachedPaybacks.length ? Math.min(...reachedPaybacks) : 0;
+    const paybackMax = Math.max(paybackMin + 0.1, ...reachedPaybacks);
     const irrMin = Math.min(...analysisData.map(item => item.irr));
     const irrMax = Math.max(irrMin + 0.1, ...analysisData.map(item => item.irr));
     const normalizedY = (value: number, min: number, max: number) => chartTop + (max - value) / (max - min) * plotHeight;
-    const paybackPoints = analysisData.map((item, index) => `${xFor(index)},${normalizedY(item.payback, paybackMin, paybackMax)}`).join(' ');
+    const paybackPoints = analysisData.every(item => item.paybackReached)
+        ? analysisData.map((item, index) => `${xFor(index)},${normalizedY(item.payback, paybackMin, paybackMax)}`).join(' ')
+        : '';
     const irrPoints = analysisData.map((item, index) => `${xFor(index)},${normalizedY(item.irr, irrMin, irrMax)}`).join(' ');
 
     const applyRateInput = () => {
@@ -121,7 +126,7 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
                     </div>
                     <div className="bg-[#f5f5f7] rounded-[18px] border border-slate-200/70 px-3 py-2">
                         <div className="text-[10px] text-slate-400">当前回本周期</div>
-                        <div className="text-base font-semibold text-[#0071e3]">{baseResult.payback.toFixed(2)}年</div>
+                        <div className="text-base font-semibold text-[#0071e3]">{formatPayback(baseResult.payback, baseResult.paybackReached)}</div>
                     </div>
                     {isEmc && (
                         <div className="bg-[#f5f5f7] rounded-[18px] border border-slate-200/70 px-3 py-2">
@@ -131,7 +136,7 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
                     )}
                     <div className="bg-[#f5f5f7] rounded-[18px] border border-slate-200/70 px-3 py-2">
                         <div className="text-[10px] text-slate-400">高低档回本差</div>
-                        <div className="text-base font-semibold text-[#0071e3]">{paybackRangeDiff.toFixed(2)}年</div>
+                        <div className="text-base font-semibold text-[#0071e3]">{paybackRangeDiff === null ? '不适用' : `${paybackRangeDiff.toFixed(2)}年`}</div>
                     </div>
                 </div>
             </div>
@@ -203,7 +208,7 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
                             <polyline points={irrPoints} fill="none" stroke="#8e8e93" strokeWidth="2" />
                             {analysisData.map((item, index) => (
                                 <g key={item.rate}>
-                                    <circle cx={xFor(index)} cy={normalizedY(item.payback, paybackMin, paybackMax)} r="4" fill="#0071e3"><title>{`消纳率${item.rate}% 回本周期 ${item.payback.toFixed(2)}年`}</title></circle>
+                                    {item.paybackReached && <circle cx={xFor(index)} cy={normalizedY(item.payback, paybackMin, paybackMax)} r="4" fill="#0071e3"><title>{`消纳率${item.rate}% 回本周期 ${item.payback.toFixed(2)}年`}</title></circle>}
                                     <circle cx={xFor(index)} cy={normalizedY(item.irr, irrMin, irrMax)} r="3" fill="#8e8e93"><title>{`消纳率${item.rate}% IRR ${item.irr.toFixed(2)}%`}</title></circle>
                                     <text x={xFor(index)} y={chartHeight - 10} textAnchor="middle" fontSize="9" fill="#64748b">{item.rate}%</text>
                                 </g>
@@ -218,22 +223,23 @@ export const ConsumptionRateAnalysis: React.FC<ConsumptionRateAnalysisProps> = (
                 <div className="bg-white rounded-[22px] border border-slate-200/70 p-4 shadow-sm">
                     <span className="text-slate-400 block mb-1">当前基准</span>
                     <span className="font-bold text-slate-700">
-                        {baseResult.rate}% 消纳率，回本周期 {baseResult.payback.toFixed(2)} 年，IRR {baseResult.irr.toFixed(2)}%
+                        {baseResult.rate}% 消纳率，回本周期 {formatPayback(baseResult.payback, baseResult.paybackReached)}，IRR {baseResult.irr.toFixed(2)}%
                         {isEmc ? `，业主${projectLifeYears}年收益 ${baseResult.ownerBenefit.toFixed(1)} 万元` : ''}
                     </span>
                 </div>
                 <div className="bg-white rounded-[22px] border border-slate-200/70 p-4 shadow-sm">
                     <span className="text-slate-400 block mb-1">低消纳风险</span>
                     <span className="font-bold text-slate-700">
-                        {lowResult.rate}% 时回本周期 {lowResult.payback.toFixed(2)} 年，投资方{projectLifeYears}年净收益 {lowResult.rev25Year.toFixed(1)} 万元
+                        {lowResult.rate}% 时回本周期 {formatPayback(lowResult.payback, lowResult.paybackReached)}，投资方{projectLifeYears}年净收益 {lowResult.rev25Year.toFixed(1)} 万元
                         {isEmc ? `，业主收益 ${lowResult.ownerBenefit.toFixed(1)} 万元` : ''}
                     </span>
                 </div>
                 <div className="bg-white rounded-[22px] border border-slate-200/70 p-4 shadow-sm">
                     <span className="text-slate-400 block mb-1">高消纳上限</span>
                     <span className="font-bold text-slate-700">
-                        {highResult.rate}% 时回本周期 {highResult.payback.toFixed(2)} 年，比 {lowResult.rate}% 档少 {paybackRangeDiff.toFixed(2)} 年
-                        {baseToHighPaybackDiff > 0 ? `，比当前基准少 ${baseToHighPaybackDiff.toFixed(2)} 年` : ''}
+                        {highResult.rate}% 时回本周期 {formatPayback(highResult.payback, highResult.paybackReached)}
+                        {paybackRangeDiff !== null ? `，比 ${lowResult.rate}% 档少 ${paybackRangeDiff.toFixed(2)} 年` : ''}
+                        {baseToHighPaybackDiff !== null && baseToHighPaybackDiff > 0 ? `，比当前基准少 ${baseToHighPaybackDiff.toFixed(2)} 年` : ''}
                         {isEmc ? `，业主收益 ${highResult.ownerBenefit.toFixed(1)} 万元` : ''}
                     </span>
                 </div>

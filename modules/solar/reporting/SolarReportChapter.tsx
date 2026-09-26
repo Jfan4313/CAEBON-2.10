@@ -20,7 +20,7 @@ export const SolarReportChapter: React.FC<ModuleReportChapterProps> = ({ module,
   const sensitivityRates = [...new Set([Math.max(40, selfRate - 15), selfRate, Math.min(100, selfRate + 10)])];
   const sensitivity = sensitivityRates.map(rate => {
     const metrics = calculateSolarMetrics(params, rate);
-    return { rate: `${rate.toFixed(0)}%`, firstYear: Number(metrics.yearlyDetails?.[0]?.netIncome || 0), lifecycle: Number(metrics.rev25Year || 0), payback: Number(metrics.paybackPeriod || 0) };
+    return { rate: `${rate.toFixed(0)}%`, firstYear: Number(metrics.yearlyDetails?.[0]?.netIncome || 0), lifecycle: Number(metrics.rev25Year || 0), payback: metrics.paybackReached ? metrics.paybackPeriod : null };
   });
   const solutions = params.solutions || [];
   const selectedSolutionId = params.selectedSolutionId || solutions[0]?.id;
@@ -52,7 +52,7 @@ export const SolarReportChapter: React.FC<ModuleReportChapterProps> = ({ module,
         <table className="w-full text-xs"><thead className="bg-blue-600 text-white"><tr><th className="text-left p-3">方案</th><th className="text-left p-3">合作方式</th><th className="text-right p-3">容量</th><th className="text-right p-3">估算投资</th><th className="text-left p-3">核心配置</th></tr></thead>
           <tbody className="divide-y divide-slate-100">{solutions.slice(0, 6).map(solution => {
             const capacity = Number(solution.capacity || params.simpleParams.capacity);
-            const investment = capacity * Number(solution.epcPrice || params.simpleParams.epcPrice) / 10 + Number(solution.voltageUpgradeCost || 0);
+            const investment = capacity * Number(solution.epcPrice || params.simpleParams.epcPrice) / 10 + (solution.connectionType === 'high' ? Number(solution.voltageUpgradeCost || 15) : 0);
             return <tr key={solution.id} className={solution.id === selectedSolutionId ? 'bg-emerald-50' : 'bg-white'}><td className="p-3 font-bold text-slate-800">{solution.name}{solution.id === selectedSolutionId && <span className="ml-2 text-[9px] text-emerald-700">推荐</span>}</td><td className="p-3">{modeLabel[solution.investmentMode] || solution.investmentMode}</td><td className="p-3 text-right">{capacity.toFixed(1)} kWp</td><td className="p-3 text-right">{money(investment)}</td><td className="p-3 text-slate-500">{MODULE_BRANDS[solution.brand]?.name} · {INVERTER_BRANDS[solution.inverterBrand]?.name} · {CABLE_BRANDS[solution.cableBrand]?.name}</td></tr>;
           })}</tbody>
         </table>

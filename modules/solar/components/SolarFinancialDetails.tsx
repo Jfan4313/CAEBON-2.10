@@ -24,7 +24,7 @@ export const SolarFinancialDetails: React.FC<SolarFinancialDetailsProps> = ({
             {/* KPI Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{isFinancing ? '业主初始投入' : isCoBuild ? '业主初始投入（40%）' : '项目总投资'}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{isFinancing ? '业主初始投入' : isCoBuild ? `业主初始投入（${100 - params.advParams.coBuildInvestorShareRate}%）` : '项目总投资'}</p>
                     <div className="text-2xl font-bold text-slate-900">¥ {(isFinancing ? longTermMetrics.investorInitialInvestment : isCoBuild ? longTermMetrics.ownerInitialInvestment : investment).toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span></div>
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -54,7 +54,7 @@ export const SolarFinancialDetails: React.FC<SolarFinancialDetailsProps> = ({
                 {!isEmc && (
                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">回本周期</p>
-                        <div className="text-2xl font-bold text-orange-500">{longTermMetrics.paybackPeriod.toFixed(2)} <span className="text-sm font-normal text-slate-500">年</span></div>
+                        <div className="text-2xl font-bold text-orange-500">{longTermMetrics.paybackReached ? <>{longTermMetrics.paybackPeriod.toFixed(2)} <span className="text-sm font-normal text-slate-500">年</span></> : '测算期内未回本'}</div>
                     </div>
                 )}
             </div>

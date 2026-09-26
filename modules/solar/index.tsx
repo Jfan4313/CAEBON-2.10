@@ -361,7 +361,7 @@ const RetrofitSolar: React.FC = () => {
                                 </div>
                                 <div>
                                     <p className="text-[10px] text-slate-400">回本周期</p>
-                                    <p className="mt-1 font-bold text-orange-600">{Number(longTermMetrics.paybackPeriod ?? 0).toFixed(2)}年</p>
+                                    <p className="mt-1 font-bold text-orange-600">{longTermMetrics.paybackReached ? `${Number(longTermMetrics.paybackPeriod).toFixed(2)}年` : '测算期内未回本'}</p>
                                 </div>
                                 <div>
                                     <p className="text-[10px] text-slate-400">{Math.max(1, Math.round(params.advParams.projectLifeYears || 11))}年净收益</p>

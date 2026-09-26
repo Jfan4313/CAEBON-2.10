@@ -6,5 +6,6 @@ node_modules
 copyright-materials
 dist-electron
 outputs
+output
 tmp
 *.log
