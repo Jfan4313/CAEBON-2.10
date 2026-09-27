@@ -42,7 +42,7 @@ export const SOLAR_CONSTRUCTION_METHODS: Record<SolarConstructionMethod, SolarCo
         name: '彩钢瓦棚架光伏',
         shortName: '彩钢瓦棚架',
         description: '在屋顶设备区或通道上方加建彩钢瓦棚架并铺设光伏，兼顾遮蔽、防护与发电。',
-        image: '/solar-construction/color-steel-canopy.jpg',
+        image: '/solar-construction/color-steel-canopy.png',
         imageSource: 'AI 生成的工业屋顶彩钢瓦棚架光伏参考图'
     },
     bipv_canopy: {
@@ -50,7 +50,7 @@ export const SOLAR_CONSTRUCTION_METHODS: Record<SolarConstructionMethod, SolarCo
         name: 'BIPV光伏棚架',
         shortName: 'BIPV棚架',
         description: '光伏组件与棚架围护一体化，兼顾发电、遮阳和防雨。',
-        image: '/solar-construction/bipv-canopy.jpg',
+        image: '/solar-construction/bipv-canopy.png',
         imageSource: 'AI 生成的工业屋顶 BIPV 光伏棚架参考图'
     },
     daylighting_canopy: {
@@ -58,8 +58,8 @@ export const SOLAR_CONSTRUCTION_METHODS: Record<SolarConstructionMethod, SolarCo
         name: '采光网光伏棚架',
         shortName: '采光棚架',
         description: '采用透光或间隔布置的光伏玻璃，兼顾自然采光与遮阳发电。',
-        image: '/solar-construction/daylighting-canopy.jpg',
-        imageSource: 'Sonnenstromfabrik 半透明光伏组件应用实景'
+        image: '/solar-construction/daylighting-canopy.png',
+        imageSource: 'AI 生成的采光型光伏棚架参考图'
     }
 };
 

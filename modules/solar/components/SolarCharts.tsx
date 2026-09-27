@@ -24,14 +24,27 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
     const isEmc = params.simpleParams.investmentMode === 'emc';
     const isCoBuild = params.simpleParams.investmentMode === 'co_build';
     const [financialPerspective, setFinancialPerspective] = useState<'investor' | 'owner'>('investor');
-    const firstYearDetails = longTermMetrics.yearlyDetails?.[0] || {};
     const investorInitialInvestment = Number(longTermMetrics.investorInitialInvestment ?? investment);
+    const ownerInitialInvestment = Number(longTermMetrics.ownerInitialInvestment ?? 0);
     const investorIrr = Number(longTermMetrics.investorIrr ?? longTermMetrics.irr ?? 0);
     const investorPayback = Number(isCoBuild ? longTermMetrics.investorPaybackPeriod : longTermMetrics.paybackPeriod);
     const investorPaybackReached = isCoBuild ? longTermMetrics.investorPaybackReached : longTermMetrics.paybackReached;
+    const ownerIrr = Number(longTermMetrics.ownerIrr ?? longTermMetrics.irr ?? 0);
+    const ownerPayback = Number(longTermMetrics.ownerPaybackPeriod ?? longTermMetrics.paybackPeriod);
+    const ownerPaybackReached = Boolean(longTermMetrics.ownerPaybackReached ?? longTermMetrics.paybackReached);
     const investorLifecycleIncome = Number(longTermMetrics.rev25Year ?? 0);
     const ownerLifecycleBenefit = Number(longTermMetrics.totalOwnerBenefit25 ?? 0);
-    const isInvestorPerspective = !isEmc || financialPerspective === 'investor';
+    const hasPerspectiveToggle = isEmc || isCoBuild;
+    const isInvestorPerspective = hasPerspectiveToggle ? financialPerspective === 'investor' : true;
+    const ownerCashFlows = isCoBuild
+        ? longTermMetrics.ownerCashFlows
+        : isEmc
+            ? [0, ...(longTermMetrics.yearlyDetails || []).map((detail: any) => Number(detail.ownerBenefit || 0))]
+            : longTermMetrics.cashFlows;
+    const perspectiveCashFlows = isInvestorPerspective ? longTermMetrics.cashFlows : ownerCashFlows;
+    const perspectiveInitialInvestment = isInvestorPerspective
+        ? investorInitialInvestment
+        : isCoBuild ? ownerInitialInvestment : 0;
 
     return (
         <>
@@ -144,11 +157,11 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
-                            {isEmc && (
+                            {hasPerspectiveToggle && (
                                 <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                                     <div>
                                         <p className="text-sm font-bold text-slate-800">收益分析视角</p>
-                                        <p className="mt-1 text-xs text-slate-500">投资方用于判断项目是否值得投；业主视角用于展示节省与综合收益。</p>
+                                        <p className="mt-1 text-xs text-slate-500">分别按各自初始出资和年度现金流展示回本与收益；EMC 业主零投入，业主回本周期不适用。</p>
                                     </div>
                                     <div className="flex rounded-xl bg-slate-100 p-1" aria-label="收益分析视角">
                                         <button
@@ -156,7 +169,7 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                             onClick={() => setFinancialPerspective('investor')}
                                             className={`rounded-lg px-4 py-2 text-sm font-bold transition-all ${financialPerspective === 'investor' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                                         >
-                                            EMC投资方
+                                            {isCoBuild ? '我方投资者' : 'EMC投资方'}
                                         </button>
                                         <button
                                             type="button"
@@ -176,7 +189,7 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                         {isInvestorPerspective ? (isEmc ? '投资方初始投入' : isCoBuild ? '我方初始投入' : '项目总投资') : '业主初始投入'}
                                     </p>
                                     <div className="text-2xl font-bold text-slate-900">
-                                        ¥ {(isInvestorPerspective ? investorInitialInvestment : 0).toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span>
+                                        ¥ {perspectiveInitialInvestment.toFixed(3)} <span className="text-sm font-normal text-slate-500">万</span>
                                     </div>
                                 </div>
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -189,20 +202,22 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                 </div>
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                                        {isInvestorPerspective ? '投资方内部收益率 (IRR)' : '业主首年综合收益'}
+                                        {isInvestorPerspective ? '投资方内部收益率 (IRR)' : isCoBuild ? '业主内部收益率 (IRR)' : '业主投资回报率'}
                                     </p>
                                     <div className="text-2xl font-bold text-purple-600">
-                                        {isInvestorPerspective ? `${investorIrr.toFixed(2)}%` : `¥ ${Number(firstYearDetails.ownerBenefit ?? 0).toFixed(3)} 万`}
+                                        {isInvestorPerspective ? `${investorIrr.toFixed(2)}%` : isEmc ? '不适用（零投入）' : `${ownerIrr.toFixed(2)}%`}
                                     </div>
                                 </div>
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                                        {isInvestorPerspective ? '投资方回本周期' : '业主收益方式'}
+                                        {isInvestorPerspective ? '投资方回本周期' : '业主回本周期'}
                                     </p>
                                     <div className="text-2xl font-bold text-orange-500">
                                         {isInvestorPerspective
                                             ? (investorPaybackReached ? <>{investorPayback.toFixed(2)} <span className="text-sm font-normal text-slate-500">年</span></> : '测算期内未回本')
-                                            : <span className="text-lg text-blue-600">零投入 · 持续节省</span>}
+                                            : isEmc
+                                                ? <span className="text-base text-blue-600">零投入，回本不适用</span>
+                                                : ownerPaybackReached ? <>{ownerPayback.toFixed(2)} <span className="text-sm font-normal text-slate-500">年</span></> : '测算期内未回本'}
                                     </div>
                                 </div>
                             </div>
@@ -211,12 +226,12 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                 {/* Cash Flow Trend */}
                                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                                        <span className="material-icons text-primary text-base">savings</span> {isEmc ? '投资方' : ''}{projectLifeYears}年累计现金流趋势
+                                        <span className="material-icons text-primary text-base">savings</span> {isInvestorPerspective ? (isEmc ? 'EMC投资方' : isCoBuild ? '我方投资方' : '') : '业主'}{projectLifeYears}年累计现金流趋势
                                     </h3>
                                     <div className="h-64 w-full">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={longTermMetrics.cashFlows.map((v: number, i: number) => {
-                                                const cumulative = longTermMetrics.cashFlows.slice(0, i + 1).reduce((a: number, b: number) => a + b, 0);
+                                            <AreaChart data={perspectiveCashFlows.map((v: number, i: number) => {
+                                                const cumulative = perspectiveCashFlows.slice(0, i + 1).reduce((a: number, b: number) => a + b, 0);
                                                 return { year: i, value: parseFloat(cumulative.toFixed(3)) };
                                             })} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                                 <defs>
@@ -266,7 +281,7 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
                                     <h3 className="text-sm font-bold text-slate-700">
-                                        {isEmc ? `业主 vs 投资方 逐年收益明细 (${projectLifeYears}年)` : `测算数据明细 (${projectLifeYears}年)`}
+                                        {hasPerspectiveToggle ? `业主 vs ${isCoBuild ? '我方投资方' : 'EMC投资方'} 逐年收益明细 (${projectLifeYears}年)` : `测算数据明细 (${projectLifeYears}年)`}
                                     </h3>
                                     <span className="text-[10px] text-slate-400">
                                         单位: 万元 | 增值税: {params.advParams.vatTaxpayerType === 'general' ? '一般纳税人（销项减进项及留抵）' : '小规模纳税人（年销售额≤120万元免征，否则1%）'} | 所得税率: {params.advParams.incomeTaxMode === 'custom' ? params.advParams.taxRate : params.advParams.incomeTaxMode === 'exempt' || params.simpleParams.operationMode === 'off_grid' ? 0 : 5}%
@@ -281,17 +296,16 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                             <tr>
                                                 <th className="px-5 py-4 sticky left-0 bg-slate-50">运营年份</th>
                                                 <th className="px-5 py-4">发电量(万度)</th>
-                                                <th className="px-5 py-4 text-right">
-                                                    {isEmc ? '发电收益（含税）' : '总营收'}
-                                                </th>
-                                                {isEmc && <th className="px-5 py-4 text-right text-red-500">减：应缴增值税</th>}
+                                                <th className="px-5 py-4 text-right">项目收入（含税）</th>
+                                                {hasPerspectiveToggle && <th className="px-5 py-4 text-right text-red-500">减：应缴增值税</th>}
                                                 {isEmc && <th className="px-5 py-4 text-right text-red-500">减：屋顶租金</th>}
-                                                <th className="px-5 py-4 text-right">{isEmc ? '减：运维质保' : '运维质保'}</th>
-                                                <th className="px-5 py-4 text-right">{isEmc ? '减：所得税及附加' : '所得税及附加'}</th>
+                                                <th className="px-5 py-4 text-right">减：运维保险</th>
+                                                <th className="px-5 py-4 text-right">减：所得税及附加</th>
+                                                <th className="px-5 py-4 text-right">项目税后净收益</th>
                                                 <th className="px-5 py-4 text-right bg-slate-50/50 font-bold text-slate-700">
-                                                    {isEmc ? '投资方净收益' : '净现金流'}
+                                                    出资方净现金流
                                                 </th>
-                                                {isEmc && <th className="px-5 py-4 text-right text-blue-600">业主综合收益</th>}
+                                                {hasPerspectiveToggle && <th className="px-5 py-4 text-right text-blue-600">业主年度综合收益</th>}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -299,30 +313,32 @@ export const SolarCharts: React.FC<SolarChartsProps> = ({
                                                 <td className="px-5 py-3 font-bold text-slate-700 sticky left-0 bg-slate-50/30">第 0 年 (投资)</td>
                                                 <td className="px-5 py-3 text-slate-400">-</td>
                                                 <td className="px-5 py-3 text-right text-slate-400">-</td>
+                                                {hasPerspectiveToggle && <td className="px-5 py-3 text-right text-slate-400">-</td>}
                                                 {isEmc && <td className="px-5 py-3 text-right text-slate-400">-</td>}
-                                                {isEmc && <td className="px-5 py-3 text-right text-slate-400">-</td>}
+                                                <td className="px-5 py-3 text-right text-slate-400">-</td>
                                                 <td className="px-5 py-3 text-right text-slate-400">-</td>
                                                 <td className="px-5 py-3 text-right text-slate-400">-</td>
                                                 <td className="px-5 py-3 text-right font-bold text-red-500">
-                                                    -{investment.toFixed(3)}
+                                                    -{investorInitialInvestment.toFixed(3)}
                                                 </td>
-                                                {isEmc && <td className="px-5 py-3 text-right text-slate-400">-</td>}
+                                                {hasPerspectiveToggle && <td className={`px-5 py-3 text-right font-bold ${ownerInitialInvestment > 0 ? 'text-red-500' : 'text-slate-400'}`}>{ownerInitialInvestment > 0 ? `-${ownerInitialInvestment.toFixed(3)}` : '0.000'}</td>}
                                             </tr>
                                             {longTermMetrics.yearlyDetails.map((row: any, i: number) => (
                                                 <tr key={i} className="hover:bg-slate-50 transition-colors">
                                                     <td className="px-5 py-3 font-medium text-slate-700 sticky left-0 bg-white">第 {row.year} 年</td>
                                                     <td className="px-5 py-3 text-slate-600 font-mono">{row.generation.toFixed(3)}</td>
                                                     <td className="px-5 py-3 text-right text-orange-600 font-medium font-mono">
-                                                        {(isEmc ? row.grossGenerationRevenue : row.revenue).toFixed(3)}
+                                                        {Number(row.grossGenerationRevenue ?? row.revenue).toFixed(3)}
                                                     </td>
-                                                    {isEmc && <td className="px-5 py-3 text-right text-red-500 font-mono">-{row.vatPayable.toFixed(3)}</td>}
-                                                    {isEmc && <td className="px-5 py-3 text-right text-red-500 font-mono">-{row.roofRentCost.toFixed(3)}</td>}
-                                                    <td className="px-5 py-3 text-right text-orange-500 font-mono">-{(isEmc ? row.grossOpex : row.opex).toFixed(3)}</td>
-                                                    <td className="px-5 py-3 text-right text-slate-500 font-mono">-{row.tax.toFixed(3)}</td>
+                                                    {hasPerspectiveToggle && <td className="px-5 py-3 text-right text-red-500 font-mono">-{Number(row.vatPayable || 0).toFixed(3)}</td>}
+                                                    {isEmc && <td className="px-5 py-3 text-right text-red-500 font-mono">-{Number(row.roofRentCost || 0).toFixed(3)}</td>}
+                                                    <td className="px-5 py-3 text-right text-orange-500 font-mono">-{Number(row.grossOpex ?? row.opex).toFixed(3)}</td>
+                                                    <td className="px-5 py-3 text-right text-slate-500 font-mono">-{Number(row.tax || 0).toFixed(3)}</td>
+                                                    <td className="px-5 py-3 text-right font-semibold text-slate-700 font-mono">{Number(row.projectNetIncome ?? row.netIncome).toFixed(3)}</td>
                                                     <td className={`px-5 py-3 text-right font-bold bg-slate-50/30 font-mono ${row.netIncome >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                                         {row.netIncome.toFixed(3)}
                                                     </td>
-                                                    {isEmc && <td className="px-5 py-3 text-right text-blue-600 font-medium font-mono">{row.ownerBenefit.toFixed(3)}</td>}
+                                                    {hasPerspectiveToggle && <td className="px-5 py-3 text-right text-blue-600 font-medium font-mono">{Number(row.ownerBenefit || 0).toFixed(3)}</td>}
                                                 </tr>
                                             ))}
                                         </tbody>

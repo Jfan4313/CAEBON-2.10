@@ -1503,7 +1503,7 @@ export default function SolarReport({
                                 <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-[11px] leading-relaxed font-semibold text-slate-500">
                                     {hasAnyEmcComparison && 'EMC 方案仅展示业主投入与业主收益；'}
                                     {compactComparisonData.some(solution => solution.investmentMode === 'epc') && 'EPC 方案按项目投资口径展示回本与 IRR。'}
-                                    {hasAnyCoBuildComparison && '股权共建：业主收益=电费优惠节省+业主持股比例×项目公司税后净收益；累计收益为运营期现金收益，未扣业主初始出资，回本与 IRR 已计入该出资。分红按项目公司净收益全额分配测算，未计融资利息、留存收益及分红税。'}
+                                    {hasAnyCoBuildComparison && '股权共建：业主收益=电费优惠节省+业主持股比例×项目公司税后净收益；累计收益为运营期现金收益，未扣业主初始出资，回本与 IRR 已计入该出资。分红按项目公司净收益全额分配测算，未计融资利息、留存收益及分红税。EMC业主零投入，业主回本不适用；判断投资方回本时，应按相同售电价、成本和合作期比较。'}
                                 </div>
                             </div>
                         ) : (
