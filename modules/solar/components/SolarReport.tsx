@@ -577,6 +577,10 @@ export default function SolarReport({
                 ownerBenefitAfterTerm: solMetrics.ownerBenefitAfterTerm,
                 ownerBenefitFirstYearAfterTerm: solMetrics.ownerBenefitFirstYearAfterTerm,
                 ownerBenefitYear1: solMetrics.yearlyDetails?.[0]?.ownerBenefit || 0,
+                ownerPowerSavingYear1: solMetrics.yearlyDetails?.[0]?.ownerPowerSaving || 0,
+                ownerDividendYear1: solMetrics.yearlyDetails?.[0]?.ownerDividend || 0,
+                ownerPowerSavingLifecycle: (solMetrics.yearlyDetails || []).reduce((sum: number, detail: any) => sum + (detail.ownerPowerSaving || 0), 0),
+                ownerDividendLifecycle: (solMetrics.yearlyDetails || []).reduce((sum: number, detail: any) => sum + (detail.ownerDividend || 0), 0),
                 netIncomeYear1: solMetrics.yearlyDetails?.[0]?.netIncome || 0,
                 ownerInitialInvestment: solMetrics.ownerInitialInvestment || 0,
                 investorInitialInvestment: solMetrics.investorInitialInvestment || 0,
@@ -780,6 +784,7 @@ export default function SolarReport({
 
     const compactComparisonData = solutionComparisonData.slice(0, 6);
     const hasAnyEmcComparison = compactComparisonData.some(solution => solution.investmentMode === 'emc');
+    const hasAnyCoBuildComparison = compactComparisonData.some(solution => solution.investmentMode === 'co_build');
     const recommendedEmcSettlement = getEmcSettlementParts(recommendedComparison);
     const isReportSharingEmcMode = isReportEmcMode && recommendedEmcSettlement.isSharing;
     const ownerBenefitChartData = longTermMetrics.yearlyDetails.reduce((acc: any[], detail: any, index: number) => {
@@ -1409,7 +1414,7 @@ export default function SolarReport({
                         {compactComparisonData.length > 0 ? (
                             <div className="h-full min-h-0 rounded-[32px] bg-white border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.08)] overflow-hidden flex flex-col">
                                 <div className="grid grid-cols-[1.58fr_0.72fr_0.66fr_0.78fr_0.86fr_0.88fr_0.9fr_0.78fr_0.58fr] bg-slate-950 text-white text-[13px] font-black">
-                                    {['方案配置', '合作模式', '容量', '业主投入', '业主首年收益', `业主${projectLifeYears}年收益`, '收益方式', '业主回本/IRR', '推荐'].map(header => (
+                                    {['方案配置', '合作模式', '容量', '业主投入', '业主首年收益', `业主${projectLifeYears}年累计收益`, '收益方式', '业主回本/IRR', '推荐'].map(header => (
                                         <div key={header} className="px-3 py-4">{header}</div>
                                     ))}
                                 </div>
@@ -1441,8 +1446,23 @@ export default function SolarReport({
                                                 </div>
                                                 <div className="px-3 py-3 min-w-0 font-black text-slate-800">{formatSafe(solution.capacity, 0)}kWp</div>
                                                 <div className="px-3 py-3 min-w-0 font-black text-slate-900">{ownerInvestment === 0 ? '¥0' : `¥${formatSafe(ownerInvestment, 1)}万`}</div>
-                                                <div className="px-3 py-3 min-w-0 font-black text-emerald-700">¥{formatSafe(ownerYearOne, 1)}万</div>
-                                                <div className="px-3 py-3 min-w-0 font-black text-emerald-700">¥{formatSafe(ownerYear25, 1)}万</div>
+                                                <div className="px-3 py-3 min-w-0">
+                                                    <p className="font-black text-emerald-700">¥{formatSafe(ownerYearOne, 1)}万</p>
+                                                    {rowIsCoBuild && (
+                                                        <p className="mt-1 text-[10px] leading-snug font-semibold text-slate-500">
+                                                            电费优惠 ¥{formatSafe(solution.ownerPowerSavingYear1, 2)}万 + 业主{formatSafe(100 - solution.coBuildInvestorShareRate, 0)}%分红 ¥{formatSafe(solution.ownerDividendYear1, 2)}万
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="px-3 py-3 min-w-0">
+                                                    <p className="font-black text-emerald-700">¥{formatSafe(ownerYear25, 1)}万</p>
+                                                    {rowIsCoBuild && (
+                                                        <p className="mt-1 text-[10px] leading-snug font-semibold text-slate-500">
+                                                            电费优惠 ¥{formatSafe(solution.ownerPowerSavingLifecycle, 2)}万 + 业主{formatSafe(100 - solution.coBuildInvestorShareRate, 0)}%分红 ¥{formatSafe(solution.ownerDividendLifecycle, 2)}万
+                                                            {solution.ownerBenefitAfterTerm > 0 && ` + 合作期满收益 ¥${formatSafe(solution.ownerBenefitAfterTerm, 2)}万`}
+                                                        </p>
+                                                    )}
+                                                </div>
                                                 <div className="px-3 py-3 min-w-0">
                                                     <p className="font-black text-slate-800 leading-tight">{rowIsEmc ? settlement?.modeText : rowIsFinancing ? '融资后业主收益' : rowIsCoBuild ? '同股同酬分红' : '项目自投收益'}</p>
                                                     <p className="text-[11px] font-bold text-slate-500 mt-1">{rowIsEmc ? settlement?.detailText : rowIsFinancing ? `融资${formatSafe(solution.financingRatio, 0)}% · ${formatSafe(solution.financingTermYears, 0)}年` : rowIsCoBuild ? `${formatSafe(solution.coBuildInvestorShareRate, 0)}/${formatSafe(100 - solution.coBuildInvestorShareRate, 0)}持股 · ${formatSafe(solution.coBuildSalePrice, 2)}元/度` : '按项目净收益测算'}</p>
@@ -1466,10 +1486,10 @@ export default function SolarReport({
                                         );
                                     })}
                                 </div>
-                                <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs font-semibold text-slate-500">
-                                    {hasAnyEmcComparison
-                                        ? 'EMC 方案仅展示业主投入与业主收益；EPC 方案按项目投资口径展示回本与 IRR。'
-                                        : 'EPC 方案按项目投资口径展示，收益为项目净收益。'}
+                                <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-[11px] leading-relaxed font-semibold text-slate-500">
+                                    {hasAnyEmcComparison && 'EMC 方案仅展示业主投入与业主收益；'}
+                                    {compactComparisonData.some(solution => solution.investmentMode === 'epc') && 'EPC 方案按项目投资口径展示回本与 IRR。'}
+                                    {hasAnyCoBuildComparison && '股权共建：业主收益=电费优惠节省+业主持股比例×项目公司税后净收益；累计收益为运营期现金收益，未扣业主初始出资，回本与 IRR 已计入该出资。分红按项目公司净收益全额分配测算，未计融资利息、留存收益及分红税。'}
                                 </div>
                             </div>
                         ) : (
