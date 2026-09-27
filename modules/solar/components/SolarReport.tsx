@@ -928,6 +928,36 @@ export default function SolarReport({
         const isCoBuild = solution.investmentMode === 'co_build';
         const modeStyle = getInvestmentModeLabel(solution.investmentMode);
         const settlement = isEmc ? getEmcSettlementParts(solution) : null;
+        const emcTerms = (() => {
+            if (!isEmc) return null;
+            const solutionAdvParams = solution.params?.advParams || params.advParams;
+            const solutionSimpleParams = solution.params?.simpleParams || params.simpleParams;
+            const emcMode = solution.emcSubMode || solutionSimpleParams.emcSubMode;
+            const salePrice = emcMode === 'sharing'
+                ? null
+                : emcMode === 'fixed'
+                    ? solution.emcFixedPrice ?? solutionAdvParams.emcFixedPrice
+                    : emcMode === 'southern_average'
+                        ? solution.emcDiscountPrice ?? solutionAdvParams.emcDiscountPrice
+                        : getGenerationWeightedTariff(
+                            solutionAdvParams.emcMonthlyTariffs || [],
+                            'benchmarkPrice',
+                            solution.emcSouthernAveragePrice ?? solutionAdvParams.emcSouthernAveragePrice ?? solutionAdvParams.electricityPrice,
+                        ) * Math.min(100, Math.max(0, solution.emcDiscountRate ?? solutionAdvParams.emcDiscountRate)) / 100;
+            const rentPerArea = safeNumber(solution.roofRent ?? solutionAdvParams.roofRent, 0);
+            const roofArea = safeNumber(solutionSimpleParams.area, 0);
+            const annualRent = roofArea * rentPerArea / 10000;
+            const savingText = settlement?.savingText && !settlement.isSharing
+                ? ` · 业主优惠省${settlement.savingText}`
+                : '';
+            const salePriceText = salePrice == null
+                ? `收益分成（业主${formatSafe(solution.emcOwnerShareRate ?? solutionAdvParams.emcOwnerShareRate, 0)}%）`
+                : `¥${formatSafe(salePrice, 3)}/度`;
+            return {
+                settlementText: `${settlement?.modeText || '-'} · ${salePriceText}`,
+                rentText: `¥${formatSafe(rentPerArea, 2)}/㎡/年 · 年租约¥${formatSafe(annualRent, 2)}万${savingText}`
+            };
+        })();
         const ownerInvestment = isEmc
             ? 0
             : isCoBuild
@@ -958,8 +988,8 @@ export default function SolarReport({
         const overviewSubtextClass = isCoBuild ? 'text-slate-600' : 'text-slate-300';
         const cooperationFacts = isEmc
             ? [
-                ['结算方式', settlement?.modeText || '-'],
-                ['业主收益口径', settlement?.detailText || '-']
+                ['结算方式 / 售电电价', emcTerms?.settlementText || '-'],
+                ['屋顶租金 / 业主优惠', emcTerms?.rentText || '-']
             ]
             : isCoBuild
                 ? [
