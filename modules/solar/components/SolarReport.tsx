@@ -691,6 +691,20 @@ export default function SolarReport({
     const ownerBenefitFirstYearAfterTerm = safeNumber(recommendedComparison?.ownerBenefitFirstYearAfterTerm ?? longTermMetrics.ownerBenefitFirstYearAfterTerm, 0);
     const ownerInitialInvestment = safeNumber(recommendedComparison?.ownerInitialInvestment ?? longTermMetrics.ownerInitialInvestment, 0);
     const coBuildTermYears = Math.min(projectLifeYears, Math.max(1, Math.round(safeNumber(recommendedComparison?.coBuildTermYears ?? params.advParams.coBuildTermYears, 11))));
+    let ownerCumulativeCashFlow = -ownerInitialInvestment;
+    let investorCumulativeCashFlow = -effectiveInvestorInvestment;
+    const coBuildAnnualAnalysis = (recommendedComparison?.yearlyDetails || longTermMetrics.yearlyDetails || []).map((detail: any) => {
+        ownerCumulativeCashFlow += safeNumber(detail.ownerBenefit, 0);
+        investorCumulativeCashFlow += safeNumber(detail.netIncome, 0);
+        return {
+            ...detail,
+            ownerCumulativeCashFlow,
+            investorCumulativeCashFlow,
+            ownerPostTermIncome: Math.max(0, safeNumber(detail.ownerBenefit, 0) - safeNumber(detail.ownerPowerSaving, 0) - safeNumber(detail.ownerDividend, 0))
+        };
+    });
+    const investorLifecycleDistribution = coBuildAnnualAnalysis.reduce((sum: number, detail: any) => sum + safeNumber(detail.netIncome, 0), 0);
+    const projectCompanyLifecycleNetIncome = coBuildAnnualAnalysis.reduce((sum: number, detail: any) => sum + safeNumber(detail.projectNetIncome, 0), 0);
     const supportsAudienceSelection = isReportEmcMode || isReportCoBuildMode;
     const isOwnerFocusedReport = supportsAudienceSelection && reportAudience === 'owner';
     const inferredLocation = (() => {
@@ -2205,24 +2219,96 @@ export default function SolarReport({
                         <span className="material-icons text-blue-600">account_balance</span>
                         四、收益详细分析
                     </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 text-center">
-                            <div className="text-xs text-blue-600 mb-1">初始总投资</div>
-                            <div className="text-2xl font-bold text-blue-700">¥{solarModule.investment?.toFixed(2)}万</div>
+                    {isReportCoBuildMode ? (
+                        <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 text-center">
+                                    <div className="text-xs text-slate-500 mb-1">项目总投资</div>
+                                    <div className="text-xl font-bold text-slate-800">¥{formatSafe(effectiveInvestment, 2)}万</div>
+                                </div>
+                                <div className="rounded-lg bg-blue-50 border border-blue-100 p-4 text-center">
+                                    <div className="text-xs text-blue-600 mb-1">业主出资（{formatSafe(coBuildOwnerShareRate, 0)}%）</div>
+                                    <div className="text-xl font-bold text-blue-700">¥{formatSafe(ownerInitialInvestment, 2)}万</div>
+                                </div>
+                                <div className="rounded-lg bg-amber-50 border border-amber-100 p-4 text-center">
+                                    <div className="text-xs text-amber-700 mb-1">投资方出资（{formatSafe(coBuildInvestorShareRate, 0)}%）</div>
+                                    <div className="text-xl font-bold text-amber-700">¥{formatSafe(effectiveInvestorInvestment, 2)}万</div>
+                                </div>
+                                <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4 text-center">
+                                    <div className="text-xs text-emerald-700 mb-1">业主首年综合收益</div>
+                                    <div className="text-xl font-bold text-emerald-700">¥{formatSafe(firstYearOwnerBenefit, 2)}万</div>
+                                    <div className="mt-1 text-[11px] text-slate-500">优惠 ¥{formatSafe(recommendedComparison?.ownerPowerSavingYear1, 2)} + 分红 ¥{formatSafe(recommendedComparison?.ownerDividendYear1, 2)}</div>
+                                </div>
+                                <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4 text-center">
+                                    <div className="text-xs text-emerald-700 mb-1">业主回本 / IRR</div>
+                                    <div className="text-xl font-bold text-emerald-700">{formatPayback(recommendedComparison?.paybackPeriod ?? longTermMetrics.paybackPeriod, recommendedComparison?.paybackReached ?? longTermMetrics.paybackReached)}</div>
+                                    <div className="mt-1 text-[11px] text-slate-500">IRR {formatSafe(recommendedComparison?.irr ?? longTermMetrics.irr, 2)}%</div>
+                                </div>
+                                <div className="rounded-lg bg-amber-50 border border-amber-100 p-4 text-center">
+                                    <div className="text-xs text-amber-700 mb-1">投资方首年分红</div>
+                                    <div className="text-xl font-bold text-amber-700">¥{formatSafe(coBuildAnnualAnalysis[0]?.netIncome, 2)}万</div>
+                                </div>
+                                <div className="rounded-lg bg-amber-50 border border-amber-100 p-4 text-center">
+                                    <div className="text-xs text-amber-700 mb-1">投资方回本 / IRR</div>
+                                    <div className="text-xl font-bold text-amber-700">{formatPayback(recommendedComparison?.investorPaybackPeriod ?? longTermMetrics.investorPaybackPeriod, recommendedComparison?.investorPaybackReached ?? longTermMetrics.investorPaybackReached)}</div>
+                                    <div className="mt-1 text-[11px] text-slate-500">IRR {formatSafe(recommendedComparison?.investorIrr ?? longTermMetrics.investorIrr, 2)}%</div>
+                                </div>
+                            </div>
+                            <div className="mt-5 rounded-lg border border-cyan-100 bg-cyan-50/70 p-4 text-sm leading-relaxed text-slate-700">
+                                <span className="font-bold text-slate-900">全周期分配概览：</span>
+                                项目公司累计税后净收益 ¥{formatSafe(projectCompanyLifecycleNetIncome, 2)}万；业主累计综合收益 ¥{formatSafe(ownerTotalBenefit25, 2)}万（其中合作期电费优惠 ¥{formatSafe(recommendedComparison?.ownerPowerSavingLifecycle, 2)}万、业主分红 ¥{formatSafe(recommendedComparison?.ownerDividendLifecycle, 2)}万、期满承接收益 ¥{formatSafe(ownerBenefitAfterTerm, 2)}万）；投资方累计分红 ¥{formatSafe(investorLifecycleDistribution, 2)}万。
+                                上述累计收益未扣各自初始出资；业主与投资方的回本、IRR按各自出资及现金流分别计算。分红假设项目公司净收益全额分配，未计融资利息、留存收益和分红税。
+                            </div>
+                            <div className="mt-5 overflow-x-auto">
+                                <table className="w-full min-w-[1120px] text-xs border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-50 border-y border-slate-200 text-slate-600">
+                                            {['年度', '发电量（万度）', '项目公司收入（万元）', '运维保险（万元）', '税费（万元）', '项目税后净收益（万元）', '业主电费优惠（万元）', '业主分红/期满收益（万元）', '投资方分红（万元）', '业主累计净现金流（万元）', '投资方累计净现金流（万元）'].map(label => (
+                                                <th key={label} className="px-2 py-2 text-right first:text-left font-semibold whitespace-nowrap">{label}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {coBuildAnnualAnalysis.map((detail: any) => (
+                                            <tr key={detail.year} className="border-b border-slate-100 text-slate-700">
+                                                <td className="px-2 py-2 font-semibold">第{detail.year}年</td>
+                                                <td className="px-2 py-2 text-right">{formatSafe(detail.generation, 2)}</td>
+                                                <td className="px-2 py-2 text-right">{formatSafe(detail.grossGenerationRevenue, 2)}</td>
+                                                <td className="px-2 py-2 text-right">{formatSafe(detail.grossOpex, 2)}</td>
+                                                <td className="px-2 py-2 text-right">{formatSafe(safeNumber(detail.tax, 0) + safeNumber(detail.vatPayable, 0), 2)}</td>
+                                                <td className="px-2 py-2 text-right font-semibold">{formatSafe(detail.projectNetIncome, 2)}</td>
+                                                <td className="px-2 py-2 text-right">{formatSafe(detail.ownerPowerSaving, 2)}</td>
+                                                <td className="px-2 py-2 text-right">{formatSafe(safeNumber(detail.ownerDividend, 0) + safeNumber(detail.ownerPostTermIncome, 0), 2)}</td>
+                                                <td className="px-2 py-2 text-right">{formatSafe(detail.netIncome, 2)}</td>
+                                                <td className="px-2 py-2 text-right font-semibold">{formatSafe(detail.ownerCumulativeCashFlow, 2)}</td>
+                                                <td className="px-2 py-2 text-right font-semibold">{formatSafe(detail.investorCumulativeCashFlow, 2)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p className="mt-2 text-xs leading-relaxed text-slate-500">说明：合作期内项目公司收入用于覆盖运维、税费后形成税后净收益，再按股权比例分配；业主电费优惠按（原综合电价－合作售电价）×自用电量单独计算，不属于项目公司分红。合作期满后的收益按当前模型的资产移交假设归业主。表格金额按万元展示。</p>
+                        </>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 text-center">
+                                <div className="text-xs text-blue-600 mb-1">初始总投资</div>
+                                <div className="text-2xl font-bold text-blue-700">¥{solarModule.investment?.toFixed(2)}万</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 text-center">
+                                <div className="text-xs text-green-600 mb-1">首年收益（税后）</div>
+                                <div className="text-2xl font-bold text-green-700">¥{solarModule.yearlySaving?.toFixed(2)}万</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 text-center">
+                                <div className="text-xs text-purple-600 mb-1">内部收益率 IRR</div>
+                                <div className="text-2xl font-bold text-purple-700">{formatSafe(effectiveIrr, 2)}%</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 text-center">
+                                <div className="text-xs text-orange-600 mb-1">回本周期</div>
+                                <div className="text-2xl font-bold text-orange-700">{formatPayback(effectivePaybackPeriod, effectivePaybackReached)}</div>
+                            </div>
                         </div>
-                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 text-center">
-                            <div className="text-xs text-green-600 mb-1">首年收益（税后）</div>
-                            <div className="text-2xl font-bold text-green-700">¥{solarModule.yearlySaving?.toFixed(2)}万</div>
-                        </div>
-                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 text-center">
-                            <div className="text-xs text-purple-600 mb-1">内部收益率 IRR</div>
-                            <div className="text-2xl font-bold text-purple-700">{formatSafe(effectiveIrr, 2)}%</div>
-                        </div>
-                        <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 text-center">
-                            <div className="text-xs text-orange-600 mb-1">回本周期</div>
-                            <div className="text-2xl font-bold text-orange-700">{formatPayback(effectivePaybackPeriod, effectivePaybackReached)}</div>
-                        </div>
-                    </div>
+                    )}
                 </section>
 
                 {/* 5. Consumption Rate Scenario Analysis */}
