@@ -22,6 +22,8 @@ export interface SolarConstructionMethodConfig {
     description: string;
     image: string;
     imageSource?: string;
+    imageSourceUrl?: string;
+    imageLicenseUrl?: string;
 }
 
 export const SOLAR_CONSTRUCTION_METHODS: Record<SolarConstructionMethod, SolarConstructionMethodConfig> = {
@@ -30,8 +32,10 @@ export const SOLAR_CONSTRUCTION_METHODS: Record<SolarConstructionMethod, SolarCo
         name: '彩钢瓦屋顶光伏',
         shortName: '彩钢瓦屋顶',
         description: '利用既有彩钢瓦厂房屋面布置光伏组件，施工成熟、综合成本可控。',
-        image: '/solar-construction/color-steel-rooftop.png',
-        imageSource: '业主提供的彩钢瓦屋顶光伏参考图'
+        image: '/solar-ppt/photo-industrial-rooftop.jpg',
+        imageSource: 'Ayman Nakib Badhan / Wikimedia Commons',
+        imageSourceUrl: 'https://commons.wikimedia.org/wiki/File:Powering_Progress.jpg',
+        imageLicenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/'
     },
     color_steel_canopy: {
         id: 'color_steel_canopy',

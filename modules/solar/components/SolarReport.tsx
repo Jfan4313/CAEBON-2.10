@@ -1242,7 +1242,17 @@ export default function SolarReport({
                             <div className="rounded-[30px] bg-slate-950/78 border border-white/15 backdrop-blur p-6">
                                 <p className="text-3xl font-black">{recommendedSolutionName}</p>
                                 <p className="text-base text-white/70 mt-3 leading-relaxed">{recommendedConstruction.description}</p>
-                                <p className="text-xs text-white/45 mt-5">图片来源：{recommendedConstruction.imageSource || '项目通用屋顶光伏资料图'}</p>
+                                <p className="text-xs text-white/55 mt-5">
+                                    图片来源：
+                                    {recommendedConstruction.imageSourceUrl ? (
+                                        <>
+                                            <a href={recommendedConstruction.imageSourceUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{recommendedConstruction.imageSource}</a>
+                                            {recommendedConstruction.imageLicenseUrl && (
+                                                <> · <a href={recommendedConstruction.imageLicenseUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">CC BY-SA 4.0</a></>
+                                            )}
+                                        </>
+                                    ) : (recommendedConstruction.imageSource || '项目通用屋顶光伏资料图')}
+                                </p>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
