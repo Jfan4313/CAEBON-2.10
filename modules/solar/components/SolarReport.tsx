@@ -884,8 +884,9 @@ export default function SolarReport({
         ? `业主${projectLifeYears}年收益`
         : `${isReportEmcMode ? '投资方' : isReportCoBuildMode ? '我方' : '项目'}${projectLifeYears}年净收益`;
     const recommendedConstruction = SOLAR_CONSTRUCTION_METHODS[recommendedComparison?.constructionMethod || recommendedSolutionConfig?.constructionMethod || 'rooftop'];
-    const selectedConstructionPreviewIds = recommendedSolutionConfig?.constructionPreviewMethods?.length
-        ? recommendedSolutionConfig.constructionPreviewMethods
+    const recommendedConstructionPreviewConfig = params.solutions?.find(solution => solution.id === recommendedComparison?.id) || recommendedSolutionConfig;
+    const selectedConstructionPreviewIds = recommendedConstructionPreviewConfig?.constructionPreviewMethods?.length
+        ? recommendedConstructionPreviewConfig.constructionPreviewMethods
         : [recommendedComparison?.constructionMethod || recommendedSolutionConfig?.constructionMethod || 'rooftop'];
     const recommendedConstructionPreviews = selectedConstructionPreviewIds
         .map(methodId => SOLAR_CONSTRUCTION_METHODS[methodId])
