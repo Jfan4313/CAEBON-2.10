@@ -105,7 +105,7 @@ export const SolarForm: React.FC<SolarFormProps> = ({
     const activeBuildingArea = activeBuildings.reduce((sum, b) => sum + (Number(b.area) || 0), 0);
     const activeBuildingCapacity = activeBuildings.reduce((sum, b) => sum + (Number(b.manualCapacity) || 0), 0);
     const currentConstructionMethod = currentSolution?.constructionMethod || 'rooftop';
-    const isCanopyConstruction = ['color_steel_canopy', 'bipv_canopy', 'daylighting_canopy'].includes(currentConstructionMethod);
+    const isCanopyConstruction = ['color_steel_canopy', 'bipv_canopy', 'daylighting_canopy', 'solar_carport'].includes(currentConstructionMethod);
     const defaultMaterialBillItems = useMemo(
         () => buildDefaultSolarMaterialBill(
             params.simpleParams.connectionType,
@@ -635,18 +635,29 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                     <div className="space-y-6">
                         <div className="space-y-3">
                             <div>
-                                <label className="text-xs font-semibold text-slate-500">建设方式与效果图</label>
-                                <p className="text-[11px] text-slate-400 mt-1">每个方案可独立选择，报告将增加对应的建设效果图页面。</p>
+                                <label className="text-xs font-semibold text-slate-500">建设效果图（可多选）</label>
+                                <p className="text-[11px] text-slate-400 mt-1">可同时选择多张效果图，报告中会并列展示；实际造价和材料清单按下方建设方式测算。</p>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                                 {(Object.keys(SOLAR_CONSTRUCTION_METHODS) as SolarConstructionMethod[]).map(methodId => {
                                     const method = SOLAR_CONSTRUCTION_METHODS[methodId];
-                                    const active = (currentSolution.constructionMethod || 'rooftop') === methodId;
+                                    const selectedPreviews = currentSolution.constructionPreviewMethods?.length
+                                        ? currentSolution.constructionPreviewMethods
+                                        : [currentSolution.constructionMethod || 'rooftop'];
+                                    const active = selectedPreviews.includes(methodId);
                                     return (
                                         <button
                                             key={methodId}
                                             type="button"
-                                            onClick={() => handleUpdateSolution(currentSolution.id, { constructionMethod: methodId })}
+                                            aria-pressed={active}
+                                            onClick={() => {
+                                                const nextMethods = active
+                                                    ? (selectedPreviews.length > 1 ? selectedPreviews.filter(selected => selected !== methodId) : selectedPreviews)
+                                                    : [...selectedPreviews, methodId];
+                                                handleUpdateSolution(currentSolution.id, {
+                                                    constructionPreviewMethods: nextMethods
+                                                });
+                                            }}
                                             className={`overflow-hidden rounded-[20px] border text-left transition-all ${active ? 'border-[#0071e3] ring-2 ring-[#0071e3]/15 shadow-lg' : 'border-slate-200 hover:border-slate-300'}`}
                                         >
                                             <div className="h-28 bg-slate-100 overflow-hidden">
@@ -655,13 +666,27 @@ export const SolarForm: React.FC<SolarFormProps> = ({
                                             <div className="p-3 bg-white">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <span className="text-sm font-bold text-slate-900">{method.name}</span>
-                                                    {active && <span className="material-icons text-[#0071e3] text-[18px]">check_circle</span>}
+                                                    <span className={`material-icons text-[18px] ${active ? 'text-[#0071e3]' : 'text-slate-300'}`}>
+                                                        {active ? 'check_circle' : 'radio_button_unchecked'}
+                                                    </span>
                                                 </div>
                                                 <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">{method.description}</p>
                                             </div>
                                         </button>
                                     );
                                 })}
+                            </div>
+                            <div className="max-w-sm space-y-2">
+                                <label className="text-xs font-semibold text-slate-500">造价测算建设方式</label>
+                                <select
+                                    value={currentSolution.constructionMethod || 'rooftop'}
+                                    onChange={event => handleUpdateSolution(currentSolution.id, { constructionMethod: event.target.value as SolarConstructionMethod })}
+                                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:border-[#0071e3]"
+                                >
+                                    {(Object.keys(SOLAR_CONSTRUCTION_METHODS) as SolarConstructionMethod[]).map(methodId => (
+                                        <option key={methodId} value={methodId}>{SOLAR_CONSTRUCTION_METHODS[methodId].name}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

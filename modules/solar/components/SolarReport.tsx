@@ -884,7 +884,13 @@ export default function SolarReport({
         ? `业主${projectLifeYears}年收益`
         : `${isReportEmcMode ? '投资方' : isReportCoBuildMode ? '我方' : '项目'}${projectLifeYears}年净收益`;
     const recommendedConstruction = SOLAR_CONSTRUCTION_METHODS[recommendedComparison?.constructionMethod || recommendedSolutionConfig?.constructionMethod || 'rooftop'];
-    const isCanopyConstruction = ['color_steel_canopy', 'bipv_canopy', 'daylighting_canopy'].includes(
+    const selectedConstructionPreviewIds = recommendedSolutionConfig?.constructionPreviewMethods?.length
+        ? recommendedSolutionConfig.constructionPreviewMethods
+        : [recommendedComparison?.constructionMethod || recommendedSolutionConfig?.constructionMethod || 'rooftop'];
+    const recommendedConstructionPreviews = selectedConstructionPreviewIds
+        .map(methodId => SOLAR_CONSTRUCTION_METHODS[methodId])
+        .filter(Boolean);
+    const isCanopyConstruction = ['color_steel_canopy', 'bipv_canopy', 'daylighting_canopy', 'solar_carport'].includes(
         recommendedComparison?.constructionMethod || recommendedSolutionConfig?.constructionMethod || 'rooftop'
     );
     const hasCanopyOverheightResponsibility = isCanopyConstruction && (params.canopyOverheightOwnerResponsibility ?? false);
@@ -1276,49 +1282,29 @@ export default function SolarReport({
             title: '建设效果图',
             content: (
                 <div className="h-full flex flex-col bg-slate-950 text-white relative overflow-hidden">
-                    <img src={recommendedConstruction.image} alt={recommendedConstruction.name} className="absolute inset-0 w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-slate-950/94 via-slate-950/64 to-slate-950/18"></div>
-                    <div className="relative z-10 flex-1 px-12 py-9 flex flex-col justify-between">
-                        <div className="flex items-start justify-between gap-8">
-                            <div>
-                                <p className="text-sm font-black tracking-[0.24em] text-cyan-300 uppercase">Construction Preview</p>
-                                <h2 className="text-5xl font-black mt-3">四、建设效果图</h2>
-                                <p className="text-2xl font-bold text-white/85 mt-3">{recommendedConstruction.name}</p>
-                            </div>
-                            <span className="rounded-full bg-white/15 border border-white/20 backdrop-blur px-4 py-2 text-sm font-bold">方案参考效果 · 以深化设计为准</span>
+                    <div className="relative z-10 px-10 pt-7 pb-4 flex items-start justify-between gap-8">
+                        <div>
+                            <p className="text-sm font-black tracking-[0.24em] text-cyan-300 uppercase">Construction Preview</p>
+                            <h2 className="text-4xl font-black mt-2">四、建设效果图</h2>
+                            <p className="text-lg font-bold text-white/75 mt-1">{recommendedSolutionName} · 已选择 {recommendedConstructionPreviews.length} 张</p>
                         </div>
-                        <div className="grid grid-cols-[1.15fr_0.85fr] gap-6 items-end">
-                            <div className="rounded-[30px] bg-slate-950/78 border border-white/15 backdrop-blur p-6">
-                                <p className="text-3xl font-black">{recommendedSolutionName}</p>
-                                <p className="text-base text-white/70 mt-3 leading-relaxed">{recommendedConstruction.description}</p>
-                                <p className="text-xs text-white/55 mt-5">
-                                    图片来源：
-                                    {recommendedConstruction.imageSourceUrl ? (
-                                        <>
-                                            <a href={recommendedConstruction.imageSourceUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{recommendedConstruction.imageSource}</a>
-                                            {recommendedConstruction.imageLicenseUrl && (
-                                                <> · <a href={recommendedConstruction.imageLicenseUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">CC BY-SA 4.0</a></>
-                                            )}
-                                        </>
-                                    ) : (recommendedConstruction.imageSource || '项目通用屋顶光伏资料图')}
-                                </p>
+                        <span className="rounded-full bg-white/15 border border-white/20 backdrop-blur px-4 py-2 text-sm font-bold">方案参考效果 · 以深化设计为准</span>
+                    </div>
+                    <div className={`relative z-10 flex-1 min-h-0 px-10 pb-6 grid ${recommendedConstructionPreviews.length >= 5 ? 'grid-cols-3' : recommendedConstructionPreviews.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
+                        {recommendedConstructionPreviews.map((construction, index) => (
+                            <div key={construction.id} className="relative min-h-0 rounded-[24px] overflow-hidden border border-white/15 bg-slate-900">
+                                <img src={construction.image} alt={construction.name} className="absolute inset-0 w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/15 to-slate-950/10"></div>
+                                <span className="absolute top-4 left-4 rounded-full bg-slate-950/70 border border-white/20 px-3 py-1.5 text-sm font-bold backdrop-blur">
+                                    效果图 {index + 1} · {construction.shortName}
+                                </span>
+                                <div className="absolute bottom-0 inset-x-0 p-5">
+                                    <p className="text-xl font-black">{construction.name}</p>
+                                    <p className="text-sm text-white/80 mt-1 leading-relaxed">{construction.description}</p>
+                                    <p className="text-xs text-white/60 mt-2">图片来源：{construction.imageSourceUrl ? <a href={construction.imageSourceUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{construction.imageSource}</a> : (construction.imageSource || '项目参考图')}</p>
+                                </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                {[
-                                    ['装机容量', `${formatSafe(recommendedComparison?.capacity ?? params.simpleParams.capacity, 0)} kWp`],
-                                    ['建设方式', recommendedConstruction.shortName],
-                                    ['组件品牌', recommendedComparison?.brand || '通用组件'],
-                                    ['电缆配置', `${recommendedComparison?.cableBrand || '国标电缆'} · ${recommendedComparison?.cableType || '铝芯'}`],
-                                    ['逆变器品牌', recommendedComparison?.inverterBrand || '通用逆变器'],
-                                    ['接入方式', recommendedComparison?.connectionType || '380V低压']
-                                ].map(([label, value]) => (
-                                    <div key={label} className="rounded-2xl bg-white text-slate-950 p-3 min-h-[74px]">
-                                        <p className="text-xs font-bold text-slate-500">{label}</p>
-                                        <p className="text-base font-black mt-1.5 leading-tight">{value}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        ))}
                     </div>
                     <PremiumSlideFooter page={4} total={presentationTotalSlides} />
                 </div>

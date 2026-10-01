@@ -6,7 +6,7 @@ export type IncomeTaxMode = 'exempt' | 'small_micro' | 'custom';
 export type VatTaxpayerType = 'small_scale' | 'general';
 export type SolarConnectionType = 'high' | 'low';
 export type SolarOperationMode = 'grid_connected' | 'off_grid';
-export type SolarConstructionMethod = 'rooftop' | 'color_steel_canopy' | 'bipv_canopy' | 'daylighting_canopy';
+export type SolarConstructionMethod = 'rooftop' | 'color_steel_canopy' | 'bipv_canopy' | 'daylighting_canopy' | 'solar_carport';
 
 export interface SolarMonthlyTariff {
     month: number;
@@ -60,6 +60,14 @@ export const SOLAR_CONSTRUCTION_METHODS: Record<SolarConstructionMethod, SolarCo
         description: '采用透光或间隔布置的光伏玻璃，兼顾自然采光与遮阳发电。',
         image: '/solar-construction/daylighting-canopy.png',
         imageSource: 'AI 生成的采光型光伏棚架参考图'
+    },
+    solar_carport: {
+        id: 'solar_carport',
+        name: '光伏车棚',
+        shortName: '光伏车棚',
+        description: '在停车区域建设光伏车棚，为车辆遮阳挡雨并利用棚顶发电。',
+        image: '/solar-construction/solar-carport.jpg',
+        imageSource: '业主提供的光伏车棚效果图'
     }
 };
 
@@ -171,7 +179,7 @@ export const buildDefaultSolarMaterialBill = (
         : DEFAULT_SOLAR_MATERIAL_TEMPLATES.lowVoltage;
     const constructionItems = constructionMethod === 'color_steel_canopy'
         ? DEFAULT_SOLAR_MATERIAL_TEMPLATES.colorSteelCanopy
-        : constructionMethod === 'bipv_canopy' || constructionMethod === 'daylighting_canopy'
+        : constructionMethod === 'bipv_canopy' || constructionMethod === 'daylighting_canopy' || constructionMethod === 'solar_carport'
             ? DEFAULT_SOLAR_MATERIAL_TEMPLATES.galvanizedCanopy
             : DEFAULT_SOLAR_MATERIAL_TEMPLATES.arrayRack;
 
@@ -309,6 +317,7 @@ export interface SolarSolution {
     cableBrand: SolarCableBrand; // 电缆品牌
     inverterBrand: SolarInverterBrand; // 逆变器品牌
     constructionMethod: SolarConstructionMethod; // 建设形式/效果图类型
+    constructionPreviewMethods?: SolarConstructionMethod[]; // 报告展示的建设效果图，可多选
     epcPrice: number; // 建造成本单价（元/Wp），EPC/EMC 投资模型共用
     investmentMode: InvestmentMode; // 该方案独立合作方式
     emcSubMode?: EmcSubMode;
